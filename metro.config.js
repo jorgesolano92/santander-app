@@ -2,7 +2,11 @@ const { getDefaultConfig } = require('expo/metro-config');
 
 const config = getDefaultConfig(__dirname);
 
-// Disable source maps to avoid update issues
+// Disable updates completely
+config.resolver.resolverMainFields = ['react-native', 'browser', 'main'];
+config.resolver.platforms = ['ios', 'android', 'native', 'web'];
+
+// Clear transformer cache
 config.transformer.minifierConfig = {
   keep_fnames: true,
   mangle: {
@@ -10,7 +14,7 @@ config.transformer.minifierConfig = {
   },
 };
 
-// Clear resolver cache
-config.resolver.platforms = ['ios', 'android', 'native', 'web'];
+// Disable source maps
+config.transformer.enableBabelRCLookup = false;
 
 module.exports = config;
