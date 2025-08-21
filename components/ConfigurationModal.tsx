@@ -50,50 +50,31 @@ export default function ConfigurationModal({ visible, onClose, onSave, officeNum
       setIsLoading(false);
     }, 1000);
   };
-          <View style={styles.formSection}>
-            <View style={styles.formColumns}>
-              {/* Left Column */}
-              <View style={styles.formColumn}>
-                <View style={styles.inputContainer}>
-                  <Text style={styles.inputLabel}>USUARIO:</Text>
-                  <View style={styles.inputUnderline} />
-                  <TextInput
-                    style={styles.textInput}
-                    value={config.username}
-                    onChangeText={(text) => setConfig(prev => ({ ...prev, username: text }))}
-                    placeholder="Ingrese usuario"
-                    autoCapitalize="none"
-                  />
-                </View>
-              </View>
 
-              {/* Right Column */}
-              <View style={styles.formColumn}>
-                <View style={styles.inputContainer}>
-                  <Text style={styles.inputLabel}>CONTRASEÑA:</Text>
-                  <View style={styles.inputUnderline} />
-                  <TextInput
-                    style={styles.textInput}
-                    value={config.password}
-                    onChangeText={(text) => setConfig(prev => ({ ...prev, password: text }))}
-                    placeholder="Ingrese contraseña"
-                    secureTextEntry={true}
-                    autoCapitalize="none"
-                  />
-                </View>
-              </View>
-            </View>
+  const handleUpdateVersion = () => {
+    // Implementar lógica de actualización
+  };
 
-            {/* Accept Button */}
-            <TouchableOpacity 
-              style={[styles.acceptButton, isLoading && styles.acceptButtonDisabled]} 
-              onPress={handleAccept}
-              disabled={isLoading}
-            >
-              <User size={20} color="#FFFFFF" />
-              <Text style={styles.acceptButtonText}>
-                {isLoading ? 'VALIDANDO...' : 'ACEPTAR'}
-              </Text>
+  const handleDetailedConfigClose = () => {
+    setShowDetailedConfig(false);
+    onClose();
+  };
+
+  const handleDetailedConfigSave = (config: ConfigData) => {
+    onSave(config);
+    setShowDetailedConfig(false);
+    onClose();
+  };
+
+  return (
+    <>
+      <Modal visible={visible} animationType="slide" presentationStyle="fullScreen">
+        <View style={styles.container}>
+          {/* Header */}
+          <View style={styles.header}>
+            <Text style={styles.headerTitle}>CONFIGURACIÓN</Text>
+            <TouchableOpacity style={styles.closeButton} onPress={onClose}>
+              <X size={24} color="#FFFFFF" />
             </TouchableOpacity>
           </View>
 
