@@ -67,7 +67,7 @@ export default function ConfigurationModal({ visible, onClose, onSave, officeNum
   };
 
   return (
-    <>
+    <View style={{ flex: 1 }}>
       <Modal visible={visible} animationType="slide" presentationStyle="fullScreen">
         <View style={styles.container}>
           {/* Header */}
@@ -174,7 +174,7 @@ export default function ConfigurationModal({ visible, onClose, onSave, officeNum
         onSave={handleDetailedConfigSave}
         officeNumber={config.officeNumber}
       />
-    </>
+    </View>
   );
 }
 
