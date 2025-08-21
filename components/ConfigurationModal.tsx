@@ -50,42 +50,50 @@ export default function ConfigurationModal({ visible, onClose, onSave, officeNum
       setIsLoading(false);
     }, 1000);
   };
+          <View style={styles.formSection}>
+            <View style={styles.formColumns}>
+              {/* Left Column */}
+              <View style={styles.formColumn}>
+                <View style={styles.inputContainer}>
+                  <Text style={styles.inputLabel}>USUARIO:</Text>
+                  <View style={styles.inputUnderline} />
+                  <TextInput
+                    style={styles.textInput}
+                    value={config.username}
+                    onChangeText={(text) => setConfig(prev => ({ ...prev, username: text }))}
+                    placeholder="Ingrese usuario"
+                    autoCapitalize="none"
+                  />
+                </View>
+              </View>
 
-  const handleDetailedConfigSave = (detailedConfig: any) => {
-    // Combinar configuración básica con detallada
-    const fullConfig = {
-      username: config.username,
-      password: config.password,
-      officeNumber: config.officeNumber,
-      ...detailedConfig
-    };
-    onSave(fullConfig);
-    setShowDetailedConfig(false);
-    onClose();
-  };
+              {/* Right Column */}
+              <View style={styles.formColumn}>
+                <View style={styles.inputContainer}>
+                  <Text style={styles.inputLabel}>CONTRASEÑA:</Text>
+                  <View style={styles.inputUnderline} />
+                  <TextInput
+                    style={styles.textInput}
+                    value={config.password}
+                    onChangeText={(text) => setConfig(prev => ({ ...prev, password: text }))}
+                    placeholder="Ingrese contraseña"
+                    secureTextEntry={true}
+                    autoCapitalize="none"
+                  />
+                </View>
+              </View>
+            </View>
 
-  const handleDetailedConfigClose = () => {
-    setShowDetailedConfig(false);
-  };
-
-  const handleUpdateVersion = () => {
-    console.log('Actualizar versión');
-  };
-
-  return (
-    <>
-      <Modal
-        visible={visible}
-        animationType="slide"
-        transparent={false}
-        onRequestClose={onClose}
-      >
-        <View style={styles.container}>
-          {/* Header */}
-          <View style={styles.header}>
-            <Text style={styles.headerTitle}>SAIMA SEGURIDAD – Panel de control puertas SECURA</Text>
-            <TouchableOpacity style={styles.closeButton} onPress={onClose}>
-              <X size={24} color="#FFFFFF" />
+            {/* Accept Button */}
+            <TouchableOpacity 
+              style={[styles.acceptButton, isLoading && styles.acceptButtonDisabled]} 
+              onPress={handleAccept}
+              disabled={isLoading}
+            >
+              <User size={20} color="#FFFFFF" />
+              <Text style={styles.acceptButtonText}>
+                {isLoading ? 'VALIDANDO...' : 'ACEPTAR'}
+              </Text>
             </TouchableOpacity>
           </View>
 
@@ -303,8 +311,16 @@ const styles = StyleSheet.create({
   formSection: {
     marginBottom: 32,
   },
-  inputContainer: {
+  formColumns: {
+    flexDirection: 'row',
+    gap: 48,
     marginBottom: 24,
+  },
+  formColumn: {
+    flex: 1,
+  },
+  inputContainer: {
+    marginBottom: 32,
   },
   inputLabel: {
     fontSize: 14,
@@ -341,7 +357,8 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.2,
     shadowRadius: 8,
     elevation: 4,
-    marginTop: 16,
+    alignSelf: 'center',
+    marginTop: 24,
   },
   acceptButtonDisabled: {
     opacity: 0.6,
