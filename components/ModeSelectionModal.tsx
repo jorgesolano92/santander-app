@@ -80,11 +80,11 @@ const categoryDisplayNames = {
 };
 
 // Categorías que tienen submodos
-const categoriesWithSubmodes = ['COMERCIAL', 'HORARIO'];
+const categoriesWithSubmodes: string[] = [];
 
 export default function ModeSelectionModal({ visible, onClose, onModeSelect }: ModeSelectionModalProps) {
   const [selectedMode, setSelectedMode] = useState<string>('comercial_automatico');
-  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set(['COMERCIAL']));
+  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
   const [countdown, setCountdown] = useState<number>(30);
   const [isCountdownActive, setIsCountdownActive] = useState<boolean>(false);
   const [showCargaCajero, setShowCargaCajero] = useState<boolean>(false);
