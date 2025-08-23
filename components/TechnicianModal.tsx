@@ -118,7 +118,7 @@ export default function TechnicianModal({ visible, onClose }: TechnicianModalPro
               <>
                 {/* DNI Input View */}
                 <View style={styles.inputSection}>
-                  <Text style={styles.inputLabel}>DNI ESPAÑOL:</Text>
+                  <Text style={styles.inputLabel}>DNI:</Text>
                   <View style={styles.inputUnderline} />
                   <TextInput
                     style={styles.textInput}
@@ -148,9 +148,9 @@ export default function TechnicianModal({ visible, onClose }: TechnicianModalPro
                   </TouchableOpacity>
 
                   <TouchableOpacity 
-                    style={[styles.consultButton, isLoading && styles.consultButtonDisabled]} 
+                    style={[styles.consultButton, (!dni.trim() || isLoading) && styles.consultButtonDisabled]} 
                     onPress={handleConsult}
-                    disabled={isLoading}
+                    disabled={!dni.trim() || isLoading}
                   >
                     <Search size={20} color="#FFFFFF" />
                     <Text style={styles.consultButtonText}>
