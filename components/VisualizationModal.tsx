@@ -1,5 +1,5 @@
 import { View, Text, StyleSheet, TouchableOpacity, Modal } from 'react-native';
-import { X, Lock, Unlock } from 'lucide-react-native';
+import { X, Lock, Clock as Unlock } from 'lucide-react-native';
 import { Image } from 'react-native';
 import { useState } from 'react';
 import { useDoorControl } from '@/hooks/useDoorControl';
