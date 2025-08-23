@@ -275,12 +275,11 @@ export default function ModeSelectionModal({ visible, onClose, onModeSelect }: M
                   ) : (
                     // Categoría sin submodos (botón directo)
                     categoryModes.map(mode => (
-                     <>
-                       <Text key={`${category}-title`} style={styles.sectionTitleStatic}>
+                     <React.Fragment key={mode.id}>
+                       <Text style={styles.sectionTitleStatic}>
                          {categoryDisplayNames[category]}
                        </Text>
                        <TouchableOpacity
-                         key={mode.id}
                          style={[
                            styles.modeButton,
                            selectedMode === mode.id && styles.selectedModeButton
@@ -294,7 +293,7 @@ export default function ModeSelectionModal({ visible, onClose, onModeSelect }: M
                            {mode.name}
                          </Text>
                        </TouchableOpacity>
-                     </>
+                     </React.Fragment>
                     ))
                   )}
                 </View>
