@@ -17,10 +17,12 @@ export default function MainScreen() {
     isLoading,
     error,
     connectionStatus,
+    currentScheduleMode,
     changeMode,
     toggleEmergency,
     configure,
     validateDevice,
+    determineScheduleMode,
   } = useDoorControl();
 
   const [showLoginModal, setShowLoginModal] = useState(false);
@@ -57,6 +59,12 @@ export default function MainScreen() {
   const isCargaCajeroMode = currentMode === 'CARGA DE CAJERO';
   const isManualMode = currentMode.includes('MANUAL');
 
+  // Mostrar información del modo automático por horario
+  useEffect(() => {
+    if (currentScheduleMode) {
+      console.log(`📅 Modo sugerido por horario: ${currentScheduleMode}`);
+    }
+  }, [currentScheduleMode]);
   // Validar dispositivo al iniciar
   useEffect(() => {
     const checkDevice = async () => {
@@ -155,6 +163,13 @@ export default function MainScreen() {
             {connectionStatus === 'online' ? 'SANDBOX' : 'OFFLINE'}
           </Text>
         </View>
+        
+        {/* Indicador de modo automático por horario */}
+        {currentScheduleMode && !isEmergencyActive && (
+          <View style={styles.scheduleIndicator}>
+            <Text style={styles.scheduleText}>AUTO: {currentScheduleMode}</Text>
+          </View>
+        )}
         
         <TouchableOpacity 
           style={styles.configButton}
@@ -497,6 +512,17 @@ const styles = StyleSheet.create({
   },
   connectionText: {
     fontSize: 12,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  scheduleIndicator: {
+    backgroundColor: '#17A2B8',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+  },
+  scheduleText: {
+    fontSize: 11,
     fontWeight: '600',
     color: '#FFFFFF',
   },
