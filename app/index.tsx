@@ -139,7 +139,6 @@ export default function MainScreen() {
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>SAIMA SEGURIDAD – Panel de control puertas SECURA</Text>
 
         <TouchableOpacity 
           style={styles.notificationsButton}
@@ -478,13 +477,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#FFFFFF',
     fontFamily: 'monospace',
-    letterSpacing: 0.5,
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: '600',
-    flex: 1,
-    color: '#FFFFFF',
     letterSpacing: 0.5,
   },
   notificationsButton: {
