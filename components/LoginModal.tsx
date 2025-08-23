@@ -1,6 +1,7 @@
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, Modal } from 'react-native';
 import { useState } from 'react';
 import { User, X } from 'lucide-react-native';
+import { Image } from 'react-native';
 
 interface LoginModalProps {
   visible: boolean;
@@ -65,6 +66,15 @@ export default function LoginModal({ visible, onClose, onSuccess }: LoginModalPr
           </View>
 
           <View style={styles.content}>
+            {/* Santander Logo */}
+            <View style={styles.logoSection}>
+              <Image 
+                source={require('@/assets/images/banco-santander-seeklogo.png')}
+                style={styles.santanderLogo}
+                resizeMode="contain"
+              />
+            </View>
+
             {/* Credenciales de prueba info */}
             <View style={styles.testCredentials}>
               <Text style={styles.testCredentialsTitle}>Credenciales de prueba:</Text>
@@ -82,28 +92,32 @@ export default function LoginModal({ visible, onClose, onSuccess }: LoginModalPr
             {/* Form */}
             <View style={styles.formContainer}>
               <View style={styles.inputContainer}>
-                <Text style={styles.inputLabel}>ORDINAL:</Text>
-                <View style={styles.inputUnderline} />
-                <TextInput
-                  style={styles.textInput}
-                  value={ordinal}
-                  onChangeText={setOrdinal}
-                  placeholder="Ingrese ordinal"
-                  autoCapitalize="none"
-                />
+                <View style={styles.inputWrapper}>
+                  <Text style={styles.inputLabel}>ORDINAL</Text>
+                  <TextInput
+                    style={styles.textInput}
+                    value={ordinal}
+                    onChangeText={setOrdinal}
+                    placeholder="Ingrese ordinal"
+                    autoCapitalize="none"
+                    placeholderTextColor="#9CA3AF"
+                  />
+                </View>
               </View>
 
               <View style={styles.inputContainer}>
-                <Text style={styles.inputLabel}>CONTRASEÑA:</Text>
-                <View style={styles.inputUnderline} />
-                <TextInput
-                  style={styles.textInput}
-                  value={password}
-                  onChangeText={setPassword}
-                  placeholder="Ingrese contraseña"
-                  secureTextEntry={true}
-                  autoCapitalize="none"
-                />
+                <View style={styles.inputWrapper}>
+                  <Text style={styles.inputLabel}>CONTRASEÑA</Text>
+                  <TextInput
+                    style={styles.textInput}
+                    value={password}
+                    onChangeText={setPassword}
+                    placeholder="Ingrese contraseña"
+                    secureTextEntry={true}
+                    autoCapitalize="none"
+                    placeholderTextColor="#9CA3AF"
+                  />
+                </View>
               </View>
             </View>
 
@@ -175,6 +189,15 @@ const styles = StyleSheet.create({
   content: {
     padding: 32,
   },
+  logoSection: {
+    alignItems: 'center',
+    marginBottom: 32,
+    paddingVertical: 16,
+  },
+  santanderLogo: {
+    width: 280,
+    height: 80,
+  },
   testCredentials: {
     backgroundColor: '#E3F2FD',
     padding: 16,
@@ -213,27 +236,38 @@ const styles = StyleSheet.create({
     marginBottom: 32,
   },
   inputContainer: {
-    marginBottom: 8,
+    marginBottom: 4,
+  },
+  inputWrapper: {
+    backgroundColor: '#F8F9FA',
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#E9ECEF',
+    paddingHorizontal: 16,
+    paddingVertical: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
   },
   inputLabel: {
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: '600',
-    color: '#212529',
-    marginBottom: 8,
-    letterSpacing: 0.3,
-  },
-  inputUnderline: {
-    height: 1,
-    backgroundColor: '#212529',
-    marginBottom: 8,
+    color: '#6C757D',
+    marginBottom: 4,
+    marginTop: 8,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
   },
   textInput: {
-    fontSize: 16,
+    fontSize: 18,
     color: '#212529',
-    paddingVertical: 12,
+    paddingVertical: 14,
     paddingHorizontal: 0,
     backgroundColor: 'transparent',
-    minHeight: 40,
+    minHeight: 24,
+    fontWeight: '500',
   },
   buttonsContainer: {
     flexDirection: 'row',
