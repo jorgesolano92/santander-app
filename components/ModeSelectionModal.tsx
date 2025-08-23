@@ -36,21 +36,21 @@ const modeOptions: ModeOption[] = [
   // HORARIO
   {
     id: 'horario_extendido',
-    category: 'HORARIO',
+    category: 'COMERCIAL',
     name: 'EXTENDIDO',
     description: 'Modo de funcionamiento para horarios extendidos de atención al público. Las puertas funcionan de forma automática con detectores de movimiento activos. Ideal para horarios de mayor afluencia de clientes.'
   },
   {
-    id: 'horario_manual',
+    id: 'horario_autoservicio',
     category: 'HORARIO',
-    name: 'MANUAL',
-    description: 'La puerta P1 y la puerta P2 actúan de forma manual. Es necesario pulsar el botón de llamada de los videoporteros ubicados en la parte exterior de las puertas o los pulsadores retroiluminados ubicados en el interior. Los detectores de movimiento actuarán sólo en modo seguridad para evitar atrapamientos.'
+    name: 'AUTOSERVICIO',
+    description: 'Modo de funcionamiento para horarios de autoservicio. Las puertas funcionan de forma automática permitiendo el acceso a los cajeros automáticos fuera del horario comercial normal.'
   },
   
   // OFICINA CERRADA
   {
     id: 'oficina_cerrada',
-    category: 'OFICINA_CERRADA',
+    category: 'INDIVIDUAL',
     name: 'OFICINA CERRADA',
     description: 'Modo de funcionamiento destinado a horarios sin empleados. Solo se permite acceso mediante llave o de forma remota en caso que la instalación se haya dado de alta en los servidores del cliente. Todas las puertas permanecen bloqueadas.'
   },
@@ -58,30 +58,28 @@ const modeOptions: ModeOption[] = [
   // CARGA DE CAJERO
   {
     id: 'carga_cajero',
-    category: 'CARGA_CAJERO',
+    category: 'INDIVIDUAL',
     name: 'CARGA DE CAJERO',
     description: 'Es el modo de funcionamiento destinado la carga de cajero en los casos que exista en el uno en el zaguán. La puerta P1 permanece cerrada y es necesario pulsar para que haga llamada a las consolas interiores. La puerta P2 permanece abierta para facilitar el desarrollo de la actividad.'
   },
   
-  // MODO EMERGENCIA
+  // MANUAL
   {
-    id: 'emergencia',
-    category: 'EMERGENCIA',
-    name: 'EMERGENCIA',
-    description: 'Es el modo de funcionamiento de las puertas destinado a su desbloqueo en caso de funcionamiento anómalo de la electrónica de gestión del sistema. Las puertas P1 y P2 quedan totalmente abiertas, permitiendo el libre tránsito de personas. Este modo de funcionamiento puede ser actuado desde las consolas o desde el pulsador verde rearmable ubicado en las inmediaciones de la mesa de subdirección.'
+    id: 'manual',
+    category: 'INDIVIDUAL',
+    name: 'MANUAL',
+    description: 'La puerta P1 y la puerta P2 actúan de forma manual. Es necesario pulsar el botón de llamada de los videoporteros ubicados en la parte exterior de las puertas o los pulsadores retroiluminados ubicados en el interior. Los detectores de movimiento actuarán sólo en modo seguridad para evitar atrapamientos.'
   }
 ];
+
+// Orden específico de categorías según la imagen
+const categoryOrder = ['COMERCIAL', 'HORARIO', 'INDIVIDUAL'];
 
 const categoryDisplayNames = {
   'COMERCIAL': 'COMERCIAL',
   'HORARIO': 'HORARIO',
-  'OFICINA_CERRADA': 'OFICINA CERRADA',
-  'CARGA_CAJERO': 'CARGA DE CAJERO',
-  'EMERGENCIA': 'EMERGENCIA'
+  'INDIVIDUAL': '', // Sin título para los modos individuales
 };
-
-// Categorías que tienen submodos
-const categoriesWithSubmodes: string[] = [];
 
 export default function ModeSelectionModal({ visible, onClose, onModeSelect }: ModeSelectionModalProps) {
   const [selectedMode, setSelectedMode] = useState<string>('comercial_automatico');
@@ -194,19 +192,18 @@ export default function ModeSelectionModal({ visible, onClose, onModeSelect }: M
   const selectedModeDetails = getSelectedModeDetails();
 
   // Agrupar modos por categoría
-  const getAvailableCategories = () => {
-    const baseCategories = ['COMERCIAL', 'HORARIO', 'OFICINA_CERRADA'];
+  const getFilteredModes = () => {
+    let filteredModes = [...modeOptions];
     
-    // Solo agregar CARGA_CAJERO si está habilitado en la configuración
-    if (showCargaCajero) {
-      baseCategories.push('CARGA_CAJERO');
+    // Filtrar CARGA CAJERO si no está habilitado
+    if (!showCargaCajero) {
+      filteredModes = filteredModes.filter(mode => mode.id !== 'carga_cajero');
     }
     
-    baseCategories.push('EMERGENCIA');
-    return baseCategories;
+    return filteredModes;
   };
 
-  const availableCategories = getAvailableCategories();
+  const filteredModes = getFilteredModes();
 
   return (
     <Modal
@@ -227,76 +224,37 @@ export default function ModeSelectionModal({ visible, onClose, onModeSelect }: M
         <View style={styles.content}>
           {/* Left Panel - Mode Selection (más estrecho) */}
           <ScrollView style={styles.leftPanel} contentContainerStyle={styles.leftPanelContent}>
-            {availableCategories.map(category => {
-              const categoryModes = modeOptions.filter(mode => mode.category === category);
+            {categoryOrder.map(category => {
+              const categoryModes = filteredModes.filter(mode => mode.category === category);
               if (categoryModes.length === 0) return null;
-              
-              const hasSubmodes = categoriesWithSubmodes.includes(category);
-              const isExpanded = expandedCategories.has(category);
               
               return (
                 <View key={category} style={styles.section}>
-                  {hasSubmodes ? (
-                    // Categoría con submodos desplegables
-                    <>
-                      <TouchableOpacity 
-                        style={styles.categoryHeader}
-                        onPress={() => toggleCategory(category)}
-                      >
-                        <Text style={styles.sectionTitle}>{categoryDisplayNames[category]}</Text>
-                        {isExpanded ? (
-                          <ChevronDown size={16} color="#212529" />
-                        ) : (
-                          <ChevronRight size={16} color="#212529" />
-                        )}
-                      </TouchableOpacity>
-                      
-                      {isExpanded && (
-                        <View style={styles.submodeContainer}>
-                          {categoryModes.map(mode => (
-                            <TouchableOpacity
-                              key={mode.id}
-                              style={[
-                                styles.modeButton,
-                                selectedMode === mode.id && styles.selectedModeButton
-                              ]}
-                              onPress={() => handleModeSelect(mode.id)}
-                            >
-                              <Text style={[
-                                styles.modeButtonText,
-                                selectedMode === mode.id && styles.selectedModeButtonText
-                              ]}>
-                                {mode.name}
-                              </Text>
-                            </TouchableOpacity>
-                          ))}
-                        </View>
-                      )}
-                    </>
-                  ) : (
-                    // Categoría sin submodos (botón directo)
-                    categoryModes.map(mode => (
-                     <React.Fragment key={mode.id}>
-                       <Text style={styles.sectionTitleStatic}>
-                         {categoryDisplayNames[category]}
-                       </Text>
-                       <TouchableOpacity
-                         style={[
-                           styles.modeButton,
-                           selectedMode === mode.id && styles.selectedModeButton
-                         ]}
-                         onPress={() => handleModeSelect(mode.id)}
-                       >
-                         <Text style={[
-                           styles.modeButtonText,
-                           selectedMode === mode.id && styles.selectedModeButtonText
-                         ]}>
-                           {mode.name}
-                         </Text>
-                       </TouchableOpacity>
-                     </React.Fragment>
-                    ))
+                  {/* Mostrar título de categoría solo si no está vacío */}
+                  {categoryDisplayNames[category] && (
+                    <Text style={styles.sectionTitleStatic}>
+                      {categoryDisplayNames[category]}
+                    </Text>
                   )}
+                  
+                  {/* Botones de los modos */}
+                  {categoryModes.map(mode => (
+                    <TouchableOpacity
+                      key={mode.id}
+                      style={[
+                        styles.modeButton,
+                        selectedMode === mode.id && styles.selectedModeButton
+                      ]}
+                      onPress={() => handleModeSelect(mode.id)}
+                    >
+                      <Text style={[
+                        styles.modeButtonText,
+                        selectedMode === mode.id && styles.selectedModeButtonText
+                      ]}>
+                        {mode.name}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
                 </View>
               );
             })}
@@ -318,7 +276,7 @@ export default function ModeSelectionModal({ visible, onClose, onModeSelect }: M
               <View style={styles.detailsCard}>
                 <View style={styles.detailsContent}>
                   <Text style={styles.detailsTitle}>
-                    {selectedModeDetails ? categoryDisplayNames[selectedModeDetails.category] : ''} {selectedModeDetails?.name}
+                    {selectedModeDetails?.name}
                   </Text>
                   <Text style={styles.detailsDescription}>
                     {selectedModeDetails?.description}
