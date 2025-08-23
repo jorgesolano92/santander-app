@@ -63,7 +63,6 @@ export default function LoginModal({ visible, onClose, onSuccess }: LoginModalPr
               <X size={24} color="#FFFFFF" />
             </TouchableOpacity>
           </View>
-        </View>
 
           <View style={styles.content}>
             {/* Credenciales de prueba info */}
@@ -130,6 +129,7 @@ export default function LoginModal({ visible, onClose, onSuccess }: LoginModalPr
               </TouchableOpacity>
             </View>
           </View>
+        </View>
         </View>
       </View>
     </Modal>
