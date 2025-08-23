@@ -1,7 +1,8 @@
 import { View, Text, StyleSheet, TouchableOpacity, Modal, ScrollView } from 'react-native';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { X, ChevronDown, ChevronRight } from 'lucide-react-native';
 import { Image } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 interface ModeSelectionModalProps {
   visible: boolean;
@@ -86,11 +87,39 @@ export default function ModeSelectionModal({ visible, onClose, onModeSelect }: M
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set(['COMERCIAL']));
   const [countdown, setCountdown] = useState<number>(30);
   const [isCountdownActive, setIsCountdownActive] = useState<boolean>(false);
+  const [showCargaCajero, setShowCargaCajero] = useState<boolean>(false);
   const countdownInterval = useRef<NodeJS.Timeout | null>(null);
+
+  // Cargar configuración para determinar si mostrar Carga de Cajero
+  const loadConfiguration = useCallback(async () => {
+    try {
+      const savedConfig = await AsyncStorage.getItem('new_door_config');
+      if (savedConfig) {
+        const config = JSON.parse(savedConfig);
+        setShowCargaCajero(config.officeWithATM === true);
+      } else {
+        // Si no hay configuración, revisar la configuración antigua
+        const oldConfig = await AsyncStorage.getItem('detailed_door_config');
+        if (oldConfig) {
+          const config = JSON.parse(oldConfig);
+          // En la configuración antigua no hay este campo, así que por defecto false
+          setShowCargaCajero(false);
+        } else {
+          setShowCargaCajero(false);
+        }
+      }
+    } catch (error) {
+      console.error('Error loading configuration:', error);
+      setShowCargaCajero(false);
+    }
+  }, []);
 
   // Iniciar cuenta atrás cuando se abre el modal
   useEffect(() => {
     if (visible) {
+      // Cargar configuración al abrir el modal
+      loadConfiguration();
+      
       setCountdown(30);
       setIsCountdownActive(true);
       
@@ -119,7 +148,8 @@ export default function ModeSelectionModal({ visible, onClose, onModeSelect }: M
         clearInterval(countdownInterval.current);
       }
     };
-  }, [visible]);
+  }, [visible, loadConfiguration]);
+
   const handleModeSelect = (modeId: string) => {
     setSelectedMode(modeId);
   };
@@ -163,7 +193,19 @@ export default function ModeSelectionModal({ visible, onClose, onModeSelect }: M
   const selectedModeDetails = getSelectedModeDetails();
 
   // Agrupar modos por categoría
-  const categories = ['COMERCIAL', 'HORARIO', 'OFICINA_CERRADA', 'CARGA_CAJERO', 'EMERGENCIA'] as const;
+  const getAvailableCategories = () => {
+    const baseCategories = ['COMERCIAL', 'HORARIO', 'OFICINA_CERRADA'];
+    
+    // Solo agregar CARGA_CAJERO si está habilitado en la configuración
+    if (showCargaCajero) {
+      baseCategories.push('CARGA_CAJERO');
+    }
+    
+    baseCategories.push('EMERGENCIA');
+    return baseCategories;
+  };
+
+  const availableCategories = getAvailableCategories();
 
   return (
     <Modal
@@ -184,7 +226,7 @@ export default function ModeSelectionModal({ visible, onClose, onModeSelect }: M
         <View style={styles.content}>
           {/* Left Panel - Mode Selection (más estrecho) */}
           <ScrollView style={styles.leftPanel} contentContainerStyle={styles.leftPanelContent}>
-            {categories.map(category => {
+            {availableCategories.map(category => {
               const categoryModes = modeOptions.filter(mode => mode.category === category);
               if (categoryModes.length === 0) return null;
               
@@ -232,7 +274,6 @@ export default function ModeSelectionModal({ visible, onClose, onModeSelect }: M
                     </>
                   ) : (
                     // Categoría sin submodos (botón directo)
-                    // Botón directo sin título redundante
                     categoryModes.map(mode => (
                       <TouchableOpacity
                         key={mode.id}
