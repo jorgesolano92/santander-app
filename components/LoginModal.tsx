@@ -64,8 +64,15 @@ export default function LoginModal({ visible, onClose, onSuccess }: LoginModalPr
             </TouchableOpacity>
           </View>
 
-          {/* Content */}
-          <View style={styles.content}>
+          {/* Buttons */}
+          <View style={styles.buttonsContainer}>
+            <TouchableOpacity 
+              style={styles.closeButton}
+              onPress={handleClose}
+            >
+              <Text style={styles.closeButtonText}>CERRAR</Text>
+            </TouchableOpacity>
+
             {/* Credenciales de prueba info */}
             <View style={styles.testCredentials}>
               <Text style={styles.testCredentialsTitle}>Credenciales de prueba:</Text>
@@ -111,14 +118,16 @@ export default function LoginModal({ visible, onClose, onSuccess }: LoginModalPr
               <TouchableOpacity 
                 style={[styles.loginButton, isLoading && styles.loginButtonDisabled]} 
                 onPress={handleLogin}
-                disabled={isLoading}
-              >
-                <User size={20} color="#FFFFFF" />
-                <Text style={styles.loginButtonText}>
-                  {isLoading ? 'VALIDANDO...' : 'ACCEDER'}
-                </Text>
-              </TouchableOpacity>
-            </View>
+            <TouchableOpacity 
+              style={[styles.loginButton, isLoading && styles.loginButtonDisabled]} 
+              onPress={handleLogin}
+              disabled={isLoading}
+            >
+              <User size={20} color="#FFFFFF" />
+              <Text style={styles.loginButtonText}>
+                {isLoading ? 'VALIDANDO...' : 'ACCEDER'}
+              </Text>
+            </TouchableOpacity>
           </View>
         </View>
       </View>
@@ -203,6 +212,33 @@ const styles = StyleSheet.create({
   formContainer: {
     gap: 24,
   },
+  buttonsContainer: {
+    flexDirection: 'row',
+    gap: 16,
+    marginTop: 16,
+  },
+  closeButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#6C757D',
+    paddingHorizontal: 32,
+    paddingVertical: 16,
+    borderRadius: 8,
+    gap: 8,
+    shadowColor: '#6C757D',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  closeButtonText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    letterSpacing: 0.5,
+  },
   inputContainer: {
     marginBottom: 8,
   },
@@ -227,6 +263,7 @@ const styles = StyleSheet.create({
     minHeight: 40,
   },
   loginButton: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -240,7 +277,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.2,
     shadowRadius: 8,
     elevation: 4,
-    marginTop: 16,
   },
   loginButtonDisabled: {
     opacity: 0.6,
