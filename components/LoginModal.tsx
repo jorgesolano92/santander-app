@@ -116,9 +116,6 @@ export default function LoginModal({ visible, onClose, onSuccess }: LoginModalPr
 
               {/* Login Button */}
               <TouchableOpacity 
-                style={[styles.loginButton, isLoading && styles.loginButtonDisabled]} 
-                onPress={handleLogin}
-            <TouchableOpacity 
               style={[styles.loginButton, isLoading && styles.loginButtonDisabled]} 
               onPress={handleLogin}
               disabled={isLoading}
