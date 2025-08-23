@@ -139,10 +139,10 @@ export default function MainScreen() {
           
           <TouchableOpacity 
             style={styles.configButton}
-            onPress={() => console.log('Ajustes - Funcionalidad pendiente')}
+            onPress={() => console.log('Técnico - Funcionalidad pendiente')}
           >
             <Sliders size={20} color="#666666" />
-            <Text style={styles.configButtonText}>AJUSTES</Text>
+            <Text style={styles.configButtonText}>TÉCNICO</Text>
           </TouchableOpacity>
         </View>
       </View>
