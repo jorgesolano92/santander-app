@@ -184,141 +184,137 @@ export default function NewConfigurationModal({ visible, onClose, onSave }: NewC
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>CONFIGURACIÓN DE PUERTAS</Text>
             
-            {config.doors.map((door, index) => (
-              <View key={index} style={styles.doorCard}>
-                <View style={styles.doorHeader}>
-                  <Switch
-                    value={door.enabled}
-                    onValueChange={(value) => updateDoor(index, 'enabled', value)}
-                    trackColor={{ false: '#CED4DA', true: '#28A745' }}
-                    thumbColor={door.enabled ? '#FFFFFF' : '#FFFFFF'}
-                  />
-                  <TextInput
-                    style={[styles.doorNameInput, !door.enabled && styles.disabledInput]}
-                    value={door.name}
-                    onChangeText={(text) => updateDoor(index, 'name', text)}
-                    placeholder={`Puerta ${index + 1}`}
-                    editable={door.enabled}
-                  />
-                </View>
-                
-                {door.enabled && (
-                  <View style={styles.doorDetails}>
-                    <View style={styles.ipRow}>
-                      <Text style={styles.ipLabel}>IP Llamador Exterior:</Text>
-                      <TextInput
-                        style={styles.ipInput}
-                        value={door.ipExterior}
-                        onChangeText={(text) => updateDoor(index, 'ipExterior', text)}
-                        placeholder="192.168.1.x"
-                      />
-                      <TouchableOpacity
-                        style={getConnectionButtonStyle(connectionStatus[`exterior_${door.ipExterior}`])}
-                        onPress={() => testConnection('exterior', door.ipExterior)}
-                        disabled={connectionStatus[`exterior_${door.ipExterior}`] === 'testing'}
-                      >
-                        <Wifi size={14} color="#FFFFFF" />
-                        <Text style={styles.connectionButtonText}>
-                          {getConnectionButtonText(connectionStatus[`exterior_${door.ipExterior}`])}
-                        </Text>
-                      </TouchableOpacity>
-                    </View>
-                    
-                    <View style={styles.ipRow}>
-                      <Text style={styles.ipLabel}>IP Llamador Interior:</Text>
-                      <TextInput
-                        style={styles.ipInput}
-                        value={door.ipInterior}
-                        onChangeText={(text) => updateDoor(index, 'ipInterior', text)}
-                        placeholder="192.168.1.x"
-                      />
-                      <TouchableOpacity
-                        style={getConnectionButtonStyle(connectionStatus[`interior_${door.ipInterior}`])}
-                        onPress={() => testConnection('interior', door.ipInterior)}
-                        disabled={connectionStatus[`interior_${door.ipInterior}`] === 'testing'}
-                      >
-                        <Wifi size={14} color="#FFFFFF" />
-                        <Text style={styles.connectionButtonText}>
-                          {getConnectionButtonText(connectionStatus[`interior_${door.ipInterior}`])}
-                        </Text>
-                      </TouchableOpacity>
-                    </View>
+            <View style={styles.doorsGrid}>
+              {config.doors.map((door, index) => (
+                <View key={index} style={styles.doorCard}>
+                  <View style={styles.doorHeader}>
+                    <Switch
+                      value={door.enabled}
+                      onValueChange={(value) => updateDoor(index, 'enabled', value)}
+                      trackColor={{ false: '#CED4DA', true: '#28A745' }}
+                      thumbColor={door.enabled ? '#FFFFFF' : '#FFFFFF'}
+                    />
+                    <TextInput
+                      style={[styles.doorNameInput, !door.enabled && styles.disabledInput]}
+                      value={door.name}
+                      onChangeText={(text) => updateDoor(index, 'name', text)}
+                      placeholder={`Puerta ${index + 1}`}
+                      editable={door.enabled}
+                    />
                   </View>
-                )}
-              </View>
-            ))}
-          </View>
-
-          {/* Parámetros de Red */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>PARÁMETROS DE RED</Text>
-            <View style={styles.networkCard}>
-              <View style={styles.networkRow}>
-                <Text style={styles.networkLabel}>Dirección IP consola:</Text>
-                <TextInput
-                  style={styles.networkInput}
-                  value={config.network.consoleIP}
-                  onChangeText={(text) => updateNetwork('consoleIP', text)}
-                  placeholder="192.168.1.25"
-                />
-              </View>
-              
-              <View style={styles.networkRow}>
-                <Text style={styles.networkLabel}>Máscara de red:</Text>
-                <TextInput
-                  style={styles.networkInput}
-                  value={config.network.netmask}
-                  onChangeText={(text) => updateNetwork('netmask', text)}
-                  placeholder="255.255.255.0"
-                />
-              </View>
-              
-              <View style={styles.networkRow}>
-                <Text style={styles.networkLabel}>Puerta de enlace (servidor):</Text>
-                <TextInput
-                  style={styles.networkInput}
-                  value={config.network.gateway}
-                  onChangeText={(text) => updateNetwork('gateway', text)}
-                  placeholder="192.168.1.1"
-                />
-                <TouchableOpacity
-                  style={getConnectionButtonStyle(connectionStatus[`server_${config.network.gateway}`])}
-                  onPress={() => testConnection('server', config.network.gateway)}
-                  disabled={connectionStatus[`server_${config.network.gateway}`] === 'testing'}
-                >
-                  <Wifi size={14} color="#FFFFFF" />
-                  <Text style={styles.connectionButtonText}>
-                    {getConnectionButtonText(connectionStatus[`server_${config.network.gateway}`])}
-                  </Text>
-                </TouchableOpacity>
-              </View>
+                  
+                  {door.enabled && (
+                    <View style={styles.doorDetails}>
+                      <View style={styles.ipRow}>
+                        <Text style={styles.ipLabel}>IP Exterior:</Text>
+                        <TextInput
+                          style={styles.ipInput}
+                          value={door.ipExterior}
+                          onChangeText={(text) => updateDoor(index, 'ipExterior', text)}
+                          placeholder="192.168.1.x"
+                        />
+                        <TouchableOpacity
+                          style={getConnectionButtonStyle(connectionStatus[`exterior_${door.ipExterior}`])}
+                          onPress={() => testConnection('exterior', door.ipExterior)}
+                          disabled={connectionStatus[`exterior_${door.ipExterior}`] === 'testing'}
+                        >
+                          <Wifi size={12} color="#FFFFFF" />
+                        </TouchableOpacity>
+                      </View>
+                      
+                      <View style={styles.ipRow}>
+                        <Text style={styles.ipLabel}>IP Interior:</Text>
+                        <TextInput
+                          style={styles.ipInput}
+                          value={door.ipInterior}
+                          onChangeText={(text) => updateDoor(index, 'ipInterior', text)}
+                          placeholder="192.168.1.x"
+                        />
+                        <TouchableOpacity
+                          style={getConnectionButtonStyle(connectionStatus[`interior_${door.ipInterior}`])}
+                          onPress={() => testConnection('interior', door.ipInterior)}
+                          disabled={connectionStatus[`interior_${door.ipInterior}`] === 'testing'}
+                        >
+                          <Wifi size={12} color="#FFFFFF" />
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  )}
+                </View>
+              ))}
             </View>
           </View>
 
-          {/* Horarios */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>HORARIOS</Text>
-            <View style={styles.scheduleCard}>
-              {Object.entries(config.schedules).map(([type, schedule]) => (
-                <View key={type} style={styles.scheduleRow}>
-                  <Text style={styles.scheduleLabel}>
-                    {type.charAt(0).toUpperCase() + type.slice(1)}:
-                  </Text>
+          {/* Sección en dos columnas */}
+          <View style={styles.twoColumnSection}>
+            {/* Columna Izquierda - Parámetros de Red */}
+            <View style={styles.leftColumn}>
+              <Text style={styles.sectionTitle}>PARÁMETROS DE RED</Text>
+              <View style={styles.networkCard}>
+                <View style={styles.networkRow}>
+                  <Text style={styles.networkLabel}>IP consola:</Text>
                   <TextInput
-                    style={styles.timeInput}
-                    value={schedule.ini1}
-                    onChangeText={(text) => updateSchedule(type as keyof typeof config.schedules, 'ini1', text)}
-                    placeholder="00:00"
-                  />
-                  <Text style={styles.timeSeparator}>-</Text>
-                  <TextInput
-                    style={styles.timeInput}
-                    value={schedule.ini2}
-                    onChangeText={(text) => updateSchedule(type as keyof typeof config.schedules, 'ini2', text)}
-                    placeholder="00:00"
+                    style={styles.networkInput}
+                    value={config.network.consoleIP}
+                    onChangeText={(text) => updateNetwork('consoleIP', text)}
+                    placeholder="192.168.1.25"
                   />
                 </View>
-              ))}
+                
+                <View style={styles.networkRow}>
+                  <Text style={styles.networkLabel}>Máscara:</Text>
+                  <TextInput
+                    style={styles.networkInput}
+                    value={config.network.netmask}
+                    onChangeText={(text) => updateNetwork('netmask', text)}
+                    placeholder="255.255.255.0"
+                  />
+                </View>
+                
+                <View style={styles.networkRow}>
+                  <Text style={styles.networkLabel}>Gateway:</Text>
+                  <TextInput
+                    style={styles.networkInput}
+                    value={config.network.gateway}
+                    onChangeText={(text) => updateNetwork('gateway', text)}
+                    placeholder="192.168.1.1"
+                  />
+                  <TouchableOpacity
+                    style={getConnectionButtonStyle(connectionStatus[`server_${config.network.gateway}`])}
+                    onPress={() => testConnection('server', config.network.gateway)}
+                    disabled={connectionStatus[`server_${config.network.gateway}`] === 'testing'}
+                  >
+                    <Wifi size={12} color="#FFFFFF" />
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+
+            {/* Columna Derecha - Horarios */}
+            <View style={styles.rightColumn}>
+              <Text style={styles.sectionTitle}>HORARIOS</Text>
+              <View style={styles.scheduleCard}>
+                {Object.entries(config.schedules).map(([type, schedule]) => (
+                  <View key={type} style={styles.scheduleRow}>
+                    <Text style={styles.scheduleLabel}>
+                      {type.charAt(0).toUpperCase() + type.slice(1)}:
+                    </Text>
+                    <TextInput
+                      style={styles.timeInput}
+                      value={schedule.ini1}
+                      onChangeText={(text) => updateSchedule(type as keyof typeof config.schedules, 'ini1', text)}
+                      placeholder="00:00"
+                    />
+                    <Text style={styles.timeSeparator}>-</Text>
+                    <TextInput
+                      style={styles.timeInput}
+                      value={schedule.ini2}
+                      onChangeText={(text) => updateSchedule(type as keyof typeof config.schedules, 'ini2', text)}
+                      placeholder="00:00"
+                    />
+                  </View>
+                ))}
+              </View>
             </View>
           </View>
 
@@ -400,11 +396,18 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     letterSpacing: 0.5,
   },
+  doorsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 16,
+  },
   doorCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
     padding: 20,
-    marginBottom: 16,
+    flex: 1,
+    minWidth: 280,
+    maxWidth: '48%',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.08,
@@ -447,7 +450,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '500',
     color: '#495057',
-    minWidth: 140,
+    minWidth: 80,
   },
   ipInput: {
     flex: 1,
@@ -463,11 +466,12 @@ const styles = StyleSheet.create({
   connectionButton: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: '#495057',
-    paddingHorizontal: 12,
+    paddingHorizontal: 8,
     paddingVertical: 8,
     borderRadius: 6,
-    gap: 6,
+    minWidth: 32,
   },
   connectionButtonTesting: {
     backgroundColor: '#FFC107',
@@ -482,6 +486,17 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     color: '#FFFFFF',
+  },
+  twoColumnSection: {
+    flexDirection: 'row',
+    gap: 32,
+    marginBottom: 32,
+  },
+  leftColumn: {
+    flex: 1,
+  },
+  rightColumn: {
+    flex: 1,
   },
   networkCard: {
     backgroundColor: '#FFFFFF',
@@ -505,7 +520,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '500',
     color: '#495057',
-    minWidth: 180,
+    minWidth: 80,
   },
   networkInput: {
     flex: 1,
@@ -540,7 +555,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '500',
     color: '#495057',
-    minWidth: 100,
+    minWidth: 90,
   },
   timeInput: {
     fontSize: 14,
