@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react';
 import { Settings, MessageCircle, DoorOpen, FileSliders as Sliders } from 'lucide-react-native';
 import { Image } from 'react-native';
 import LoginModal from '@/components/LoginModal';
-import DetailedConfigurationModal from '@/components/DetailedConfigurationModal';
+import NewConfigurationModal from '@/components/NewConfigurationModal';
 import ModeSelectionModal from '@/components/ModeSelectionModal';
 import VisualizationModal from '@/components/VisualizationModal';
 import { useDoorControl } from '@/hooks/useDoorControl';
@@ -23,7 +23,7 @@ export default function MainScreen() {
   } = useDoorControl();
 
   const [showLoginModal, setShowLoginModal] = useState(false);
-  const [showDetailedConfigModal, setShowDetailedConfigModal] = useState(false);
+  const [showNewConfigModal, setShowNewConfigModal] = useState(false);
   const [showModeModal, setShowModeModal] = useState(false);
   const [showVisualizationModal, setShowVisualizationModal] = useState(false);
 
@@ -70,7 +70,7 @@ export default function MainScreen() {
 
   const handleLoginSuccess = () => {
     setShowLoginModal(false);
-    setShowDetailedConfigModal(true);
+    setShowNewConfigModal(true);
   };
 
   const handleModeSelect = async (mode: string) => {
@@ -388,10 +388,10 @@ export default function MainScreen() {
         onSuccess={handleLoginSuccess}
       />
 
-      {/* Detailed Configuration Modal */}
-      <DetailedConfigurationModal
-        visible={showDetailedConfigModal}
-        onClose={() => setShowDetailedConfigModal(false)}
+      {/* New Configuration Modal */}
+      <NewConfigurationModal
+        visible={showNewConfigModal}
+        onClose={() => setShowNewConfigModal(false)}
         onSave={handleConfigSave}
       />
 
