@@ -6,6 +6,7 @@ import LoginModal from '@/components/LoginModal';
 import NewConfigurationModal from '@/components/NewConfigurationModal';
 import ModeSelectionModal from '@/components/ModeSelectionModal';
 import VisualizationModal from '@/components/VisualizationModal';
+import TechnicianModal from '@/components/TechnicianModal';
 import { useDoorControl } from '@/hooks/useDoorControl';
 
 const { width, height } = Dimensions.get('window');
@@ -26,6 +27,7 @@ export default function MainScreen() {
   const [showNewConfigModal, setShowNewConfigModal] = useState(false);
   const [showModeModal, setShowModeModal] = useState(false);
   const [showVisualizationModal, setShowVisualizationModal] = useState(false);
+  const [showTechnicianModal, setShowTechnicianModal] = useState(false);
 
   // Estados derivados del sistema real
   const currentMode = systemStatus?.mode || 'COMERCIAL AUTOMATICO';
@@ -139,7 +141,7 @@ export default function MainScreen() {
           
           <TouchableOpacity 
             style={styles.configButton}
-            onPress={() => console.log('Técnico - Funcionalidad pendiente')}
+            onPress={() => setShowTechnicianModal(true)}
           >
             <Sliders size={20} color="#666666" />
             <Text style={styles.configButtonText}>TÉCNICO</Text>
@@ -406,6 +408,12 @@ export default function MainScreen() {
       <VisualizationModal
         visible={showVisualizationModal}
         onClose={() => setShowVisualizationModal(false)}
+      />
+
+      {/* Technician Modal */}
+      <TechnicianModal
+        visible={showTechnicianModal}
+        onClose={() => setShowTechnicianModal(false)}
       />
     </View>
   );
