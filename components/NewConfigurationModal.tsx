@@ -91,7 +91,16 @@ export default function NewConfigurationModal({ visible, onClose, onSave }: NewC
 
   const handleSave = async () => {
     await saveConfiguration(config);
-    onSave(config);
+    
+    // Convertir la configuración al formato esperado por el componente padre
+    const configForParent = {
+      username: 'admin', // Usuario por defecto
+      password: '123456', // Password por defecto  
+      officeNumber: '1234', // Número de oficina por defecto
+      ...config // Spread de toda la configuración
+    };
+    
+    onSave(configForParent);
     console.log('📋 Nueva configuración completa guardada:', config);
   };
 
