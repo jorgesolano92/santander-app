@@ -1,5 +1,5 @@
 import { View, Text, StyleSheet, TouchableOpacity, Modal } from 'react-native';
-import { X, Lock, Clock as Unlock } from 'lucide-react-native';
+import { X, Lock, Unlock } from 'lucide-react-native';
 import { Image } from 'react-native';
 import { useState } from 'react';
 import { useDoorControl } from '@/hooks/useDoorControl';
@@ -58,7 +58,7 @@ export default function VisualizationModal({ visible, onClose }: VisualizationMo
       <View style={styles.container}>
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.headerTitle}>SAIMA SEGURIDAD – Panel de control puertas SECURA</Text>
+          <Text style={styles.headerTitle}>VISUALIZACIÓN</Text>
           <TouchableOpacity style={styles.closeButton} onPress={onClose}>
             <X size={24} color="#FFFFFF" />
           </TouchableOpacity>
@@ -73,10 +73,6 @@ export default function VisualizationModal({ visible, onClose }: VisualizationMo
               resizeMode="contain"
             />
           </View>
-
-          {/* Title */}
-          <Text style={styles.pageTitle}>VISUALIZACIÓN</Text>
-          <View style={styles.titleUnderline} />
 
           {/* Door Status Cards */}
           <View style={styles.doorsContainer}>
@@ -101,11 +97,6 @@ export default function VisualizationModal({ visible, onClose }: VisualizationMo
                   </View>
                 </View>
                 
-                {/* Información adicional de configuración */}
-                <View style={styles.doorInfo}>
-                  <Text style={styles.doorInfoText}>IP: {door.ip}</Text>
-                  <Text style={styles.doorInfoText}>Tipo: {door.type}</Text>
-                </View>
               </View>
             ))}
           </View>
@@ -145,7 +136,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 32,
+    paddingHorizontal: 24,
     paddingVertical: 20,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -154,21 +145,7 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   headerTitle: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: '#FFFFFF',
-    letterSpacing: 0.5,
-  },
-  notificationsButton: {
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
-  },
-  notificationsButtonText: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: '600',
     color: '#FFFFFF',
     letterSpacing: 0.5,
@@ -178,47 +155,34 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    padding: 32,
+    padding: 24,
     alignItems: 'center',
   },
   logoSection: {
     alignItems: 'center',
-    marginBottom: 16,
-    marginTop: 4,
+    marginBottom: 32,
+    marginTop: 16,
   },
   santanderLogo: {
-    width: 280,
-    height: 80,
-  },
-  pageTitle: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: '#212529',
-    marginBottom: 8,
-    letterSpacing: 0.5,
-  },
-  titleUnderline: {
-    width: 160,
-    height: 2,
-    backgroundColor: '#212529',
-    marginBottom: 24,
+    width: 350,
+    height: 100,
   },
   doorsContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 32,
-    marginBottom: 24,
+    gap: 40,
+    marginBottom: 32,
     alignItems: 'flex-start',
     justifyContent: 'center',
-    maxWidth: 1000,
+    maxWidth: 800,
   },
   doorCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
-    padding: 24,
+    padding: 32,
     alignItems: 'center',
-    minWidth: 280,
-    maxWidth: 320,
+    minWidth: 300,
+    maxWidth: 350,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.08,
@@ -229,11 +193,11 @@ const styles = StyleSheet.create({
   },
   doorButton: {
     backgroundColor: '#495057',
-    paddingHorizontal: 24,
-    paddingVertical: 14,
+    paddingHorizontal: 32,
+    paddingVertical: 16,
     borderRadius: 8,
-    marginBottom: 20,
-    minWidth: 200,
+    marginBottom: 24,
+    minWidth: 220,
     alignItems: 'center',
     shadowColor: '#495057',
     shadowOffset: { width: 0, height: 2 },
@@ -242,7 +206,7 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   doorButtonText: {
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: '700',
     color: '#FFFFFF',
     letterSpacing: 0.5,
@@ -250,49 +214,32 @@ const styles = StyleSheet.create({
   },
   statusContainer: {
     alignItems: 'center',
-    marginBottom: 16,
   },
   statusLabel: {
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: '700',
     color: '#212529',
-    marginBottom: 12,
+    marginBottom: 16,
     letterSpacing: 0.3,
     textAlign: 'center',
   },
   statusRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 12,
   },
   statusText: {
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: '600',
     color: '#212529',
     letterSpacing: 0.3,
   },
-  doorInfo: {
-    alignItems: 'center',
-    backgroundColor: '#F8F9FA',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: '#E9ECEF',
-    width: '100%',
-  },
-  doorInfoText: {
-    fontSize: 11,
-    color: '#6C757D',
-    fontWeight: '500',
-    marginBottom: 2,
-  },
   backButton: {
     backgroundColor: '#495057',
-    paddingHorizontal: 40,
-    paddingVertical: 16,
+    paddingHorizontal: 48,
+    paddingVertical: 20,
     borderRadius: 8,
-    marginBottom: 24,
+    marginBottom: 32,
     shadowColor: '#495057',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.2,
@@ -300,37 +247,15 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   backButtonText: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: '700',
     color: '#FFFFFF',
     letterSpacing: 1,
   },
   footerText: {
-    fontSize: 12,
+    fontSize: 14,
     color: '#6C757D',
-    textAlign: 'center',
+    textAlign: 'left',
     fontWeight: '400',
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    minHeight: 200,
-  },
-  loadingText: {
-    fontSize: 16,
-    color: '#6C757D',
-    fontWeight: '500',
-  },
-  nodoorsContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    minHeight: 200,
-  },
-  nodoorsText: {
-    fontSize: 16,
-    color: '#6C757D',
-    fontWeight: '500',
   },
 });
