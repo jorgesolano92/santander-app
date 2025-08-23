@@ -2,7 +2,8 @@ import { View, Text, StyleSheet, TouchableOpacity, Dimensions } from 'react-nati
 import { useState, useEffect } from 'react';
 import { Settings, MessageCircle, DoorOpen, FileSliders as Sliders } from 'lucide-react-native';
 import { Image } from 'react-native';
-import ConfigurationModal from '@/components/ConfigurationModal';
+import LoginModal from '@/components/LoginModal';
+import DetailedConfigurationModal from '@/components/DetailedConfigurationModal';
 import ModeSelectionModal from '@/components/ModeSelectionModal';
 import VisualizationModal from '@/components/VisualizationModal';
 import { useDoorControl } from '@/hooks/useDoorControl';
@@ -21,7 +22,8 @@ export default function MainScreen() {
     validateDevice,
   } = useDoorControl();
 
-  const [showConfigModal, setShowConfigModal] = useState(false);
+  const [showLoginModal, setShowLoginModal] = useState(false);
+  const [showDetailedConfigModal, setShowDetailedConfigModal] = useState(false);
   const [showModeModal, setShowModeModal] = useState(false);
   const [showVisualizationModal, setShowVisualizationModal] = useState(false);
 
@@ -64,6 +66,11 @@ export default function MainScreen() {
     } else {
       console.error('❌ Error aplicando configuración');
     }
+  };
+
+  const handleLoginSuccess = () => {
+    setShowLoginModal(false);
+    setShowDetailedConfigModal(true);
   };
 
   const handleModeSelect = async (mode: string) => {
@@ -124,7 +131,7 @@ export default function MainScreen() {
           
           <TouchableOpacity 
             style={styles.configButton}
-            onPress={() => setShowConfigModal(true)}
+            onPress={() => setShowLoginModal(true)}
           >
             <Settings size={20} color="#666666" />
             <Text style={styles.configButtonText}>CONFIGURACIÓN</Text>
@@ -374,10 +381,17 @@ export default function MainScreen() {
         </View>
       )}
 
-      {/* Configuration Modal */}
-      <ConfigurationModal
-        visible={showConfigModal}
-        onClose={() => setShowConfigModal(false)}
+      {/* Login Modal */}
+      <LoginModal
+        visible={showLoginModal}
+        onClose={() => setShowLoginModal(false)}
+        onSuccess={handleLoginSuccess}
+      />
+
+      {/* Detailed Configuration Modal */}
+      <DetailedConfigurationModal
+        visible={showDetailedConfigModal}
+        onClose={() => setShowDetailedConfigModal(false)}
         onSave={handleConfigSave}
       />
 
