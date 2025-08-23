@@ -1,5 +1,5 @@
 import { View, Text, StyleSheet, TouchableOpacity, Dimensions } from 'react-native';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Settings, MessageCircle, DoorOpen, FileSliders as Sliders } from 'lucide-react-native';
 import { Image } from 'react-native';
 import LoginModal from '@/components/LoginModal';
@@ -28,6 +28,28 @@ export default function MainScreen() {
   const [showModeModal, setShowModeModal] = useState(false);
   const [showVisualizationModal, setShowVisualizationModal] = useState(false);
   const [showTechnicianModal, setShowTechnicianModal] = useState(false);
+  const [currentDateTime, setCurrentDateTime] = useState(new Date());
+
+  // Actualizar fecha y hora cada segundo
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentDateTime(new Date());
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, []);
+
+  // Formatear fecha y hora
+  const formatDateTime = useCallback((date: Date) => {
+    const day = date.getDate().toString().padStart(2, '0');
+    const month = (date.getMonth() + 1).toString().padStart(2, '0');
+    const year = date.getFullYear();
+    const hours = date.getHours().toString().padStart(2, '0');
+    const minutes = date.getMinutes().toString().padStart(2, '0');
+    const seconds = date.getSeconds().toString().padStart(2, '0');
+    
+    return `${day}/${month}/${year} ${hours}:${minutes}:${seconds}`;
+  }, []);
 
   // Estados derivados del sistema real
   const currentMode = systemStatus?.mode || 'COMERCIAL AUTOMATICO';
@@ -117,6 +139,11 @@ export default function MainScreen() {
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
+        {/* Fecha y hora */}
+        <View style={styles.dateTimeContainer}>
+          <Text style={styles.dateTimeText}>{formatDateTime(currentDateTime)}</Text>
+        </View>
+        
         <TouchableOpacity 
           style={styles.notificationsButton}
           onPress={() => console.log('Notificaciones presionado')}
@@ -436,6 +463,21 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
+  },
+  dateTimeContainer: {
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  dateTimeText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#FFFFFF',
+    fontFamily: 'monospace',
+    letterSpacing: 0.5,
   },
   headerTitle: {
     fontSize: 20,
