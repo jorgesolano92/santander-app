@@ -1,6 +1,6 @@
 import { View, Text, StyleSheet, TouchableOpacity, Dimensions } from 'react-native';
 import { useState, useEffect, useCallback } from 'react';
-import { Settings, MessageCircle, DoorOpen, Wrench } from 'lucide-react-native';
+import { Settings, MessageCircle, DoorOpen, HardHat } from 'lucide-react-native';
 import { Image } from 'react-native';
 import LoginModal from '@/components/LoginModal';
 import NewConfigurationModal from '@/components/NewConfigurationModal';
@@ -190,7 +190,7 @@ export default function MainScreen() {
           style={styles.configButton}
           onPress={() => setShowTechnicianModal(true)}
         >
-          <Wrench size={20} color="#666666" />
+          <HardHat size={20} color="#666666" />
           <Text style={styles.configButtonText}>TÉCNICO</Text>
         </TouchableOpacity>
       </View>
