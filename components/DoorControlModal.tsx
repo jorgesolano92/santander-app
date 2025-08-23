@@ -1,6 +1,7 @@
 import { View, Text, StyleSheet, TouchableOpacity, Modal } from 'react-native';
 import { useState } from 'react';
 import { X, Lock, Clock as Unlock, MessageCircle, DoorOpen } from 'lucide-react-native';
+import { useDoorControl } from '@/hooks/useDoorControl';
 
 interface DoorControlModalProps {
   visible: boolean;
@@ -11,7 +12,15 @@ interface DoorControlModalProps {
 
 export default function DoorControlModal({ visible, onClose, doorId, doorName }: DoorControlModalProps) {
   const [isCommunicating, setIsCommunicating] = useState(false);
-  const [isOpening, setIsOpening] = useState(false);
+  const { systemStatus, controlDoor } = useDoorControl();
+  
+  // Obtener estado actual de la puerta
+  const currentDoor = systemStatus?.doors[doorId];
+  const doorStatus = currentDoor?.status || 'closed';
+  const isLocked = currentDoor?.locked ?? true;
+  const isOpening = doorStatus === 'opening';
+  const isClosing = doorStatus === 'closing';
+  const isOpen = doorStatus === 'open';
 
   const handleCommunicate = () => {
     console.log(`📞 Comunicar con ${doorName}`);
@@ -23,14 +32,47 @@ export default function DoorControlModal({ visible, onClose, doorId, doorName }:
     }, 3000);
   };
 
-  const handleOpenDoor = () => {
-    console.log(`🚪 Abriendo ${doorName}`);
-    setIsOpening(true);
+  const handleOpenDoor = async () => {
+    console.log(`🚪 ${isOpen ? 'Cerrando' : 'Abriendo'} ${doorName}`);
     
-    // Simular apertura por 2 segundos
-    setTimeout(() => {
-      setIsOpening(false);
-    }, 2000);
+    const action = isOpen ? 'close' : 'open';
+    const success = await controlDoor(doorId, action);
+    
+    if (success) {
+      console.log(`✅ ${doorName} - Comando ${action} ejecutado correctamente`);
+    } else {
+      console.error(`❌ Error ejecutando comando ${action} en ${doorName}`);
+    }
+  };
+
+  // Función para obtener el texto del estado de la puerta
+  const getDoorStatusText = () => {
+    switch (doorStatus) {
+      case 'open':
+        return 'ABIERTA';
+      case 'closed':
+        return 'CERRADA';
+      case 'opening':
+        return 'ABRIENDO...';
+      case 'closing':
+        return 'CERRANDO...';
+      case 'error':
+        return 'ERROR';
+      default:
+        return 'DESCONOCIDO';
+    }
+  };
+
+  // Función para obtener el texto del botón
+  const getButtonText = () => {
+    if (isOpening) return 'ABRIENDO...';
+    if (isClosing) return 'CERRANDO...';
+    return isOpen ? 'CERRAR PUERTA' : 'ABRIR PUERTA';
+  };
+
+  // Función para determinar si el botón está deshabilitado
+  const isButtonDisabled = () => {
+    return isOpening || isClosing;
   };
 
   const handleEmergency = () => {
@@ -96,13 +138,20 @@ export default function DoorControlModal({ visible, onClose, doorId, doorName }:
                 </TouchableOpacity>
 
                 <TouchableOpacity 
-                  style={[styles.controlButton, isOpening && styles.controlButtonDisabled]}
+                  style={[
+                    styles.controlButton, 
+                    isButtonDisabled() && styles.controlButtonDisabled,
+                    isOpen && styles.controlButtonClose
+                  ]}
                   onPress={handleOpenDoor}
-                  disabled={isOpening}
+                  disabled={isButtonDisabled()}
                 >
-                  <DoorOpen size={18} color="#495057" />
-                  <Text style={styles.controlButtonText}>
-                    {isOpening ? 'ABRIENDO...' : 'ABRIR PUERTA'}
+                  <DoorOpen size={18} color={isOpen ? "#FFFFFF" : "#495057"} />
+                  <Text style={[
+                    styles.controlButtonText,
+                    isOpen && styles.controlButtonCloseText
+                  ]}>
+                    {getButtonText()}
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -111,8 +160,17 @@ export default function DoorControlModal({ visible, onClose, doorId, doorName }:
               <View style={styles.statusSection}>
                 <Text style={styles.statusTitle}>ESTADO DE PUERTA</Text>
                 <View style={styles.statusRow}>
-                  <Text style={styles.statusText}>CERRADA</Text>
-                  <Lock size={20} color="#212529" />
+                  <Text style={[
+                    styles.statusText,
+                    (isOpening || isClosing) && styles.statusTextAnimated
+                  ]}>
+                    {getDoorStatusText()}
+                  </Text>
+                  {isLocked ? (
+                    <Lock size={20} color="#212529" />
+                  ) : (
+                    <Unlock size={20} color="#28A745" />
+                  )}
                 </View>
               </View>
             </View>
@@ -284,6 +342,13 @@ const styles = StyleSheet.create({
     color: '#495057',
     letterSpacing: 0.5,
   },
+  controlButtonClose: {
+    backgroundColor: '#DC3545',
+    borderColor: '#C82333',
+  },
+  controlButtonCloseText: {
+    color: '#FFFFFF',
+  },
   statusSection: {
     alignItems: 'center',
     backgroundColor: '#FFFFFF',
@@ -314,6 +379,10 @@ const styles = StyleSheet.create({
     color: '#212529',
     letterSpacing: 0.3,
     marginBottom: 6,
+  },
+  statusTextAnimated: {
+    color: '#17A2B8',
+    fontWeight: '700',
   },
   bottomButtons: {
     flexDirection: 'row',
