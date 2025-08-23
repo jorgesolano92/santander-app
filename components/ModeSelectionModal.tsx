@@ -17,13 +17,7 @@ interface ModeOption {
 }
 
 const modeOptions: ModeOption[] = [
-  // MODO COMERCIAL
-  {
-    id: 'comercial_independiente',
-    category: 'COMERCIAL',
-    name: 'INDEPENDIENTE',
-    description: 'La puerta P1 y la puerta P2 actúan de forma independiente, tanto si se va en dirección entrada como en dirección salida. No es necesario pulsar botones de Visor Voxter o Videoporteros, dado que los detectores de movimiento actuarán como apertura de puerta en cortesía. Los detectores de movimiento interiores y exteriores actuarán también en modo seguridad, es decir, cuando la puerta esté abierta, protegerán a los usuarios frente al atrapamiento cuando ésta se cierre. Las puertas no trabajan en modo esclusa; es decir las puertas abren independientemente de si la otra puerta está abierta o cerrada.'
-  },
+  // COMERCIAL
   {
     id: 'comercial_automatico',
     category: 'COMERCIAL',
@@ -31,49 +25,35 @@ const modeOptions: ModeOption[] = [
     description: 'La puerta P1 y la puerta P2 actúan de forma automática, tanto si se va en dirección entrada como en dirección salida. No es necesario pulsar botones de Visor Voxter o Videoporteros, dado que los detectores de movimiento actuarán como apertura de puerta en cortesía. Los detectores de movimiento interiores y exteriores actuarán también en modo seguridad, es decir, cuando la puerta esté abierta, protegerán a los usuarios frente al atrapamiento cuando ésta se cierre. Las puertas trabajan en modo esclusa; es decir una puerta no abre hasta que la otra esté cerrada.'
   },
   {
-    id: 'comercial_semiautomatico',
+    id: 'comercial_esclusa',
     category: 'COMERCIAL',
-    name: 'SEMIAUTOMÁTICO',
-    description: 'La puerta P1 y la puerta P2 actúan de forma semiautomática, es decir, si se va en dirección entrada, será necesario pulsar el botón de llamada de los Videoporteros ubicados en la parte exterior de las puertas. En el caso de ir en dirección de salida, las puertas funcionarán de forma automática mediante los detectores de movimiento, los cuales actuarán como apertura de puerta en cortesía. Los detectores de movimiento interiores y exteriores actuarán también en modo seguridad, es decir, cuando la puerta esté abierta, protegerán a los usuarios frente al atrapamiento cuando ésta se cierre. Las puertas trabajan en modo esclusa; es decir una puerta no abre hasta que la otra esté cerrada.'
+    name: 'ESCLUSA',
+    description: 'La puerta P1 y la puerta P2 actúan de forma automática con funcionamiento en esclusa estricta. Los detectores de movimiento actuarán como apertura de puerta en cortesía. Una puerta no abre hasta que la otra esté completamente cerrada, garantizando máxima seguridad en el acceso.'
+  },
+  
+  // HORARIO
+  {
+    id: 'horario_extendido',
+    category: 'HORARIO',
+    name: 'EXTENDIDO',
+    description: 'Modo de funcionamiento para horarios extendidos de atención al público. Las puertas funcionan de forma automática con detectores de movimiento activos. Ideal para horarios de mayor afluencia de clientes.'
   },
   {
-    id: 'comercial_manual',
-    category: 'COMERCIAL',
+    id: 'horario_manual',
+    category: 'HORARIO',
     name: 'MANUAL',
-    description: 'La puerta P1 y la puerta P2 actúan de forma manual, es decir, tanto si se va en dirección entrada como de salida, será necesario pulsar el botón de llamada de los Videoporteros ubicados en la parte exterior de las puertas o los pulsadores retroiluminados ubicados en el interior de las puertas. Los detectores de movimiento interiores y exteriores actuarán sólo en modo seguridad, es decir, cuando la puerta esté abierta, protegerán a los usuarios frente al atrapamiento cuando ésta se cierre. Las puertas trabajan en modo esclusa; es decir una puerta no abre hasta que la otra esté cerrada.'
+    description: 'La puerta P1 y la puerta P2 actúan de forma manual. Es necesario pulsar el botón de llamada de los videoporteros ubicados en la parte exterior de las puertas o los pulsadores retroiluminados ubicados en el interior. Los detectores de movimiento actuarán sólo en modo seguridad para evitar atrapamientos.'
   },
   
-  // MODO EXTENDIDO
+  // OFICINA CERRADA
   {
-    id: 'extendido_semiautomatico',
-    category: 'EXTENDIDO',
-    name: 'SEMIAUTOMÁTICO',
-    description: 'La puerta P1 y la puerta P2 actúan de forma semiautomática, es decir, si se va en dirección entrada, será necesario pulsar el botón de llamada de los video porteros ubicados en la parte exterior de las puertas. En el caso de ir en dirección de salida, las puertas funcionarán de forma automática mediante los detectores de movimiento, los cuales actuarán como apertura de puerta en cortesía. Los detectores de movimiento interiores y exteriores actuarán también en modo seguridad, es decir, cuando la puerta esté abierta, protegerán a los usuarios frente al atrapamiento cuando ésta se cierre. Las puertas trabajan en modo esclusa; es decir una puerta no abre hasta que la otra esté cerrada.'
-  },
-  {
-    id: 'extendido_manual',
-    category: 'EXTENDIDO',
-    name: 'MANUAL',
-    description: 'La puerta P1 y la puerta P2 actúan de forma manual, es decir, tanto si se va en dirección entrada como de salida, será necesario pulsar el botón de llamada de los video porteros ubicados en la parte exterior de las puertas o los pulsadores retro iluminados ubicados en el interior de las puertas. Los detectores de movimiento interiores y exteriores actuarán sólo en modo seguridad, es decir, cuando la puerta esté abierta, protegerán a los usuarios frente al atrapamiento cuando ésta se cierre. Las puertas trabajan en modo esclusa; es decir una puerta no abre hasta que la otra esté cerrada.'
+    id: 'oficina_cerrada',
+    category: 'OFICINA_CERRADA',
+    name: 'OFICINA CERRADA',
+    description: 'Modo de funcionamiento destinado a horarios sin empleados. Solo se permite acceso mediante llave o de forma remota en caso que la instalación se haya dado de alta en los servidores del cliente. Todas las puertas permanecen bloqueadas.'
   },
   
-  // MODO ATM
-  {
-    id: 'atm',
-    category: 'ATM',
-    name: 'ATM',
-    description: 'Es el modo de funcionamiento destinado al acceso al cajero. La puerta P1 y la puerta P2 actúan de forma manual, es decir, tanto si se va en dirección entrada como de salida, será necesario pulsar el botón de llamada de los video porteros ubicados en la parte exterior de las puertas o los pulsadores retro iluminados ubicados en el interior de las puertas. Los detectores de movimiento interiores y exteriores actuarán sólo en modo seguridad, es decir, cuando la puerta esté abierta, protegerán a los usuarios frente al atrapamiento cuando ésta se cierre. Las puertas trabajan en modo esclusa; es decir una puerta no abre hasta que la otra esté cerrada.'
-  },
-  
-  // MODO CERRADO
-  {
-    id: 'cerrado',
-    category: 'CERRADO',
-    name: 'CERRADO',
-    description: 'Es el modo de funcionamiento destinado a horarios sin empleados. Solo se permite acceso mediante llave o de forma remota en al caso que la instalación se haya dado de alta en los servidores del cliente.'
-  },
-  
-  // MODO CARGA DE CAJERO
+  // CARGA DE CAJERO
   {
     id: 'carga_cajero',
     category: 'CARGA_CAJERO',
@@ -92,15 +72,14 @@ const modeOptions: ModeOption[] = [
 
 const categoryDisplayNames = {
   'COMERCIAL': 'COMERCIAL',
-  'EXTENDIDO': 'EXTENDIDO',
-  'ATM': 'ATM',
-  'CERRADO': 'CERRADO',
+  'HORARIO': 'HORARIO',
+  'OFICINA_CERRADA': 'OFICINA CERRADA',
   'CARGA_CAJERO': 'CARGA DE CAJERO',
   'EMERGENCIA': 'EMERGENCIA'
 };
 
 // Categorías que tienen submodos
-const categoriesWithSubmodes = ['COMERCIAL', 'EXTENDIDO'];
+const categoriesWithSubmodes = ['COMERCIAL', 'HORARIO'];
 
 export default function ModeSelectionModal({ visible, onClose, onModeSelect }: ModeSelectionModalProps) {
   const [selectedMode, setSelectedMode] = useState<string>('comercial_automatico');
@@ -184,7 +163,7 @@ export default function ModeSelectionModal({ visible, onClose, onModeSelect }: M
   const selectedModeDetails = getSelectedModeDetails();
 
   // Agrupar modos por categoría
-  const categories = ['COMERCIAL', 'EXTENDIDO', 'ATM', 'CERRADO', 'CARGA_CAJERO', 'EMERGENCIA'] as const;
+  const categories = ['COMERCIAL', 'HORARIO', 'OFICINA_CERRADA', 'CARGA_CAJERO', 'EMERGENCIA'] as const;
 
   return (
     <Modal

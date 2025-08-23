@@ -100,14 +100,11 @@ export default function MainScreen() {
   const handleModeSelect = async (mode: string) => {
     // Mapear el ID del modo a un texto descriptivo
     const modeMap: { [key: string]: string } = {
-      'comercial_independiente': 'COMERCIAL INDEPENDIENTE',
       'comercial_automatico': 'COMERCIAL AUTOMÁTICO',
-      'comercial_semiautomatico': 'COMERCIAL SEMIAUTOMÁTICO',
-      'comercial_manual': 'COMERCIAL MANUAL',
-      'extendido_semiautomatico': 'EXTENDIDO SEMIAUTOMÁTICO',
-      'extendido_manual': 'EXTENDIDO MANUAL',
-      'atm': 'ATM',
-      'cerrado': 'CERRADO',
+      'comercial_esclusa': 'COMERCIAL ESCLUSA',
+      'horario_extendido': 'HORARIO EXTENDIDO',
+      'horario_manual': 'HORARIO MANUAL',
+      'oficina_cerrada': 'OFICINA CERRADA',
       'carga_cajero': 'CARGA DE CAJERO',
       'emergencia': 'EMERGENCIA'
     };
