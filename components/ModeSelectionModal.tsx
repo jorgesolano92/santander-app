@@ -1,4 +1,5 @@
 import { View, Text, StyleSheet, TouchableOpacity, Modal, ScrollView } from 'react-native';
+import React from 'react';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { X, ChevronDown, ChevronRight } from 'lucide-react-native';
 import { Image } from 'react-native';
