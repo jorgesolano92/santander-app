@@ -229,7 +229,7 @@ export default function TechnicianModal({ visible, onClose }: TechnicianModalPro
 
                   <TouchableOpacity 
                     style={styles.backButton}
-                    onPress={handleBack}
+                    onPress={handleClose}
                   >
                     <Text style={styles.backButtonText}>VOLVER</Text>
                   </TouchableOpacity>
