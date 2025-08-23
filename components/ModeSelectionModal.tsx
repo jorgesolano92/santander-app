@@ -275,21 +275,26 @@ export default function ModeSelectionModal({ visible, onClose, onModeSelect }: M
                   ) : (
                     // Categoría sin submodos (botón directo)
                     categoryModes.map(mode => (
-                      <TouchableOpacity
-                        key={mode.id}
-                        style={[
-                          styles.modeButton,
-                          selectedMode === mode.id && styles.selectedModeButton
-                        ]}
-                        onPress={() => handleModeSelect(mode.id)}
-                      >
-                        <Text style={[
-                          styles.modeButtonText,
-                          selectedMode === mode.id && styles.selectedModeButtonText
-                        ]}>
-                          {categoryDisplayNames[category]}
-                        </Text>
-                      </TouchableOpacity>
+                     <>
+                       <Text key={`${category}-title`} style={styles.sectionTitleStatic}>
+                         {categoryDisplayNames[category]}
+                       </Text>
+                       <TouchableOpacity
+                         key={mode.id}
+                         style={[
+                           styles.modeButton,
+                           selectedMode === mode.id && styles.selectedModeButton
+                         ]}
+                         onPress={() => handleModeSelect(mode.id)}
+                       >
+                         <Text style={[
+                           styles.modeButtonText,
+                           selectedMode === mode.id && styles.selectedModeButtonText
+                         ]}>
+                           {mode.name}
+                         </Text>
+                       </TouchableOpacity>
+                     </>
                     ))
                   )}
                 </View>
@@ -450,6 +455,16 @@ const styles = StyleSheet.create({
   selectedModeButtonText: {
     color: '#FFFFFF',
     fontWeight: '700',
+  },
+  sectionTitleStatic: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#212529',
+    textAlign: 'left',
+    letterSpacing: 0.5,
+    marginBottom: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 4,
   },
   rightPanel: {
     flex: 2, // 2/3 de la vista
