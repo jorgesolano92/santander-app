@@ -150,7 +150,7 @@ export default function TechnicianModal({ visible, onClose }: TechnicianModalPro
                   <TouchableOpacity 
                     style={[styles.consultButton, isLoading && styles.consultButtonDisabled]} 
                     onPress={handleConsult}
-                    disabled={isLoading || !dni.trim()}
+                    disabled={isLoading}
                   >
                     <Search size={20} color="#FFFFFF" />
                     <Text style={styles.consultButtonText}>
