@@ -159,17 +159,19 @@ export default function DoorControlModal({ visible, onClose, doorId, doorName }:
               {/* Door Status */}
               <View style={styles.statusSection}>
                 <Text style={styles.statusTitle}>ESTADO DE PUERTA</Text>
-                <View style={styles.statusRow}>
-                  <Text style={[
-                    styles.statusText,
-                    (isOpening || isClosing) && styles.statusTextAnimated
-                  ]}>
-                    {getDoorStatusText()}
-                  </Text>
+                
+                <Text style={[
+                  styles.statusText,
+                  (isOpening || isClosing) && styles.statusTextAnimated
+                ]}>
+                  {getDoorStatusText()}
+                </Text>
+                
+                <View style={styles.lockIconContainer}>
                   {isLocked ? (
-                    <Lock size={20} color="#212529" />
+                    <Lock size={32} color="#495057" />
                   ) : (
-                    <Unlock size={20} color="#28A745" />
+                    <Unlock size={32} color="#28A745" />
                   )}
                 </View>
               </View>
@@ -350,9 +352,9 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
   statusSection: {
-    alignItems: 'center',
     backgroundColor: '#FFFFFF',
-    paddingVertical: 14,
+    paddingVertical: 24,
+    paddingHorizontal: 20,
     borderRadius: 8,
     borderWidth: 1,
     borderColor: '#E9ECEF',
@@ -361,6 +363,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.05,
     shadowRadius: 4,
     elevation: 2,
+    alignItems: 'center',
   },
   statusTitle: {
     fontSize: 12,
@@ -369,20 +372,27 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     letterSpacing: 0.3,
   },
-  statusRow: {
-    alignItems: 'center',
-    gap: 10,
-  },
   statusText: {
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: 18,
+    fontWeight: '700',
     color: '#212529',
     letterSpacing: 0.3,
-    marginBottom: 6,
+    marginBottom: 16,
+    textAlign: 'center',
   },
   statusTextAnimated: {
     color: '#17A2B8',
     fontWeight: '700',
+  },
+  lockIconContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#F8F9FA',
+    borderWidth: 2,
+    borderColor: '#E9ECEF',
   },
   bottomButtons: {
     flexDirection: 'row',
