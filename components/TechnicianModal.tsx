@@ -47,8 +47,7 @@ export default function TechnicianModal({ visible, onClose }: TechnicianModalPro
   const [isLoading, setIsLoading] = useState(false);
 
   const handleConsult = () => {
-    if (!dni.trim()) return;
-    
+    console.log('🔍 Consultando DNI:', dni);
     setIsLoading(true);
     
     // Simular consulta a base de datos
@@ -56,6 +55,8 @@ export default function TechnicianModal({ visible, onClose }: TechnicianModalPro
       const foundTechnician = TECHNICIANS_DB.find(
         tech => tech.dni.toLowerCase() === dni.trim().toLowerCase()
       );
+      
+      console.log('📋 Resultado búsqueda:', foundTechnician ? 'ENCONTRADO' : 'NO ENCONTRADO');
       
       if (foundTechnician) {
         setTechnicianData(foundTechnician);
@@ -68,6 +69,7 @@ export default function TechnicianModal({ visible, onClose }: TechnicianModalPro
   };
 
   const handleClose = () => {
+    console.log('❌ Cerrando modal técnico');
     setDni('');
     setCurrentView('input');
     setTechnicianData(null);
@@ -75,6 +77,7 @@ export default function TechnicianModal({ visible, onClose }: TechnicianModalPro
   };
 
   const handleBack = () => {
+    console.log('⬅️ Volviendo a vista DNI');
     setCurrentView('input');
     setTechnicianData(null);
   };
@@ -82,15 +85,6 @@ export default function TechnicianModal({ visible, onClose }: TechnicianModalPro
   const handlePermitido = () => {
     console.log('✅ Técnico autorizado:', technicianData?.nombre, technicianData?.apellido);
     handleClose();
-  };
-
-  const formatDNI = (value: string) => {
-    // Formatear DNI español (8 números + 1 letra)
-    const cleaned = value.replace(/[^0-9A-Za-z]/g, '').toUpperCase();
-    if (cleaned.length <= 8) {
-      return cleaned;
-    }
-    return cleaned.slice(0, 8) + cleaned.slice(8, 9);
   };
 
   return (
@@ -123,7 +117,7 @@ export default function TechnicianModal({ visible, onClose }: TechnicianModalPro
                   <TextInput
                     style={styles.textInput}
                     value={dni}
-                    onChangeText={(text) => setDni(formatDNI(text))}
+                    onChangeText={setDni}
                     placeholder="12345678A"
                     autoCapitalize="characters"
                     maxLength={9}
