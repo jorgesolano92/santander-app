@@ -139,17 +139,22 @@ export default function MainScreen() {
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        {/* Fecha y hora */}
-        <View style={styles.dateTimeContainer}>
-          <Text style={styles.dateTimeText}>{formatDateTime(currentDateTime)}</Text>
+        <View style={styles.headerLeft}>
+          <Text style={styles.headerTitle}>SAIMA SEGURIDAD – Panel de control puertas SECURA</Text>
         </View>
-        
+
         <TouchableOpacity 
           style={styles.notificationsButton}
           onPress={() => console.log('Notificaciones presionado')}
         >
           <Text style={styles.notificationsButtonText}>NOTIFICACIONES</Text>
         </TouchableOpacity>
+        
+        {/* Fecha y hora */}
+        <View style={styles.dateTimeContainer}>
+          <Text style={styles.dateTimeText}>{formatDateTime(currentDateTime)}</Text>
+        </View>
+        
         <View style={styles.headerRight}>
           {/* Indicador de conexión */}
           <View style={[styles.connectionIndicator, { backgroundColor: connectionStatus === 'online' ? '#28A745' : '#DC3545' }]}>
@@ -454,7 +459,6 @@ const styles = StyleSheet.create({
   header: {
     backgroundColor: '#495057',
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 32,
     paddingVertical: 20,
@@ -464,6 +468,9 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
   },
+  headerLeft: {
+    flex: 1,
+  },
   dateTimeContainer: {
     backgroundColor: 'rgba(255, 255, 255, 0.1)',
     paddingHorizontal: 16,
@@ -471,6 +478,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.2)',
+    marginLeft: 16,
   },
   dateTimeText: {
     fontSize: 14,
