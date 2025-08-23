@@ -1,5 +1,5 @@
 import { View, Text, StyleSheet, TouchableOpacity, Modal, ScrollView } from 'react-native';
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { X, ChevronDown, ChevronRight } from 'lucide-react-native';
 import { Image } from 'react-native';
 
@@ -105,16 +105,68 @@ const categoriesWithSubmodes = ['COMERCIAL', 'EXTENDIDO'];
 export default function ModeSelectionModal({ visible, onClose, onModeSelect }: ModeSelectionModalProps) {
   const [selectedMode, setSelectedMode] = useState<string>('comercial_automatico');
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set(['COMERCIAL']));
+  const [countdown, setCountdown] = useState<number>(30);
+  const [isCountdownActive, setIsCountdownActive] = useState<boolean>(false);
+  const countdownInterval = useRef<NodeJS.Timeout | null>(null);
 
+  // Iniciar cuenta atrás cuando se abre el modal
+  useEffect(() => {
+    if (visible) {
+      setCountdown(30);
+      setIsCountdownActive(true);
+      
+      countdownInterval.current = setInterval(() => {
+        setCountdown(prev => {
+          if (prev <= 1) {
+            // Auto-activar cuando llegue a 0
+            handleActivate();
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    } else {
+      // Limpiar interval cuando se cierra el modal
+      if (countdownInterval.current) {
+        clearInterval(countdownInterval.current);
+        countdownInterval.current = null;
+      }
+      setIsCountdownActive(false);
+      setCountdown(30);
+    }
+
+    return () => {
+      if (countdownInterval.current) {
+        clearInterval(countdownInterval.current);
+      }
+    };
+  }, [visible]);
   const handleModeSelect = (modeId: string) => {
     setSelectedMode(modeId);
   };
 
   const handleActivate = () => {
+    // Detener cuenta atrás
+    if (countdownInterval.current) {
+      clearInterval(countdownInterval.current);
+      countdownInterval.current = null;
+    }
+    setIsCountdownActive(false);
+    
     onModeSelect(selectedMode);
     onClose();
   };
 
+  const handleClose = () => {
+    // Detener cuenta atrás al cerrar
+    if (countdownInterval.current) {
+      clearInterval(countdownInterval.current);
+      countdownInterval.current = null;
+    }
+    setIsCountdownActive(false);
+    setCountdown(30);
+    onClose();
+  };
   const toggleCategory = (category: string) => {
     const newExpanded = new Set(expandedCategories);
     if (newExpanded.has(category)) {
@@ -145,7 +197,7 @@ export default function ModeSelectionModal({ visible, onClose, onModeSelect }: M
         {/* Header */}
         <View style={styles.header}>
           <Text style={styles.headerTitle}>SAIMA SEGURIDAD – Panel de control puertas SECURA</Text>
-          <TouchableOpacity style={styles.closeButton} onPress={onClose}>
+          <TouchableOpacity style={styles.closeButton} onPress={handleClose}>
             <X size={24} color="#FFFFFF" />
           </TouchableOpacity>
         </View>
@@ -252,7 +304,9 @@ export default function ModeSelectionModal({ visible, onClose, onModeSelect }: M
 
             {/* Activate Button */}
             <TouchableOpacity style={styles.activateButton} onPress={handleActivate}>
-              <Text style={styles.activateButtonText}>ACTIVAR</Text>
+              <Text style={styles.activateButtonText}>
+                {isCountdownActive ? `ACTIVAR (${countdown}s)` : 'ACTIVAR'}
+              </Text>
             </TouchableOpacity>
           </View>
         </View>
