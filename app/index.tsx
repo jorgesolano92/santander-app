@@ -139,9 +139,7 @@ export default function MainScreen() {
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <View style={styles.headerLeft}>
-          <Text style={styles.headerTitle}>SAIMA SEGURIDAD – Panel de control puertas SECURA</Text>
-        </View>
+        <Text style={styles.headerTitle}>SAIMA SEGURIDAD – Panel de control puertas SECURA</Text>
 
         <TouchableOpacity 
           style={styles.notificationsButton}
@@ -155,30 +153,28 @@ export default function MainScreen() {
           <Text style={styles.dateTimeText}>{formatDateTime(currentDateTime)}</Text>
         </View>
         
-        <View style={styles.headerRight}>
-          {/* Indicador de conexión */}
-          <View style={[styles.connectionIndicator, { backgroundColor: connectionStatus === 'online' ? '#28A745' : '#DC3545' }]}>
-            <Text style={styles.connectionText}>
-              {connectionStatus === 'online' ? 'SANDBOX' : 'OFFLINE'}
-            </Text>
-          </View>
-          
-          <TouchableOpacity 
-            style={styles.configButton}
-            onPress={() => setShowLoginModal(true)}
-          >
-            <Settings size={20} color="#666666" />
-            <Text style={styles.configButtonText}>CONFIGURACIÓN</Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity 
-            style={styles.configButton}
-            onPress={() => setShowTechnicianModal(true)}
-          >
-            <Sliders size={20} color="#666666" />
-            <Text style={styles.configButtonText}>TÉCNICO</Text>
-          </TouchableOpacity>
+        {/* Indicador de conexión */}
+        <View style={[styles.connectionIndicator, { backgroundColor: connectionStatus === 'online' ? '#28A745' : '#DC3545' }]}>
+          <Text style={styles.connectionText}>
+            {connectionStatus === 'online' ? 'SANDBOX' : 'OFFLINE'}
+          </Text>
         </View>
+        
+        <TouchableOpacity 
+          style={styles.configButton}
+          onPress={() => setShowLoginModal(true)}
+        >
+          <Settings size={20} color="#666666" />
+          <Text style={styles.configButtonText}>CONFIGURACIÓN</Text>
+        </TouchableOpacity>
+        
+        <TouchableOpacity 
+          style={styles.configButton}
+          onPress={() => setShowTechnicianModal(true)}
+        >
+          <Sliders size={20} color="#666666" />
+          <Text style={styles.configButtonText}>TÉCNICO</Text>
+        </TouchableOpacity>
       </View>
 
       {/* Error Display */}
@@ -460,6 +456,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#495057',
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: 32,
     paddingVertical: 20,
     shadowColor: '#000',
@@ -468,9 +465,6 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
   },
-  headerLeft: {
-    flex: 1,
-  },
   dateTimeContainer: {
     backgroundColor: 'rgba(255, 255, 255, 0.1)',
     paddingHorizontal: 16,
@@ -478,7 +472,6 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.2)',
-    marginLeft: 16,
   },
   dateTimeText: {
     fontSize: 14,
@@ -490,6 +483,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 20,
     fontWeight: '600',
+    flex: 1,
     color: '#FFFFFF',
     letterSpacing: 0.5,
   },
@@ -506,11 +500,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#FFFFFF',
     letterSpacing: 0.5,
-  },
-  headerRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 16,
   },
   connectionIndicator: {
     paddingHorizontal: 12,
