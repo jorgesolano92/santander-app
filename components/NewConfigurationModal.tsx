@@ -303,6 +303,12 @@ export default function NewConfigurationModal({ visible, onClose, onSave }: NewC
             <View style={styles.rightColumn}>
               <Text style={styles.sectionTitle}>HORARIOS</Text>
               <View style={styles.scheduleCard}>
+                <View style={styles.scheduleHeaderRow}>
+                  <Text style={styles.scheduleHeaderLabel}></Text>
+                  <Text style={styles.scheduleHeaderTime}>INI 1</Text>
+                  <Text style={styles.scheduleHeaderSeparator}></Text>
+                  <Text style={styles.scheduleHeaderTime}>INI 2</Text>
+                </View>
                 {Object.entries(config.schedules).map(([type, schedule]) => (
                   <View key={type} style={styles.scheduleRow}>
                     <Text style={styles.scheduleLabel}>
@@ -582,6 +588,31 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#495057',
+  },
+  scheduleHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+    gap: 12,
+  },
+  scheduleHeaderLabel: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#495057',
+    minWidth: 90,
+  },
+  scheduleHeaderTime: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#495057',
+    width: 80,
+    textAlign: 'center',
+  },
+  scheduleHeaderSeparator: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#495057',
+    width: 16,
   },
   officeCard: {
     backgroundColor: '#FFFFFF',
