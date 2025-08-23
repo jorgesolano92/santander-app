@@ -116,7 +116,6 @@ export default function LoginModal({ visible, onClose, onSuccess }: LoginModalPr
                 <Text style={styles.closeButtonText}>CERRAR</Text>
               </TouchableOpacity>
 
-              {/* Login Button */}
               <TouchableOpacity 
                 style={[styles.loginButton, isLoading && styles.loginButtonDisabled]} 
                 onPress={handleLogin}
@@ -129,7 +128,6 @@ export default function LoginModal({ visible, onClose, onSuccess }: LoginModalPr
               </TouchableOpacity>
             </View>
           </View>
-        </View>
         </View>
       </View>
     </Modal>
@@ -212,33 +210,7 @@ const styles = StyleSheet.create({
   },
   formContainer: {
     gap: 24,
-  },
-  buttonsContainer: {
-    flexDirection: 'row',
-    gap: 16,
-    marginTop: 16,
-  },
-  closeButtonSecondary: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#6C757D',
-    paddingHorizontal: 32,
-    paddingVertical: 16,
-    borderRadius: 8,
-    gap: 8,
-    shadowColor: '#6C757D',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  closeButtonText: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#FFFFFF',
-    letterSpacing: 0.5,
+    marginBottom: 32,
   },
   inputContainer: {
     marginBottom: 8,
@@ -262,6 +234,32 @@ const styles = StyleSheet.create({
     paddingHorizontal: 0,
     backgroundColor: 'transparent',
     minHeight: 40,
+  },
+  buttonsContainer: {
+    flexDirection: 'row',
+    gap: 16,
+  },
+  closeButtonSecondary: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#6C757D',
+    paddingHorizontal: 32,
+    paddingVertical: 16,
+    borderRadius: 8,
+    gap: 8,
+    shadowColor: '#6C757D',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  closeButtonText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    letterSpacing: 0.5,
   },
   loginButton: {
     flex: 1,
