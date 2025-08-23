@@ -64,15 +64,7 @@ export default function LoginModal({ visible, onClose, onSuccess }: LoginModalPr
             </TouchableOpacity>
           </View>
 
-          {/* Buttons */}
-          <View style={styles.buttonsContainer}>
-            <TouchableOpacity 
-              style={styles.closeButton}
-              onPress={handleClose}
-            >
-              <Text style={styles.closeButtonText}>CERRAR</Text>
-            </TouchableOpacity>
-
+          <View style={styles.content}>
             {/* Credenciales de prueba info */}
             <View style={styles.testCredentials}>
               <Text style={styles.testCredentialsTitle}>Credenciales de prueba:</Text>
@@ -113,18 +105,29 @@ export default function LoginModal({ visible, onClose, onSuccess }: LoginModalPr
                   autoCapitalize="none"
                 />
               </View>
+            </View>
+
+            {/* Buttons */}
+            <View style={styles.buttonsContainer}>
+              <TouchableOpacity 
+                style={styles.closeButtonSecondary}
+                onPress={handleClose}
+              >
+                <Text style={styles.closeButtonText}>CERRAR</Text>
+              </TouchableOpacity>
 
               {/* Login Button */}
               <TouchableOpacity 
-              style={[styles.loginButton, isLoading && styles.loginButtonDisabled]} 
-              onPress={handleLogin}
-              disabled={isLoading}
-            >
-              <User size={20} color="#FFFFFF" />
-              <Text style={styles.loginButtonText}>
-                {isLoading ? 'VALIDANDO...' : 'ACCEDER'}
-              </Text>
-            </TouchableOpacity>
+                style={[styles.loginButton, isLoading && styles.loginButtonDisabled]} 
+                onPress={handleLogin}
+                disabled={isLoading}
+              >
+                <User size={20} color="#FFFFFF" />
+                <Text style={styles.loginButtonText}>
+                  {isLoading ? 'VALIDANDO...' : 'ACCEDER'}
+                </Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </View>
@@ -214,7 +217,7 @@ const styles = StyleSheet.create({
     gap: 16,
     marginTop: 16,
   },
-  closeButton: {
+  closeButtonSecondary: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
