@@ -108,7 +108,12 @@ export default function MainScreen() {
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>SAIMA SEGURIDAD – Panel de control puertas SECURA</Text>
+        <TouchableOpacity 
+          style={styles.notificationsButton}
+          onPress={() => console.log('Notificaciones presionado')}
+        >
+          <Text style={styles.notificationsButtonText}>NOTIFICACIONES</Text>
+        </TouchableOpacity>
         <View style={styles.headerRight}>
           {/* Indicador de conexión */}
           <View style={[styles.connectionIndicator, { backgroundColor: connectionStatus === 'online' ? '#28A745' : '#DC3545' }]}>
@@ -417,6 +422,20 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontSize: 20,
+    fontWeight: '600',
+    color: '#FFFFFF',
+    letterSpacing: 0.5,
+  },
+  notificationsButton: {
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  notificationsButtonText: {
+    fontSize: 16,
     fontWeight: '600',
     color: '#FFFFFF',
     letterSpacing: 0.5,
