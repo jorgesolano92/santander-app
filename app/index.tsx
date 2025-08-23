@@ -165,9 +165,16 @@ export default function MainScreen() {
         </View>
         
         {/* Indicador de modo automático por horario */}
-        {currentScheduleMode && !isEmergencyActive && (
+        {currentScheduleMode && !isEmergencyActive && currentMode === currentScheduleMode && (
           <View style={styles.scheduleIndicator}>
             <Text style={styles.scheduleText}>AUTO: {currentScheduleMode}</Text>
+          </View>
+        )}
+        
+        {/* Indicador cuando el modo actual difiere del sugerido por horario */}
+        {currentScheduleMode && !isEmergencyActive && currentMode !== currentScheduleMode && (
+          <View style={styles.manualModeIndicator}>
+            <Text style={styles.manualModeText}>MANUAL: {currentMode}</Text>
           </View>
         )}
         
@@ -525,6 +532,17 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '600',
     color: '#FFFFFF',
+  },
+  manualModeIndicator: {
+    backgroundColor: '#FFC107',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+  },
+  manualModeText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#212529',
   },
   configButton: {
     flexDirection: 'row',
