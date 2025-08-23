@@ -85,7 +85,6 @@ export default function ConfigurationModal({ visible, onClose, onSave, officeNum
 
             {/* Office Card */}
             <View style={styles.officeCard}>
-              <View style={styles.officePlaceholder} />
               <View style={styles.officeContent}>
                 <Text style={styles.officeTitle}>OFICINA N° {config.officeNumber}</Text>
                 <Text style={styles.officeSubtitle}>Por favor introduzca usuario y contraseña</Text>

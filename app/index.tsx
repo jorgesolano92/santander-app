@@ -169,7 +169,6 @@ export default function MainScreen() {
 
           {/* Emergency Alert Card */}
           <View style={styles.emergencyCard}>
-            <View style={styles.emergencyImagePlaceholder} />
             <View style={styles.emergencyTextContent}>
               <Text style={styles.emergencyTitle}>MODO EMERGENCIA ACTIVADO</Text>
               <Text style={styles.emergencyDescription}>
@@ -205,7 +204,6 @@ export default function MainScreen() {
 
           {/* Carga Cajero Card */}
           <View style={styles.cargaCajeroCard}>
-            <View style={styles.cargaCajeroImagePlaceholder} />
             <View style={styles.cargaCajeroContent}>
               <Text style={styles.cargaCajeroTitle}>CARGA CAJERO</Text>
               <Text style={styles.cargaCajeroDescription}>
@@ -267,7 +265,6 @@ export default function MainScreen() {
             <View style={styles.doorControlSection}>
               <Text style={styles.doorControlTitle}>PUERTA OFICINA</Text>
               <View style={styles.doorControlCard}>
-                <View style={styles.doorControlImagePlaceholder} />
                 <TouchableOpacity 
                   style={styles.doorControlButton}
                   onPress={() => console.log('Comunicar Puerta Oficina')}
@@ -289,7 +286,6 @@ export default function MainScreen() {
             <View style={styles.doorControlSection}>
               <Text style={styles.doorControlTitle}>PUERTA CALLE</Text>
               <View style={styles.doorControlCard}>
-                <View style={styles.doorControlImagePlaceholder} />
                 <TouchableOpacity 
                   style={styles.doorControlButton}
                   onPress={() => console.log('Comunicar Puerta Calle')}
@@ -342,7 +338,6 @@ export default function MainScreen() {
           {/* Operation Mode Section */}
           <View style={styles.operationSection}>
             <View style={styles.modeCard}>
-              <View style={styles.modeImagePlaceholder} />
               <View style={styles.modeContent}>
                 <Text style={styles.modeTitle}>Modo de Operación Actual: {currentMode}</Text>
                 <Text style={styles.modeDescription}>

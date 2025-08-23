@@ -239,7 +239,6 @@ export default function ModeSelectionModal({ visible, onClose, onModeSelect }: M
             {/* Mode Details Card */}
             <ScrollView style={styles.detailsScrollView}>
               <View style={styles.detailsCard}>
-                <View style={styles.detailsImagePlaceholder} />
                 <View style={styles.detailsContent}>
                   <Text style={styles.detailsTitle}>
                     {selectedModeDetails ? categoryDisplayNames[selectedModeDetails.category] : ''} {selectedModeDetails?.name}

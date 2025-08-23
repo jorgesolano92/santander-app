@@ -119,7 +119,6 @@ export default function DetailedConfigurationModal({
 
           {/* Office Card */}
           <View style={styles.officeCard}>
-            <View style={styles.officePlaceholder} />
             <View style={styles.officeContent}>
               <Text style={styles.officeTitle}>OFICINA N° {config.officeNumber}</Text>
               <Text style={styles.officeSubtitle}>Datos generales de la Sucursal, Nombre, direccion, ect...</Text>
