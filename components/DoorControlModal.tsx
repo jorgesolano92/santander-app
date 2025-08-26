@@ -2,11 +2,7 @@ import { View, Text, StyleSheet, TouchableOpacity, Modal } from 'react-native';
 import { useState } from 'react';
 import { X, Lock, Clock as Unlock, MessageCircle, DoorOpen } from 'lucide-react-native';
 import { useDoorControl } from '@/hooks/useDoorControl';
-import { Dimensions } from 'react-native';
-
-const { width } = Dimensions.get('window');
-const isSmallTablet = width < 900;
-const isLargeTablet = width >= 1200;
+import { useWindowDimensions } from 'react-native';
 
 interface DoorControlModalProps {
   visible: boolean;
@@ -16,6 +12,10 @@ interface DoorControlModalProps {
 }
 
 export default function DoorControlModal({ visible, onClose, doorId, doorName }: DoorControlModalProps) {
+  const { width = 0 } = useWindowDimensions();
+  const isSmallTablet = width < 900;
+  const isLargeTablet = width >= 1200;
+
   const [isCommunicating, setIsCommunicating] = useState(false);
   const { systemStatus, controlDoor } = useDoorControl();
   
@@ -87,6 +87,248 @@ export default function DoorControlModal({ visible, onClose, doorId, doorName }:
   const handleVisualization = () => {
     console.log(`👁️ Ver visualización desde ${doorName}`);
   };
+
+  const styles = StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: '#F8F9FA',
+    },
+    header: {
+      backgroundColor: '#495057',
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      paddingHorizontal: isSmallTablet ? 16 : isLargeTablet ? 24 : 20,
+      paddingVertical: isSmallTablet ? 12 : isLargeTablet ? 16 : 14,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.1,
+      shadowRadius: 4,
+      elevation: 3,
+    },
+    headerTitle: {
+      fontSize: isSmallTablet ? 11 : isLargeTablet ? 16 : 13,
+      fontWeight: '600',
+      color: '#FFFFFF',
+      letterSpacing: 0.5,
+    },
+    notificationsButton: {
+      backgroundColor: 'rgba(255, 255, 255, 0.1)',
+      paddingHorizontal: 20,
+      paddingVertical: 12,
+      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: 'rgba(255, 255, 255, 0.2)',
+    },
+    notificationsButtonText: {
+      fontSize: 16,
+      fontWeight: '600',
+      color: '#FFFFFF',
+      letterSpacing: 0.5,
+    },
+    closeButton: {
+      padding: 8,
+    },
+    content: {
+      flex: 1,
+      padding: isSmallTablet ? 12 : isLargeTablet ? 20 : 16,
+    },
+    doorTitle: {
+      fontSize: isSmallTablet ? 18 : isLargeTablet ? 24 : 21,
+      fontWeight: '700',
+      color: '#212529',
+      marginBottom: isSmallTablet ? 8 : isLargeTablet ? 12 : 10,
+      letterSpacing: 0.5,
+    },
+    mainArea: {
+      flex: 1,
+      flexDirection: 'row',
+      gap: isSmallTablet ? 16 : isLargeTablet ? 24 : 20,
+      marginBottom: isSmallTablet ? 12 : isLargeTablet ? 20 : 16,
+    },
+    videoSection: {
+      flex: 2,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    videoPlaceholder: {
+      width: '100%',
+      maxWidth: isSmallTablet ? 320 : isLargeTablet ? 480 : 400,
+      aspectRatio: 4/3,
+      backgroundColor: '#FFFFFF',
+      borderRadius: 12,
+      borderWidth: 2,
+      borderColor: '#E9ECEF',
+      justifyContent: 'center',
+      alignItems: 'center',
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.08,
+      shadowRadius: 8,
+      elevation: 4,
+    },
+    cameraIcon: {
+      width: isSmallTablet ? 40 : isLargeTablet ? 60 : 50,
+      height: isSmallTablet ? 30 : isLargeTablet ? 45 : 37,
+      backgroundColor: '#E9ECEF',
+      borderRadius: 6,
+      justifyContent: 'center',
+      alignItems: 'center',
+      marginBottom: isSmallTablet ? 8 : isLargeTablet ? 12 : 10,
+    },
+    cameraIconInner: {
+      width: isSmallTablet ? 20 : isLargeTablet ? 30 : 25,
+      height: isSmallTablet ? 15 : isLargeTablet ? 22 : 18,
+      backgroundColor: '#CED4DA',
+      borderRadius: 4,
+    },
+    videoText: {
+      fontSize: isSmallTablet ? 11 : isLargeTablet ? 14 : 12,
+      color: '#6C757D',
+      fontWeight: '500',
+    },
+    controlsSection: {
+      flex: 1,
+      justifyContent: 'flex-start',
+      paddingTop: isSmallTablet ? 12 : isLargeTablet ? 20 : 16,
+    },
+    controlButtons: {
+      gap: isSmallTablet ? 12 : isLargeTablet ? 16 : 14,
+      marginBottom: isSmallTablet ? 12 : isLargeTablet ? 20 : 16,
+    },
+    controlButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: '#E9ECEF',
+      paddingVertical: 10,
+      paddingHorizontal: 14,
+      borderRadius: 8,
+      gap: 6,
+      borderWidth: 1,
+      borderColor: '#CED4DA',
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 0.05,
+      shadowRadius: 2,
+      elevation: 2,
+    },
+    controlButtonDisabled: {
+      opacity: 0.6,
+    },
+    communicatingButton: {
+      backgroundColor: '#28A745',
+      borderColor: '#1E7E34',
+    },
+    communicatingButtonText: {
+      color: '#FFFFFF',
+    },
+    controlButtonText: {
+      fontSize: 12,
+      fontWeight: '600',
+      color: '#495057',
+      letterSpacing: 0.5,
+    },
+    controlButtonClose: {
+      backgroundColor: '#DC3545',
+      borderColor: '#C82333',
+    },
+    controlButtonCloseText: {
+      color: '#FFFFFF',
+    },
+    statusSection: {
+      backgroundColor: '#FFFFFF',
+      paddingVertical: isSmallTablet ? 24 : isLargeTablet ? 32 : 28,
+      paddingHorizontal: isSmallTablet ? 20 : isLargeTablet ? 28 : 24,
+      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: '#E9ECEF',
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.05,
+      shadowRadius: 4,
+      elevation: 2,
+      alignItems: 'center',
+    },
+    statusTitle: {
+      fontSize: isSmallTablet ? 13 : isLargeTablet ? 16 : 14,
+      fontWeight: '700',
+      color: '#212529',
+      marginBottom: isSmallTablet ? 12 : isLargeTablet ? 16 : 14,
+      letterSpacing: 0.3,
+    },
+    statusText: {
+      fontSize: isSmallTablet ? 16 : isLargeTablet ? 20 : 18,
+      fontWeight: '700',
+      color: '#212529',
+      letterSpacing: 0.3,
+      marginBottom: isSmallTablet ? 16 : isLargeTablet ? 20 : 18,
+      textAlign: 'center',
+    },
+    statusTextAnimated: {
+      color: '#17A2B8',
+      fontWeight: '700',
+    },
+    lockIconContainer: {
+      alignItems: 'center',
+      justifyContent: 'center',
+      width: isSmallTablet ? 50 : isLargeTablet ? 70 : 60,
+      height: isSmallTablet ? 50 : isLargeTablet ? 70 : 60,
+      borderRadius: isSmallTablet ? 25 : isLargeTablet ? 35 : 30,
+      backgroundColor: '#F8F9FA',
+      borderWidth: 2,
+      borderColor: '#E9ECEF',
+    },
+    bottomButtons: {
+      flexDirection: 'row',
+      gap: 12,
+      marginBottom: 12,
+    },
+    emergencyButton: {
+      flex: 1,
+      backgroundColor: '#EC1C24',
+      paddingVertical: 12,
+      borderRadius: 8,
+      alignItems: 'center',
+      justifyContent: 'center',
+      shadowColor: '#EC1C24',
+      shadowOffset: { width: 0, height: 3 },
+      shadowOpacity: 0.3,
+      shadowRadius: 6,
+      elevation: 6,
+    },
+    emergencyButtonText: {
+      fontSize: 12,
+      fontWeight: '700',
+      color: '#FFFFFF',
+      letterSpacing: 0.5,
+    },
+    visualizationButton: {
+      flex: 1,
+      backgroundColor: '#495057',
+      paddingVertical: 12,
+      borderRadius: 8,
+      alignItems: 'center',
+      justifyContent: 'center',
+      shadowColor: '#495057',
+      shadowOffset: { width: 0, height: 3 },
+      shadowOpacity: 0.2,
+      shadowRadius: 6,
+      elevation: 4,
+    },
+    visualizationButtonText: {
+      fontSize: 12,
+      fontWeight: '700',
+      color: '#FFFFFF',
+      letterSpacing: 0.5,
+    },
+    footerText: {
+      fontSize: 10,
+      color: '#6C757D',
+      textAlign: 'left',
+      fontWeight: '400',
+    },
+  });
 
   return (
     <Modal
@@ -207,245 +449,3 @@ export default function DoorControlModal({ visible, onClose, doorId, doorName }:
     </Modal>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F8F9FA',
-  },
-  header: {
-    backgroundColor: '#495057',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: isSmallTablet ? 16 : isLargeTablet ? 24 : 20,
-    paddingVertical: isSmallTablet ? 12 : isLargeTablet ? 16 : 14,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  headerTitle: {
-    fontSize: isSmallTablet ? 11 : isLargeTablet ? 16 : 13,
-    fontWeight: '600',
-    color: '#FFFFFF',
-    letterSpacing: 0.5,
-  },
-  notificationsButton: {
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
-  },
-  notificationsButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#FFFFFF',
-    letterSpacing: 0.5,
-  },
-  closeButton: {
-    padding: 8,
-  },
-  content: {
-    flex: 1,
-    padding: isSmallTablet ? 12 : isLargeTablet ? 20 : 16,
-  },
-  doorTitle: {
-    fontSize: isSmallTablet ? 18 : isLargeTablet ? 24 : 21,
-    fontWeight: '700',
-    color: '#212529',
-    marginBottom: isSmallTablet ? 8 : isLargeTablet ? 12 : 10,
-    letterSpacing: 0.5,
-  },
-  mainArea: {
-    flex: 1,
-    flexDirection: 'row',
-    gap: isSmallTablet ? 16 : isLargeTablet ? 24 : 20,
-    marginBottom: isSmallTablet ? 12 : isLargeTablet ? 20 : 16,
-  },
-  videoSection: {
-    flex: 2,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  videoPlaceholder: {
-    width: '100%',
-    maxWidth: isSmallTablet ? 320 : isLargeTablet ? 480 : 400,
-    aspectRatio: 4/3,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: '#E9ECEF',
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  cameraIcon: {
-    width: isSmallTablet ? 40 : isLargeTablet ? 60 : 50,
-    height: isSmallTablet ? 30 : isLargeTablet ? 45 : 37,
-    backgroundColor: '#E9ECEF',
-    borderRadius: 6,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: isSmallTablet ? 8 : isLargeTablet ? 12 : 10,
-  },
-  cameraIconInner: {
-    width: isSmallTablet ? 20 : isLargeTablet ? 30 : 25,
-    height: isSmallTablet ? 15 : isLargeTablet ? 22 : 18,
-    backgroundColor: '#CED4DA',
-    borderRadius: 4,
-  },
-  videoText: {
-    fontSize: isSmallTablet ? 11 : isLargeTablet ? 14 : 12,
-    color: '#6C757D',
-    fontWeight: '500',
-  },
-  controlsSection: {
-    flex: 1,
-    justifyContent: 'flex-start',
-    paddingTop: isSmallTablet ? 12 : isLargeTablet ? 20 : 16,
-  },
-  controlButtons: {
-    gap: isSmallTablet ? 12 : isLargeTablet ? 16 : 14,
-    marginBottom: isSmallTablet ? 12 : isLargeTablet ? 20 : 16,
-  },
-  controlButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#E9ECEF',
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    borderRadius: 8,
-    gap: 6,
-    borderWidth: 1,
-    borderColor: '#CED4DA',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  controlButtonDisabled: {
-    opacity: 0.6,
-  },
-  communicatingButton: {
-    backgroundColor: '#28A745',
-    borderColor: '#1E7E34',
-  },
-  communicatingButtonText: {
-    color: '#FFFFFF',
-  },
-  controlButtonText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#495057',
-    letterSpacing: 0.5,
-  },
-  controlButtonClose: {
-    backgroundColor: '#DC3545',
-    borderColor: '#C82333',
-  },
-  controlButtonCloseText: {
-    color: '#FFFFFF',
-  },
-  statusSection: {
-    backgroundColor: '#FFFFFF',
-    paddingVertical: isSmallTablet ? 24 : isLargeTablet ? 32 : 28,
-    paddingHorizontal: isSmallTablet ? 20 : isLargeTablet ? 28 : 24,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#E9ECEF',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
-    alignItems: 'center',
-  },
-  statusTitle: {
-    fontSize: isSmallTablet ? 13 : isLargeTablet ? 16 : 14,
-    fontWeight: '700',
-    color: '#212529',
-    marginBottom: isSmallTablet ? 12 : isLargeTablet ? 16 : 14,
-    letterSpacing: 0.3,
-  },
-  statusText: {
-    fontSize: isSmallTablet ? 16 : isLargeTablet ? 20 : 18,
-    fontWeight: '700',
-    color: '#212529',
-    letterSpacing: 0.3,
-    marginBottom: isSmallTablet ? 16 : isLargeTablet ? 20 : 18,
-    textAlign: 'center',
-  },
-  statusTextAnimated: {
-    color: '#17A2B8',
-    fontWeight: '700',
-  },
-  lockIconContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: isSmallTablet ? 50 : isLargeTablet ? 70 : 60,
-    height: isSmallTablet ? 50 : isLargeTablet ? 70 : 60,
-    borderRadius: isSmallTablet ? 25 : isLargeTablet ? 35 : 30,
-    backgroundColor: '#F8F9FA',
-    borderWidth: 2,
-    borderColor: '#E9ECEF',
-  },
-  bottomButtons: {
-    flexDirection: 'row',
-    gap: 12,
-    marginBottom: 12,
-  },
-  emergencyButton: {
-    flex: 1,
-    backgroundColor: '#EC1C24',
-    paddingVertical: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#EC1C24',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.3,
-    shadowRadius: 6,
-    elevation: 6,
-  },
-  emergencyButtonText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#FFFFFF',
-    letterSpacing: 0.5,
-  },
-  visualizationButton: {
-    flex: 1,
-    backgroundColor: '#495057',
-    paddingVertical: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#495057',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.2,
-    shadowRadius: 6,
-    elevation: 4,
-  },
-  visualizationButtonText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#FFFFFF',
-    letterSpacing: 0.5,
-  },
-  footerText: {
-    fontSize: 10,
-    color: '#6C757D',
-    textAlign: 'left',
-    fontWeight: '400',
-  },
-});

@@ -3,6 +3,10 @@ import { useState, useEffect } from 'react';
 import { ArrowLeft, Save, X, Wifi } from 'lucide-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+const { width: screenWidth } = require('react-native').Dimensions.get('window');
+const isSmallTablet = screenWidth < 900;
+const isLargeTablet = screenWidth >= 1200;
+
 interface NewConfigurationModalProps {
   visible: boolean;
   onClose: () => void;

@@ -4,11 +4,7 @@ import { Image } from 'react-native';
 import { useState } from 'react';
 import { useDoorControl } from '@/hooks/useDoorControl';
 import DoorControlModal from './DoorControlModal';
-import { Dimensions } from 'react-native';
-
-const { width } = Dimensions.get('window');
-const isSmallTablet = width < 900;
-const isLargeTablet = width >= 1200;
+import { useWindowDimensions } from 'react-native';
 
 interface VisualizationModalProps {
   visible: boolean;
@@ -16,6 +12,10 @@ interface VisualizationModalProps {
 }
 
 export default function VisualizationModal({ visible, onClose }: VisualizationModalProps) {
+  const { width = 0 } = useWindowDimensions();
+  const isSmallTablet = width < 900;
+  const isLargeTablet = width >= 1200;
+
   const { systemStatus } = useDoorControl();
   const [selectedDoor, setSelectedDoor] = useState<{ id: 'P1' | 'P2' | 'P3' | 'P4'; name: string } | null>(null);
   
@@ -52,6 +52,140 @@ export default function VisualizationModal({ visible, onClose }: VisualizationMo
   const handleDoorPress = (doorId: 'P1' | 'P2' | 'P3' | 'P4', doorName: string) => {
     setSelectedDoor({ id: doorId, name: doorName });
   };
+
+  const styles = StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: '#F8F9FA',
+    },
+    header: {
+      backgroundColor: '#495057',
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      paddingHorizontal: isSmallTablet ? 24 : isLargeTablet ? 32 : 28,
+      paddingVertical: isSmallTablet ? 18 : isLargeTablet ? 24 : 20,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.1,
+      shadowRadius: 4,
+      elevation: 3,
+    },
+    headerTitle: {
+      fontSize: isSmallTablet ? 18 : isLargeTablet ? 22 : 20,
+      fontWeight: '600',
+      color: '#FFFFFF',
+      letterSpacing: 0.5,
+    },
+    closeButton: {
+      padding: 8,
+    },
+    content: {
+      flex: 1,
+      padding: isSmallTablet ? 24 : isLargeTablet ? 40 : 32,
+      alignItems: 'center',
+    },
+    logoSection: {
+      alignItems: 'center',
+      marginBottom: isSmallTablet ? 32 : isLargeTablet ? 48 : 40,
+      marginTop: isSmallTablet ? 16 : isLargeTablet ? 24 : 20,
+    },
+    santanderLogo: {
+      width: isSmallTablet ? 350 : isLargeTablet ? 480 : 420,
+      height: isSmallTablet ? 100 : isLargeTablet ? 140 : 120,
+    },
+    doorsContainer: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: isSmallTablet ? 24 : isLargeTablet ? 40 : 32,
+      marginBottom: isSmallTablet ? 32 : isLargeTablet ? 48 : 40,
+      alignItems: 'flex-start',
+      justifyContent: 'center',
+      maxWidth: isSmallTablet ? 700 : isLargeTablet ? 1000 : 850,
+    },
+    doorCard: {
+      backgroundColor: '#FFFFFF',
+      borderRadius: 12,
+      padding: isSmallTablet ? 32 : isLargeTablet ? 48 : 40,
+      alignItems: 'center',
+      minWidth: isSmallTablet ? 300 : isLargeTablet ? 400 : 350,
+      maxWidth: isSmallTablet ? 350 : isLargeTablet ? 450 : 400,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.08,
+      shadowRadius: 12,
+      elevation: 4,
+      borderWidth: 1,
+      borderColor: '#E9ECEF',
+    },
+    doorButton: {
+      backgroundColor: '#495057',
+      paddingHorizontal: isSmallTablet ? 32 : isLargeTablet ? 48 : 40,
+      paddingVertical: isSmallTablet ? 18 : isLargeTablet ? 24 : 21,
+      borderRadius: 8,
+      marginBottom: isSmallTablet ? 24 : isLargeTablet ? 32 : 28,
+      minWidth: isSmallTablet ? 220 : isLargeTablet ? 280 : 250,
+      alignItems: 'center',
+      shadowColor: '#495057',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.2,
+      shadowRadius: 4,
+      elevation: 3,
+    },
+    doorButtonText: {
+      fontSize: 14,
+      fontWeight: '700',
+      color: '#FFFFFF',
+      letterSpacing: 0.5,
+      textAlign: 'center',
+    },
+    statusContainer: {
+      alignItems: 'center',
+    },
+    statusLabel: {
+      fontSize: 14,
+      fontWeight: '700',
+      color: '#212529',
+      marginBottom: 12,
+      letterSpacing: 0.3,
+      textAlign: 'center',
+    },
+    statusRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+    },
+    statusText: {
+      fontSize: 14,
+      fontWeight: '600',
+      color: '#212529',
+      letterSpacing: 0.3,
+    },
+    backButton: {
+      backgroundColor: '#495057',
+      paddingHorizontal: 32,
+      paddingVertical: 16,
+      borderRadius: 8,
+      marginBottom: 20,
+      shadowColor: '#495057',
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.2,
+      shadowRadius: 8,
+      elevation: 4,
+    },
+    backButtonText: {
+      fontSize: isSmallTablet ? 16 : isLargeTablet ? 20 : 18,
+      fontWeight: '700',
+      color: '#FFFFFF',
+      letterSpacing: 1,
+    },
+    footerText: {
+      fontSize: 12,
+      color: '#6C757D',
+      textAlign: 'left',
+      fontWeight: '400',
+    },
+  });
 
   return (
     <Modal
@@ -130,137 +264,3 @@ export default function VisualizationModal({ visible, onClose }: VisualizationMo
     </Modal>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F8F9FA',
-  },
-  header: {
-    backgroundColor: '#495057',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: isSmallTablet ? 24 : isLargeTablet ? 32 : 28,
-    paddingVertical: isSmallTablet ? 18 : isLargeTablet ? 24 : 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  headerTitle: {
-    fontSize: isSmallTablet ? 18 : isLargeTablet ? 22 : 20,
-    fontWeight: '600',
-    color: '#FFFFFF',
-    letterSpacing: 0.5,
-  },
-  closeButton: {
-    padding: 8,
-  },
-  content: {
-    flex: 1,
-    padding: isSmallTablet ? 24 : isLargeTablet ? 40 : 32,
-    alignItems: 'center',
-  },
-  logoSection: {
-    alignItems: 'center',
-    marginBottom: isSmallTablet ? 32 : isLargeTablet ? 48 : 40,
-    marginTop: isSmallTablet ? 16 : isLargeTablet ? 24 : 20,
-  },
-  santanderLogo: {
-    width: isSmallTablet ? 350 : isLargeTablet ? 480 : 420,
-    height: isSmallTablet ? 100 : isLargeTablet ? 140 : 120,
-  },
-  doorsContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: isSmallTablet ? 24 : isLargeTablet ? 40 : 32,
-    marginBottom: isSmallTablet ? 32 : isLargeTablet ? 48 : 40,
-    alignItems: 'flex-start',
-    justifyContent: 'center',
-    maxWidth: isSmallTablet ? 700 : isLargeTablet ? 1000 : 850,
-  },
-  doorCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: isSmallTablet ? 32 : isLargeTablet ? 48 : 40,
-    alignItems: 'center',
-    minWidth: isSmallTablet ? 300 : isLargeTablet ? 400 : 350,
-    maxWidth: isSmallTablet ? 350 : isLargeTablet ? 450 : 400,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 4,
-    borderWidth: 1,
-    borderColor: '#E9ECEF',
-  },
-  doorButton: {
-    backgroundColor: '#495057',
-    paddingHorizontal: isSmallTablet ? 32 : isLargeTablet ? 48 : 40,
-    paddingVertical: isSmallTablet ? 18 : isLargeTablet ? 24 : 21,
-    borderRadius: 8,
-    marginBottom: isSmallTablet ? 24 : isLargeTablet ? 32 : 28,
-    minWidth: isSmallTablet ? 220 : isLargeTablet ? 280 : 250,
-    alignItems: 'center',
-    shadowColor: '#495057',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  doorButtonText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#FFFFFF',
-    letterSpacing: 0.5,
-    textAlign: 'center',
-  },
-  statusContainer: {
-    alignItems: 'center',
-  },
-  statusLabel: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#212529',
-    marginBottom: 12,
-    letterSpacing: 0.3,
-    textAlign: 'center',
-  },
-  statusRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  statusText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#212529',
-    letterSpacing: 0.3,
-  },
-  backButton: {
-    backgroundColor: '#495057',
-    paddingHorizontal: 32,
-    paddingVertical: 16,
-    borderRadius: 8,
-    marginBottom: 20,
-    shadowColor: '#495057',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  backButtonText: {
-    fontSize: isSmallTablet ? 16 : isLargeTablet ? 20 : 18,
-    fontWeight: '700',
-    color: '#FFFFFF',
-    letterSpacing: 1,
-  },
-  footerText: {
-    fontSize: 12,
-    color: '#6C757D',
-    textAlign: 'left',
-    fontWeight: '400',
-  }
-});

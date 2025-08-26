@@ -1,11 +1,7 @@
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, Modal } from 'react-native';
 import { useState } from 'react';
 import { User, X, Search } from 'lucide-react-native';
-import { Dimensions } from 'react-native';
-
-const { width } = Dimensions.get('window');
-const isSmallTablet = width < 900;
-const isLargeTablet = width >= 1200;
+import { useWindowDimensions } from 'react-native';
 
 interface TechnicianModalProps {
   visible: boolean;
@@ -46,6 +42,10 @@ const TECHNICIANS_DB: TechnicianData[] = [
 ];
 
 export default function TechnicianModal({ visible, onClose }: TechnicianModalProps) {
+  const { width = 0 } = useWindowDimensions();
+  const isSmallTablet = width < 900;
+  const isLargeTablet = width >= 1200;
+
   const [dni, setDni] = useState<string>('');
   const [currentView, setCurrentView] = useState<'input' | 'result' | 'notfound'>('input');
   const [technicianData, setTechnicianData] = useState<TechnicianData | null>(null);
@@ -91,6 +91,245 @@ export default function TechnicianModal({ visible, onClose }: TechnicianModalPro
     console.log('✅ Técnico autorizado:', technicianData?.nombre, technicianData?.apellido);
     handleClose();
   };
+
+  const styles = StyleSheet.create({
+    overlay: {
+      flex: 1,
+      backgroundColor: 'rgba(0, 0, 0, 0.5)',
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    modalContainer: {
+      backgroundColor: '#F8F9FA',
+      borderRadius: 16,
+      width: isSmallTablet ? '95%' : isLargeTablet ? '75%' : '85%',
+      maxWidth: isSmallTablet ? 550 : isLargeTablet ? 800 : 675,
+      maxHeight: '80%',
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 8 },
+      shadowOpacity: 0.3,
+      shadowRadius: 16,
+      elevation: 8,
+    },
+    header: {
+      backgroundColor: '#495057',
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      paddingHorizontal: isSmallTablet ? 20 : isLargeTablet ? 32 : 24,
+      paddingVertical: isSmallTablet ? 14 : isLargeTablet ? 20 : 16,
+      borderTopLeftRadius: 16,
+      borderTopRightRadius: 16,
+    },
+    headerTitle: {
+      fontSize: isSmallTablet ? 16 : isLargeTablet ? 20 : 18,
+      fontWeight: '600',
+      color: '#FFFFFF',
+      letterSpacing: 0.5,
+    },
+    closeButton: {
+      padding: 8,
+    },
+    content: {
+      padding: isSmallTablet ? 20 : isLargeTablet ? 32 : 24,
+    },
+    inputSection: {
+      marginBottom: 20,
+    },
+    inputLabel: {
+      fontSize: 13,
+      fontWeight: '600',
+      color: '#212529',
+      marginBottom: 6,
+      letterSpacing: 0.3,
+    },
+    inputUnderline: {
+      height: 1,
+      backgroundColor: '#212529',
+      marginBottom: 6,
+    },
+    textInput: {
+      fontSize: 15,
+      color: '#212529',
+      paddingVertical: 10,
+      paddingHorizontal: 0,
+      backgroundColor: 'transparent',
+      minHeight: 35,
+      fontFamily: 'monospace',
+    },
+    exampleSection: {
+      backgroundColor: '#E3F2FD',
+      padding: 14,
+      borderRadius: 8,
+      marginBottom: 20,
+      borderLeftWidth: 4,
+      borderLeftColor: '#2196F3',
+    },
+    exampleTitle: {
+      fontSize: 13,
+      fontWeight: '600',
+      color: '#1976D2',
+      marginBottom: 6,
+    },
+    exampleText: {
+      fontSize: 13,
+      color: '#1976D2',
+      fontFamily: 'monospace',
+      marginBottom: 4,
+    },
+    resultSection: {
+      marginBottom: 20,
+    },
+    dataCard: {
+      backgroundColor: '#FFFFFF',
+      borderRadius: 12,
+      padding: 20,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.08,
+      shadowRadius: 8,
+      elevation: 3,
+      borderWidth: 1,
+      borderColor: '#E9ECEF',
+    },
+    dataRow: {
+      flexDirection: 'row',
+      marginBottom: 14,
+      alignItems: 'center',
+    },
+    dataLabel: {
+      fontSize: 13,
+      fontWeight: '600',
+      color: '#495057',
+      minWidth: 90,
+      letterSpacing: 0.3,
+    },
+    dataValue: {
+      fontSize: 15,
+      color: '#212529',
+      fontWeight: '500',
+      flex: 1,
+    },
+    notFoundSection: {
+      marginBottom: 20,
+    },
+    notFoundCard: {
+      backgroundColor: '#FFEBEE',
+      borderRadius: 12,
+      padding: 20,
+      borderLeftWidth: 4,
+      borderLeftColor: '#F44336',
+      alignItems: 'center',
+    },
+    notFoundTitle: {
+      fontSize: 16,
+      fontWeight: '700',
+      color: '#C62828',
+      marginBottom: 10,
+      letterSpacing: 0.5,
+    },
+    notFoundDescription: {
+      fontSize: 13,
+      color: '#C62828',
+      textAlign: 'center',
+      lineHeight: 18,
+    },
+    buttonsContainer: {
+      flexDirection: 'row',
+      gap: 12,
+    },
+    closeButtonSecondary: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: '#6C757D',
+      paddingHorizontal: 24,
+      paddingVertical: 14,
+      borderRadius: 8,
+      gap: 6,
+      shadowColor: '#6C757D',
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.2,
+      shadowRadius: 8,
+      elevation: 4,
+    },
+    closeButtonText: {
+      fontSize: 14,
+      fontWeight: '700',
+      color: '#FFFFFF',
+      letterSpacing: 0.5,
+    },
+    consultButton: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: '#495057',
+      paddingHorizontal: 24,
+      paddingVertical: 14,
+      borderRadius: 8,
+      gap: 6,
+      shadowColor: '#495057',
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.2,
+      shadowRadius: 8,
+      elevation: 4,
+    },
+    consultButtonDisabled: {
+      opacity: 0.6,
+    },
+    consultButtonText: {
+      fontSize: 14,
+      fontWeight: '700',
+      color: '#FFFFFF',
+      letterSpacing: 0.5,
+    },
+    backButton: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: '#6C757D',
+      paddingHorizontal: 24,
+      paddingVertical: 14,
+      borderRadius: 8,
+      gap: 6,
+      shadowColor: '#6C757D',
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.2,
+      shadowRadius: 8,
+      elevation: 4,
+    },
+    backButtonText: {
+      fontSize: 14,
+      fontWeight: '700',
+      color: '#FFFFFF',
+      letterSpacing: 0.5,
+    },
+    permitidoButton: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: '#28A745',
+      paddingHorizontal: 24,
+      paddingVertical: 14,
+      borderRadius: 8,
+      gap: 6,
+      shadowColor: '#28A745',
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.2,
+      shadowRadius: 8,
+      elevation: 4,
+    },
+    permitidoButtonText: {
+      fontSize: 14,
+      fontWeight: '700',
+      color: '#FFFFFF',
+      letterSpacing: 0.5,
+    },
+  });
 
   return (
     <Modal
@@ -247,242 +486,3 @@ export default function TechnicianModal({ visible, onClose }: TechnicianModalPro
     </Modal>
   );
 }
-
-const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  modalContainer: {
-    backgroundColor: '#F8F9FA',
-    borderRadius: 16,
-    width: isSmallTablet ? '95%' : isLargeTablet ? '75%' : '85%',
-    maxWidth: isSmallTablet ? 550 : isLargeTablet ? 800 : 675,
-    maxHeight: '80%',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.3,
-    shadowRadius: 16,
-    elevation: 8,
-  },
-  header: {
-    backgroundColor: '#495057',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: isSmallTablet ? 20 : isLargeTablet ? 32 : 24,
-    paddingVertical: isSmallTablet ? 14 : isLargeTablet ? 20 : 16,
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
-  },
-  headerTitle: {
-    fontSize: isSmallTablet ? 16 : isLargeTablet ? 20 : 18,
-    fontWeight: '600',
-    color: '#FFFFFF',
-    letterSpacing: 0.5,
-  },
-  closeButton: {
-    padding: 8,
-  },
-  content: {
-    padding: isSmallTablet ? 20 : isLargeTablet ? 32 : 24,
-  },
-  inputSection: {
-    marginBottom: 20,
-  },
-  inputLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#212529',
-    marginBottom: 6,
-    letterSpacing: 0.3,
-  },
-  inputUnderline: {
-    height: 1,
-    backgroundColor: '#212529',
-    marginBottom: 6,
-  },
-  textInput: {
-    fontSize: 15,
-    color: '#212529',
-    paddingVertical: 10,
-    paddingHorizontal: 0,
-    backgroundColor: 'transparent',
-    minHeight: 35,
-    fontFamily: 'monospace',
-  },
-  exampleSection: {
-    backgroundColor: '#E3F2FD',
-    padding: 14,
-    borderRadius: 8,
-    marginBottom: 20,
-    borderLeftWidth: 4,
-    borderLeftColor: '#2196F3',
-  },
-  exampleTitle: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#1976D2',
-    marginBottom: 6,
-  },
-  exampleText: {
-    fontSize: 13,
-    color: '#1976D2',
-    fontFamily: 'monospace',
-    marginBottom: 4,
-  },
-  resultSection: {
-    marginBottom: 20,
-  },
-  dataCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 3,
-    borderWidth: 1,
-    borderColor: '#E9ECEF',
-  },
-  dataRow: {
-    flexDirection: 'row',
-    marginBottom: 14,
-    alignItems: 'center',
-  },
-  dataLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#495057',
-    minWidth: 90,
-    letterSpacing: 0.3,
-  },
-  dataValue: {
-    fontSize: 15,
-    color: '#212529',
-    fontWeight: '500',
-    flex: 1,
-  },
-  notFoundSection: {
-    marginBottom: 20,
-  },
-  notFoundCard: {
-    backgroundColor: '#FFEBEE',
-    borderRadius: 12,
-    padding: 20,
-    borderLeftWidth: 4,
-    borderLeftColor: '#F44336',
-    alignItems: 'center',
-  },
-  notFoundTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#C62828',
-    marginBottom: 10,
-    letterSpacing: 0.5,
-  },
-  notFoundDescription: {
-    fontSize: 13,
-    color: '#C62828',
-    textAlign: 'center',
-    lineHeight: 18,
-  },
-  buttonsContainer: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  closeButtonSecondary: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#6C757D',
-    paddingHorizontal: 24,
-    paddingVertical: 14,
-    borderRadius: 8,
-    gap: 6,
-    shadowColor: '#6C757D',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  closeButtonText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#FFFFFF',
-    letterSpacing: 0.5,
-  },
-  consultButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#495057',
-    paddingHorizontal: 24,
-    paddingVertical: 14,
-    borderRadius: 8,
-    gap: 6,
-    shadowColor: '#495057',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  consultButtonDisabled: {
-    opacity: 0.6,
-  },
-  consultButtonText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#FFFFFF',
-    letterSpacing: 0.5,
-  },
-  backButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#6C757D',
-    paddingHorizontal: 24,
-    paddingVertical: 14,
-    borderRadius: 8,
-    gap: 6,
-    shadowColor: '#6C757D',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  backButtonText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#FFFFFF',
-    letterSpacing: 0.5,
-  },
-  permitidoButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#28A745',
-    paddingHorizontal: 24,
-    paddingVertical: 14,
-    borderRadius: 8,
-    gap: 6,
-    shadowColor: '#28A745',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  permitidoButtonText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#FFFFFF',
-    letterSpacing: 0.5,
-  },
-});
