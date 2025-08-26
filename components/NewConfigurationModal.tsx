@@ -1,11 +1,8 @@
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, Modal, ScrollView, Switch } from 'react-native';
 import { useState, useEffect } from 'react';
 import { ArrowLeft, Save, X, Wifi } from 'lucide-react-native';
+import { useWindowDimensions } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-
-const { width: screenWidth } = require('react-native').Dimensions.get('window');
-const isSmallTablet = screenWidth < 900;
-const isLargeTablet = screenWidth >= 1200;
 
 interface NewConfigurationModalProps {
   visible: boolean;
@@ -42,6 +39,10 @@ interface ConfigurationData {
 }
 
 export default function NewConfigurationModal({ visible, onClose, onSave }: NewConfigurationModalProps) {
+  const { width = 0 } = useWindowDimensions();
+  const isSmallTablet = width < 900;
+  const isLargeTablet = width >= 1200;
+
   const [config, setConfig] = useState<ConfigurationData>({
     doors: [
       { enabled: true, name: 'Calle (P1)', ipExterior: '192.168.1.26', ipInterior: '192.168.1.27' },
@@ -436,253 +437,20 @@ const styles = StyleSheet.create({
     borderColor: '#E9ECEF',
   },
   doorHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  doorNameInput: {
-    flex: 1,
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#212529',
-    marginLeft: 12,
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    backgroundColor: '#F8F9FA',
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: '#DEE2E6',
-  },
-  disabledInput: {
-    backgroundColor: '#E9ECEF',
-    color: '#6C757D',
-  },
-  doorDetails: {
-    gap: 10,
-  },
-  ipRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  ipLabel: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: '#495057',
-    minWidth: 70,
-  },
-  ipInput: {
-    flex: 1,
-    fontSize: 13,
-    color: '#212529',
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    backgroundColor: '#F8F9FA',
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: '#DEE2E6',
-  },
-  connectionButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#495057',
-    paddingHorizontal: 6,
-    paddingVertical: 6,
-    borderRadius: 6,
-    minWidth: 28,
-  },
-  connectionButtonTesting: {
-    backgroundColor: '#FFC107',
-  },
-  connectionButtonSuccess: {
-    backgroundColor: '#28A745',
-  },
-  connectionButtonError: {
-    backgroundColor: '#DC3545',
-  },
-  connectionButtonText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#FFFFFF',
-  },
-  twoColumnSection: {
-    flexDirection: 'row',
-    gap: isSmallTablet ? 20 : isLargeTablet ? 32 : 24,
-    marginBottom: 24,
-  },
-  leftColumn: {
-    flex: 1,
-  },
-  rightColumn: {
-    flex: 1,
-  },
-  networkCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: isSmallTablet ? 16 : isLargeTablet ? 24 : 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 3,
-    borderWidth: 1,
-    borderColor: '#E9ECEF',
-  },
-  networkRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-    gap: 10,
-  },
-  networkLabel: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: '#495057',
-    minWidth: 70,
-  },
-  networkInput: {
-    flex: 1,
-    fontSize: 13,
-    color: '#212529',
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    backgroundColor: '#F8F9FA',
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: '#DEE2E6',
-  },
-  scheduleCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: isSmallTablet ? 16 : isLargeTablet ? 24 : 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 3,
-    borderWidth: 1,
-    borderColor: '#E9ECEF',
-  },
-  scheduleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-    gap: 10,
-  },
-  scheduleLabel: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: '#495057',
-    minWidth: 80,
-  },
-  timeInput: {
-    fontSize: 13,
-    color: '#212529',
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    backgroundColor: '#F8F9FA',
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: '#DEE2E6',
-    width: 70,
-    textAlign: 'center',
-  },
-  timeSeparator: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#495057',
-  },
-  scheduleHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 10,
-    gap: 10,
-  },
-  scheduleHeaderLabel: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: '#495057',
-    minWidth: 80,
-  },
-  scheduleHeaderTime: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#495057',
-    width: 70,
-    textAlign: 'center',
-  },
-  scheduleHeaderSeparator: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#495057',
-    width: 14,
-  },
-  officeCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 3,
-    borderWidth: 1,
-    borderColor: '#E9ECEF',
-  },
-  officeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  officeLabel: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#495057',
-  },
-  bottomButtons: {
-    flexDirection: 'row',
-    gap: 20,
-    marginTop: 12,
-  },
-  backButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#6C757D',
-    paddingVertical: 14,
-    borderRadius: 8,
-    gap: 6,
-    shadowColor: '#6C757D',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  backButtonText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#FFFFFF',
-    letterSpacing: 0.5,
-  },
-  saveButton: {
-    flex: 1,
-    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#28A745',
-    paddingVertical: 14,
-    borderRadius: 8,
-    gap: 6,
+    paddingVertical: isSmallTablet ? 10 : isLargeTablet ? 14 : 12,
+    borderRadius: 6,
+    gap: isSmallTablet ? 4 : isLargeTablet ? 6 : 5,
     shadowColor: '#28A745',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.2,
-    shadowRadius: 8,
+    shadowRadius: 4,
     elevation: 4,
   },
   saveButtonText: {
-    fontSize: 14,
+    fontSize: isSmallTablet ? 12 : isLargeTablet ? 14 : 13,
     fontWeight: '700',
     color: '#FFFFFF',
     letterSpacing: 0.5,
