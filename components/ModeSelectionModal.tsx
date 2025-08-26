@@ -37,7 +37,7 @@ const modeOptions: ModeOption[] = [
   // HORARIO
   {
     id: 'horario_extendido',
-    category: 'COMERCIAL',
+    category: 'HORARIO',
     name: 'EXTENDIDO',
     description: 'Modo de funcionamiento para horarios extendidos de atención al público. Las puertas funcionan de forma automática con detectores de movimiento activos. Ideal para horarios de mayor afluencia de clientes.'
   },
