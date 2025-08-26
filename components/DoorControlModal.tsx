@@ -147,13 +147,14 @@ export default function DoorControlModal({ visible, onClose, doorId, doorName }:
       marginBottom: isSmallTablet ? 12 : isLargeTablet ? 20 : 16,
     },
     videoSection: {
-      flex: 2,
+      flex: 3,
       justifyContent: 'center',
       alignItems: 'center',
+      marginTop: isSmallTablet ? 16 : isLargeTablet ? 24 : 20,
     },
     videoPlaceholder: {
       width: '100%',
-      maxWidth: isSmallTablet ? 320 : isLargeTablet ? 480 : 400,
+      maxWidth: isSmallTablet ? 420 : isLargeTablet ? 600 : 520,
       aspectRatio: 4/3,
       backgroundColor: '#FFFFFF',
       borderRadius: 12,
@@ -188,7 +189,7 @@ export default function DoorControlModal({ visible, onClose, doorId, doorName }:
       fontWeight: '500',
     },
     controlsSection: {
-      flex: 1,
+      flex: 2,
       justifyContent: 'flex-start',
       paddingTop: isSmallTablet ? 12 : isLargeTablet ? 20 : 16,
     },
