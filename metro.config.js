@@ -15,6 +15,6 @@ config.transformer.minifierConfig = {
 };
 
 // Disable source maps
-config.transformer.enableBabelRCLookup = false;
+config.transformer.enableBabelRCLookup = true;
 
 module.exports = config;
