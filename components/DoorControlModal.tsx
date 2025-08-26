@@ -17,7 +17,7 @@ export default function DoorControlModal({ visible, onClose, doorId, doorName }:
   const isLargeTablet = width >= 1200;
 
   const [isCommunicating, setIsCommunicating] = useState(false);
-  const { systemStatus, controlDoor } = useDoorControl();
+  const { systemStatus, controlDoor, toggleEmergency } = useDoorControl();
   
   // Obtener estado actual de la puerta
   const currentDoor = systemStatus?.doors[doorId];
@@ -80,8 +80,17 @@ export default function DoorControlModal({ visible, onClose, doorId, doorName }:
     return isOpening || isClosing;
   };
 
-  const handleEmergency = () => {
+  const handleEmergency = async () => {
     console.log(`🚨 Activando emergencia desde ${doorName}`);
+    
+    const success = await toggleEmergency(true);
+    if (success) {
+      console.log('✅ Emergencia activada correctamente');
+      // Cerrar el modal después de activar emergencia
+      onClose();
+    } else {
+      console.error('❌ Error activando emergencia');
+    }
   };
 
   const handleVisualization = () => {
