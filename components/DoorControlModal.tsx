@@ -281,8 +281,8 @@ export default function DoorControlModal({ visible, onClose, doorId, doorName }:
     },
     bottomButtons: {
       flexDirection: 'row',
-      gap: 12,
-      marginBottom: 12,
+      gap: isSmallTablet ? 8 : isLargeTablet ? 16 : 12,
+      marginTop: isSmallTablet ? 16 : isLargeTablet ? 24 : 20,
     },
     emergencyButton: {
       flex: 1,
@@ -422,27 +422,27 @@ export default function DoorControlModal({ visible, onClose, doorId, doorName }:
                   )}
                 </View>
               </View>
+
+              {/* Bottom Buttons - Moved below status */}
+              <View style={styles.bottomButtons}>
+                <TouchableOpacity 
+                  style={styles.emergencyButton}
+                  onPress={handleEmergency}
+                >
+                  <Text style={styles.emergencyButtonText}>ACTIVAR EMERGENCIA</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity 
+                  style={styles.visualizationButton}
+                  onPress={handleVisualization}
+                >
+                  <Text style={styles.visualizationButtonText}>VISUALIZACIÓN</Text>
+                </TouchableOpacity>
+              </View>
             </View>
           </View>
 
           {/* Bottom Buttons */}
-          <View style={styles.bottomButtons}>
-            <TouchableOpacity 
-              style={styles.emergencyButton}
-              onPress={handleEmergency}
-            >
-              <Text style={styles.emergencyButtonText}>ACTIVAR EMERGENCIA</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity 
-              style={styles.visualizationButton}
-              onPress={handleVisualization}
-            >
-              <Text style={styles.visualizationButtonText}>VISUALIZACIÓN</Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Footer Text */}
           <Text style={styles.footerText}>Pantalla acceso a visualización puerta {doorName.toLowerCase()}</Text>
         </View>
       </View>
