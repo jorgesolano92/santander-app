@@ -20,6 +20,47 @@ export interface SystemStatus {
   emergencyActive: boolean;
   connectionStatus: 'online' | 'offline';
   lastSync: string;
+  tags?: Tag[];
+  alarms?: Alarm[];
+  events?: Event[];
+}
+
+export interface Tag {
+  tag: string;
+  Tip: number; // 0=Entrada, 1=Salida manual, 2=Salida automática
+  v: string;   // Valor actual
+  St: number;  // Estado: 0=reposo, 1=alarma, 128=fallo comunicación, 1000=apagada, 1001=encendida
+  Rst?: number;
+  TipS?: string;
+  tact?: number;
+  trc?: number;
+  Srv_email_body?: string;
+}
+
+export interface Alarm {
+  Action: number;
+  id: number;
+  TAG: string;
+  lap: number;
+  fh: string;
+  pri: number;
+  cev: number;
+  ac: number;
+}
+
+export interface Event {
+  Fec: string;
+  CE: number;
+  id: number;
+  tg: string;
+  v: string;
+  FotoJPEGBase64?: string;
+}
+
+export interface ApiResponse {
+  tags: Tag[];
+  Alarms: Alarm[];
+  Events: Event[];
 }
 
 export interface ModeChangeRequest {
@@ -45,6 +86,8 @@ class DoorControlService {
   private statusCheckInterval: NodeJS.Timeout | null = null;
   private sandboxMode: boolean = true; // Modo sandbox activado por defecto
   private mockSystemStatus: SystemStatus;
+  private lastEventId: number = 0;
+  private lastChangeTime: number = 0;
 
   constructor() {
     // Estado inicial simulado
@@ -159,7 +202,11 @@ class DoorControlService {
         return null;
       }
 
-      const response = await fetch(`${this.baseURL}/api/estado`, {
+      // Usar la API real del cliente
+      const mSecCambio = Date.now() - this.lastChangeTime;
+      const apiUrl = `${this.baseURL}/API2/gettags?mSecCambio=${mSecCambio}&id=${this.lastEventId}`;
+      
+      const response = await fetch(apiUrl, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${this.authToken}`,
@@ -172,36 +219,169 @@ class DoorControlService {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 
-      const data = await response.json();
+      const data: ApiResponse = await response.json();
       this.connectionStatus = 'online';
+      this.lastChangeTime = Date.now();
       
-      return {
-        mode: data.mode || 'COMERCIAL AUTOMATICO',
-        doors: {
-          P1: {
-            id: 'P1',
-            name: 'Puerta Calle',
-            status: data.doors?.P1?.status || 'closed',
-            locked: data.doors?.P1?.locked ?? true,
-            sensorActive: data.doors?.P1?.sensorActive ?? true,
-            lastUpdate: new Date().toISOString(),
-          },
-          P2: {
-            id: 'P2',
-            name: 'Puerta Oficina',
-            status: data.doors?.P2?.status || 'closed',
-            locked: data.doors?.P2?.locked ?? true,
-            sensorActive: data.doors?.P2?.sensorActive ?? true,
-            lastUpdate: new Date().toISOString(),
-          },
-        },
-        emergencyActive: data.emergencyActive || false,
-        connectionStatus: this.connectionStatus,
-        lastSync: new Date().toISOString(),
-      };
+      // Actualizar último ID de evento
+      if (data.Events && data.Events.length > 0) {
+        this.lastEventId = Math.max(...data.Events.map(e => e.id));
+      }
+      
+      // Procesar tags para determinar estado de puertas
+      const processedStatus = this.processApiResponse(data);
+      
+      return processedStatus;
     } catch (error) {
       console.error('Error getting system status:', error);
       this.connectionStatus = 'offline';
+      return null;
+    }
+  }
+
+  // Procesar respuesta de la API real
+  private processApiResponse(data: ApiResponse): SystemStatus {
+    // Buscar modo de funcionamiento
+    const modeTag = data.tags.find(tag => tag.tag === 'Srv_modo_funcionamiento_esclusa');
+    let currentMode = 'COMERCIAL AUTOMÁTICO';
+    
+    if (modeTag) {
+      switch (modeTag.v) {
+        case '0':
+          currentMode = 'OFICINA CERRADA';
+          break;
+        case '1':
+          currentMode = 'COMERCIAL AUTOMÁTICO';
+          break;
+        case '2':
+          currentMode = 'COMERCIAL ESCLUSA';
+          break;
+        case '3':
+          currentMode = 'HORARIO EXTENDIDO';
+          break;
+        case '4':
+          currentMode = 'CARGA DE CAJERO';
+          break;
+        case '5':
+          currentMode = 'EMERGENCIA';
+          break;
+        default:
+          currentMode = 'COMERCIAL AUTOMÁTICO';
+      }
+    }
+
+    // Procesar estado de puertas basado en las salidas digitales
+    const doors = this.processDoorStatus(data.tags);
+    
+    // Detectar emergencia
+    const emergencyActive = currentMode === 'EMERGENCIA' || 
+                           data.Alarms.some(alarm => alarm.pri === 0); // Prioridad 0 = emergencia
+
+    return {
+      mode: currentMode,
+      doors,
+      emergencyActive,
+      connectionStatus: this.connectionStatus,
+      lastSync: new Date().toISOString(),
+      tags: data.tags,
+      alarms: data.Alarms,
+      events: data.Events,
+    };
+  }
+
+  // Procesar estado de puertas desde tags
+  private processDoorStatus(tags: Tag[]): SystemStatus['doors'] {
+    const doors: SystemStatus['doors'] = {
+      P1: {
+        id: 'P1',
+        name: 'Puerta Calle',
+        status: 'closed',
+        locked: true,
+        sensorActive: true,
+        lastUpdate: new Date().toISOString(),
+      },
+      P2: {
+        id: 'P2',
+        name: 'Puerta Oficina',
+        status: 'closed',
+        locked: true,
+        sensorActive: true,
+        lastUpdate: new Date().toISOString(),
+      },
+    };
+
+    // Mapeo de salidas digitales a puertas
+    // Asumiendo que las primeras salidas controlan las puertas principales
+    const doorOutputs = {
+      P1: ['smcse_do_01_01_01', 'smcse_do_01_01_02'], // Puerta Calle
+      P2: ['smcse_do_01_01_03', 'smcse_do_01_01_04'], // Puerta Oficina
+    };
+
+    Object.entries(doorOutputs).forEach(([doorId, outputTags]) => {
+      const doorKey = doorId as 'P1' | 'P2';
+      
+      // Buscar tags de salida para esta puerta
+      const doorTags = tags.filter(tag => outputTags.includes(tag.tag));
+      
+      if (doorTags.length > 0) {
+        // Determinar estado basado en las salidas
+        const hasActiveOutput = doorTags.some(tag => tag.St === 1001); // 1001 = encendida
+        const hasOpenCommand = doorTags.some(tag => tag.v === '1001');
+        
+        if (hasActiveOutput || hasOpenCommand) {
+          doors[doorKey].status = 'open';
+          doors[doorKey].locked = false;
+        } else {
+          doors[doorKey].status = 'closed';
+          doors[doorKey].locked = true;
+        }
+      }
+      
+      // Verificar sensores (entradas digitales)
+      const sensorTags = tags.filter(tag => 
+        tag.tag.includes('smcse_di_') && tag.Tip === 0
+      );
+      
+      doors[doorKey].sensorActive = sensorTags.some(tag => tag.St !== 128); // 128 = fallo comunicación
+    });
+
+    return doors;
+  }
+
+  // Obtener tags específicos
+  async getTags(mSecCambio: number = 0, eventId: number = 0): Promise<ApiResponse | null> {
+    try {
+      if (this.sandboxMode) {
+        // En sandbox, devolver datos simulados
+        return {
+          tags: [],
+          Alarms: [],
+          Events: [],
+        };
+      }
+
+      if (!this.baseURL) {
+        return null;
+      }
+
+      const apiUrl = `${this.baseURL}/API2/gettags?mSecCambio=${mSecCambio}&id=${eventId}`;
+      
+      const response = await fetch(apiUrl, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${this.authToken}`,
+          'Content-Type': 'application/json',
+        },
+        timeout: 5000,
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('Error getting tags:', error);
       return null;
     }
   }
