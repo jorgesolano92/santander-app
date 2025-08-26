@@ -312,6 +312,7 @@ export default function VisualizationModal({ visible, onClose }: VisualizationMo
         <DoorControlModal
           visible={!!selectedDoor}
           onClose={() => setSelectedDoor(null)}
+          onCloseAll={onClose}
           doorId={selectedDoor.id}
           doorName={selectedDoor.name}
         />

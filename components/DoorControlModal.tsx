@@ -7,11 +7,12 @@ import { useWindowDimensions } from 'react-native';
 interface DoorControlModalProps {
   visible: boolean;
   onClose: () => void;
+  onCloseAll?: () => void;
   doorId: 'P1' | 'P2' | 'P3' | 'P4';
   doorName: string;
 }
 
-export default function DoorControlModal({ visible, onClose, doorId, doorName }: DoorControlModalProps) {
+export default function DoorControlModal({ visible, onClose, onCloseAll, doorId, doorName }: DoorControlModalProps) {
   const { width = 0 } = useWindowDimensions();
   const isSmallTablet = width < 900;
   const isLargeTablet = width >= 1200;
@@ -86,8 +87,12 @@ export default function DoorControlModal({ visible, onClose, doorId, doorName }:
     const success = await toggleEmergency(true);
     if (success) {
       console.log('✅ Emergencia activada correctamente');
-      // Cerrar el modal después de activar emergencia
-      onClose();
+      // Cerrar todos los modales después de activar emergencia
+      if (onCloseAll) {
+        onCloseAll();
+      } else {
+        onClose();
+      }
     } else {
       console.error('❌ Error activando emergencia');
     }
