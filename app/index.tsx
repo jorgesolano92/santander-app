@@ -9,7 +9,7 @@ import VisualizationModal from '@/components/VisualizationModal';
 import TechnicianModal from '@/components/TechnicianModal';
 import { useDoorControl } from '@/hooks/useDoorControl';
 
-const { width, height } = Dimensions.get('window');
+const { width = 0, height = 0 } = Dimensions.get('window') || {};
 
 // Responsive breakpoints
 const isSmallTablet = width < 900; // 8" tablets like Oukitel RT3 Pro
