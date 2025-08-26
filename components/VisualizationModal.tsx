@@ -1,14 +1,26 @@
 import { View, Text, StyleSheet, TouchableOpacity, Modal } from 'react-native';
 import { X, Lock, Clock as Unlock } from 'lucide-react-native';
 import { Image } from 'react-native';
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useDoorControl } from '@/hooks/useDoorControl';
 import DoorControlModal from './DoorControlModal';
 import { useWindowDimensions } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 interface VisualizationModalProps {
   visible: boolean;
   onClose: () => void;
+}
+
+interface DoorConfig {
+  enabled: boolean;
+  name: string;
+  ipExterior: string;
+  ipInterior: string;
+}
+
+interface SavedConfiguration {
+  doors: DoorConfig[];
 }
 
 export default function VisualizationModal({ visible, onClose }: VisualizationModalProps) {
@@ -18,12 +30,52 @@ export default function VisualizationModal({ visible, onClose }: VisualizationMo
 
   const { systemStatus } = useDoorControl();
   const [selectedDoor, setSelectedDoor] = useState<{ id: 'P1' | 'P2' | 'P3' | 'P4'; name: string } | null>(null);
-  
-  // Configuración por defecto - siempre 2 puertas
-  const doorConfig = [
+  const [doorConfig, setDoorConfig] = useState([
     { id: 'P1' as const, name: 'PUERTA CALLE', ip: '192.168.1.100', type: 'Principal' },
     { id: 'P2' as const, name: 'PUERTA OFICINA', ip: '192.168.1.101', type: 'Principal' }
-  ];
+  ]);
+  
+  // Cargar configuración de puertas guardada
+  const loadDoorConfiguration = useCallback(async () => {
+    try {
+      const savedConfig = await AsyncStorage.getItem('new_door_config');
+      if (savedConfig) {
+        const config: SavedConfiguration = JSON.parse(savedConfig);
+        const enabledDoors = config.doors.filter(door => door.enabled);
+        
+        const newDoorConfig = enabledDoors.map((door, index) => {
+          const doorIds = ['P1', 'P2', 'P3', 'P4'] as const;
+          return {
+            id: doorIds[index] || 'P1',
+            name: door.name.toUpperCase(),
+            ip: door.ipExterior || `192.168.1.${100 + index}`,
+            type: 'Principal' as const
+          };
+        });
+        
+        // Asegurar que siempre haya al menos 2 puertas por defecto
+        if (newDoorConfig.length === 0) {
+          setDoorConfig([
+            { id: 'P1' as const, name: 'PUERTA CALLE', ip: '192.168.1.100', type: 'Principal' },
+            { id: 'P2' as const, name: 'PUERTA OFICINA', ip: '192.168.1.101', type: 'Principal' }
+          ]);
+        } else {
+          setDoorConfig(newDoorConfig);
+        }
+        
+        console.log('✅ Configuración de puertas cargada:', newDoorConfig);
+      }
+    } catch (error) {
+      console.error('❌ Error cargando configuración de puertas:', error);
+    }
+  }, []);
+
+  // Cargar configuración cuando se abre el modal
+  useEffect(() => {
+    if (visible) {
+      loadDoorConfiguration();
+    }
+  }, [visible, loadDoorConfiguration]);
 
   const getDoorStatusText = (doorId: 'P1' | 'P2' | 'P3' | 'P4') => {
     const door = systemStatus?.doors[doorId];
@@ -82,34 +134,37 @@ export default function VisualizationModal({ visible, onClose }: VisualizationMo
     },
     content: {
       flex: 1,
-      padding: isSmallTablet ? 24 : isLargeTablet ? 40 : 32,
+      padding: isSmallTablet ? 16 : isLargeTablet ? 24 : 20,
       alignItems: 'center',
     },
     logoSection: {
       alignItems: 'center',
-      marginBottom: isSmallTablet ? 32 : isLargeTablet ? 48 : 40,
-      marginTop: isSmallTablet ? 16 : isLargeTablet ? 24 : 20,
+      marginBottom: isSmallTablet ? 20 : isLargeTablet ? 32 : 24,
+      marginTop: isSmallTablet ? 8 : isLargeTablet ? 16 : 12,
     },
     santanderLogo: {
-      width: isSmallTablet ? 350 : isLargeTablet ? 480 : 420,
-      height: isSmallTablet ? 100 : isLargeTablet ? 140 : 120,
+      width: isSmallTablet ? 280 : isLargeTablet ? 380 : 330,
+      height: isSmallTablet ? 80 : isLargeTablet ? 110 : 95,
     },
     doorsContainer: {
       flexDirection: 'row',
       flexWrap: 'wrap',
-      gap: isSmallTablet ? 24 : isLargeTablet ? 40 : 32,
-      marginBottom: isSmallTablet ? 32 : isLargeTablet ? 48 : 40,
+      gap: isSmallTablet ? 16 : isLargeTablet ? 24 : 20,
+      marginBottom: isSmallTablet ? 20 : isLargeTablet ? 32 : 24,
       alignItems: 'flex-start',
       justifyContent: 'center',
-      maxWidth: isSmallTablet ? 700 : isLargeTablet ? 1000 : 850,
+      maxWidth: '100%',
+      flex: 1,
     },
     doorCard: {
       backgroundColor: '#FFFFFF',
       borderRadius: 12,
-      padding: isSmallTablet ? 32 : isLargeTablet ? 48 : 40,
+      padding: isSmallTablet ? 20 : isLargeTablet ? 32 : 24,
       alignItems: 'center',
-      minWidth: isSmallTablet ? 300 : isLargeTablet ? 400 : 350,
-      maxWidth: isSmallTablet ? 350 : isLargeTablet ? 450 : 400,
+      minWidth: isSmallTablet ? 240 : isLargeTablet ? 320 : 280,
+      maxWidth: isSmallTablet ? 280 : isLargeTablet ? 360 : 320,
+      flex: doorConfig.length <= 2 ? 1 : 0,
+      maxWidth: doorConfig.length <= 2 ? '45%' : isSmallTablet ? '30%' : '32%',
       shadowColor: '#000',
       shadowOffset: { width: 0, height: 4 },
       shadowOpacity: 0.08,
@@ -120,11 +175,11 @@ export default function VisualizationModal({ visible, onClose }: VisualizationMo
     },
     doorButton: {
       backgroundColor: '#495057',
-      paddingHorizontal: isSmallTablet ? 32 : isLargeTablet ? 48 : 40,
-      paddingVertical: isSmallTablet ? 18 : isLargeTablet ? 24 : 21,
+      paddingHorizontal: isSmallTablet ? 24 : isLargeTablet ? 36 : 30,
+      paddingVertical: isSmallTablet ? 14 : isLargeTablet ? 18 : 16,
       borderRadius: 8,
-      marginBottom: isSmallTablet ? 24 : isLargeTablet ? 32 : 28,
-      minWidth: isSmallTablet ? 220 : isLargeTablet ? 280 : 250,
+      marginBottom: isSmallTablet ? 16 : isLargeTablet ? 24 : 20,
+      minWidth: isSmallTablet ? 180 : isLargeTablet ? 240 : 210,
       alignItems: 'center',
       shadowColor: '#495057',
       shadowOffset: { width: 0, height: 2 },
@@ -133,7 +188,7 @@ export default function VisualizationModal({ visible, onClose }: VisualizationMo
       elevation: 3,
     },
     doorButtonText: {
-      fontSize: 14,
+      fontSize: isSmallTablet ? 12 : isLargeTablet ? 14 : 13,
       fontWeight: '700',
       color: '#FFFFFF',
       letterSpacing: 0.5,
@@ -143,10 +198,10 @@ export default function VisualizationModal({ visible, onClose }: VisualizationMo
       alignItems: 'center',
     },
     statusLabel: {
-      fontSize: 14,
+      fontSize: isSmallTablet ? 12 : isLargeTablet ? 14 : 13,
       fontWeight: '700',
       color: '#212529',
-      marginBottom: 12,
+      marginBottom: isSmallTablet ? 8 : isLargeTablet ? 12 : 10,
       letterSpacing: 0.3,
       textAlign: 'center',
     },
@@ -156,7 +211,7 @@ export default function VisualizationModal({ visible, onClose }: VisualizationMo
       gap: 10,
     },
     statusText: {
-      fontSize: 14,
+      fontSize: isSmallTablet ? 12 : isLargeTablet ? 14 : 13,
       fontWeight: '600',
       color: '#212529',
       letterSpacing: 0.3,

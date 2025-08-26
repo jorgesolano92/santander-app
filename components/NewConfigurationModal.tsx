@@ -106,6 +106,7 @@ export default function NewConfigurationModal({ visible, onClose, onSave }: NewC
     };
     
     onSave(configForParent);
+    onClose(); // Cerrar el modal después de guardar
     console.log('📋 Nueva configuración completa guardada:', config);
   };
 

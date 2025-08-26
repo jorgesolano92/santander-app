@@ -123,12 +123,38 @@ class DoorControlService {
 
   private async initializeAdditionalDoors(): Promise<void> {
     try {
-      const savedConfig = await AsyncStorage.getItem('detailed_door_config');
+      // Primero intentar cargar la nueva configuración
+      let savedConfig = await AsyncStorage.getItem('new_door_config');
+      
+      // Si no existe, intentar cargar la configuración antigua
+      if (!savedConfig) {
+        savedConfig = await AsyncStorage.getItem('detailed_door_config');
+      }
+      
       if (savedConfig) {
         const config = JSON.parse(savedConfig);
         
-        // Agregar P3 si está configurada
-        if (config.direccionIP3) {
+        // Manejar nueva configuración
+        if (config.doors) {
+          const enabledDoors = config.doors.filter((door: any) => door.enabled);
+          
+          // Agregar puertas adicionales basadas en las habilitadas
+          enabledDoors.forEach((door: any, index: number) => {
+            if (index >= 2) { // P3, P4, etc.
+              const doorId = `P${index + 1}` as 'P3' | 'P4';
+              this.mockSystemStatus.doors[doorId] = {
+                id: doorId,
+                name: door.name || `Puerta ${index + 1}`,
+                status: 'closed',
+                locked: true,
+                sensorActive: true,
+                lastUpdate: new Date().toISOString(),
+              };
+            }
+          });
+        }
+        // Manejar configuración antigua
+        else if (config.direccionIP3) {
           this.mockSystemStatus.doors.P3 = {
             id: 'P3',
             name: 'Puerta Lateral',
@@ -139,7 +165,6 @@ class DoorControlService {
           };
         }
         
-        // Agregar P4 si está configurada
         if (config.direccionIP4) {
           this.mockSystemStatus.doors.P4 = {
             id: 'P4',
