@@ -4,6 +4,11 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { X, ChevronDown, ChevronRight } from 'lucide-react-native';
 import { Image } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Dimensions } from 'react-native';
+
+const { width } = Dimensions.get('window');
+const isSmallTablet = width < 900;
+const isLargeTablet = width >= 1200;
 
 interface ModeSelectionModalProps {
   visible: boolean;
@@ -311,8 +316,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingHorizontal: isSmallTablet ? 20 : isLargeTablet ? 32 : 24,
+    paddingVertical: isSmallTablet ? 16 : isLargeTablet ? 24 : 20,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
@@ -320,7 +325,7 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   headerTitle: {
-    fontSize: 16,
+    fontSize: isSmallTablet ? 16 : isLargeTablet ? 20 : 18,
     fontWeight: '600',
     color: '#FFFFFF',
     letterSpacing: 0.5,
@@ -345,8 +350,8 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     flexDirection: 'row',
-    padding: 20,
-    gap: 20,
+    padding: isSmallTablet ? 20 : isLargeTablet ? 32 : 24,
+    gap: isSmallTablet ? 20 : isLargeTablet ? 32 : 24,
   },
   leftPanel: {
     backgroundColor: '#FFFFFF',
@@ -359,7 +364,7 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   leftPanelContent: {
-    padding: 12,
+    padding: isSmallTablet ? 12 : isLargeTablet ? 20 : 16,
     paddingBottom: 40,
   },
   section: {
@@ -430,12 +435,12 @@ const styles = StyleSheet.create({
   },
   logoSection: {
     alignItems: 'center',
-    marginBottom: 20,
-    marginTop: 16,
+    marginBottom: isSmallTablet ? 20 : isLargeTablet ? 32 : 24,
+    marginTop: isSmallTablet ? 16 : isLargeTablet ? 24 : 20,
   },
   santanderLogo: {
-    width: 280,
-    height: 80,
+    width: isSmallTablet ? 280 : isLargeTablet ? 400 : 340,
+    height: isSmallTablet ? 80 : isLargeTablet ? 115 : 97,
   },
   detailsScrollView: {
     flex: 1,
@@ -445,11 +450,11 @@ const styles = StyleSheet.create({
   detailsCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
-    padding: 20,
+    padding: isSmallTablet ? 20 : isLargeTablet ? 32 : 24,
     flexDirection: 'row',
     alignItems: 'flex-start',
     width: '100%',
-    maxWidth: 600,
+    maxWidth: isSmallTablet ? 600 : isLargeTablet ? 900 : 750,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.08,
@@ -468,16 +473,16 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   detailsTitle: {
-    fontSize: 18,
+    fontSize: isSmallTablet ? 18 : isLargeTablet ? 24 : 21,
     fontWeight: '700',
     color: '#212529',
-    marginBottom: 12,
+    marginBottom: isSmallTablet ? 12 : isLargeTablet ? 16 : 14,
     letterSpacing: 0.3,
   },
   detailsDescription: {
-    fontSize: 13,
+    fontSize: isSmallTablet ? 13 : isLargeTablet ? 16 : 14,
     color: '#6C757D',
-    lineHeight: 18,
+    lineHeight: isSmallTablet ? 18 : isLargeTablet ? 24 : 20,
     fontWeight: '400',
   },
   activateButton: {

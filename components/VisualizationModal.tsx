@@ -4,6 +4,11 @@ import { Image } from 'react-native';
 import { useState } from 'react';
 import { useDoorControl } from '@/hooks/useDoorControl';
 import DoorControlModal from './DoorControlModal';
+import { Dimensions } from 'react-native';
+
+const { width } = Dimensions.get('window');
+const isSmallTablet = width < 900;
+const isLargeTablet = width >= 1200;
 
 interface VisualizationModalProps {
   visible: boolean;
@@ -136,8 +141,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingHorizontal: isSmallTablet ? 24 : isLargeTablet ? 32 : 28,
+    paddingVertical: isSmallTablet ? 18 : isLargeTablet ? 24 : 20,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
@@ -145,7 +150,7 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   headerTitle: {
-    fontSize: 16,
+    fontSize: isSmallTablet ? 18 : isLargeTablet ? 22 : 20,
     fontWeight: '600',
     color: '#FFFFFF',
     letterSpacing: 0.5,
@@ -155,34 +160,34 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    padding: 16,
+    padding: isSmallTablet ? 24 : isLargeTablet ? 40 : 32,
     alignItems: 'center',
   },
   logoSection: {
     alignItems: 'center',
-    marginBottom: 20,
-    marginTop: 12,
+    marginBottom: isSmallTablet ? 32 : isLargeTablet ? 48 : 40,
+    marginTop: isSmallTablet ? 16 : isLargeTablet ? 24 : 20,
   },
   santanderLogo: {
-    width: 280,
-    height: 80,
+    width: isSmallTablet ? 350 : isLargeTablet ? 480 : 420,
+    height: isSmallTablet ? 100 : isLargeTablet ? 140 : 120,
   },
   doorsContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 20,
-    marginBottom: 20,
+    gap: isSmallTablet ? 24 : isLargeTablet ? 40 : 32,
+    marginBottom: isSmallTablet ? 32 : isLargeTablet ? 48 : 40,
     alignItems: 'flex-start',
     justifyContent: 'center',
-    maxWidth: 600,
+    maxWidth: isSmallTablet ? 700 : isLargeTablet ? 1000 : 850,
   },
   doorCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
-    padding: 20,
+    padding: isSmallTablet ? 32 : isLargeTablet ? 48 : 40,
     alignItems: 'center',
-    minWidth: 240,
-    maxWidth: 280,
+    minWidth: isSmallTablet ? 300 : isLargeTablet ? 400 : 350,
+    maxWidth: isSmallTablet ? 350 : isLargeTablet ? 450 : 400,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.08,
@@ -193,11 +198,11 @@ const styles = StyleSheet.create({
   },
   doorButton: {
     backgroundColor: '#495057',
-    paddingHorizontal: 24,
-    paddingVertical: 14,
+    paddingHorizontal: isSmallTablet ? 32 : isLargeTablet ? 48 : 40,
+    paddingVertical: isSmallTablet ? 18 : isLargeTablet ? 24 : 21,
     borderRadius: 8,
-    marginBottom: 16,
-    minWidth: 180,
+    marginBottom: isSmallTablet ? 24 : isLargeTablet ? 32 : 28,
+    minWidth: isSmallTablet ? 220 : isLargeTablet ? 280 : 250,
     alignItems: 'center',
     shadowColor: '#495057',
     shadowOffset: { width: 0, height: 2 },
@@ -247,7 +252,7 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   backButtonText: {
-    fontSize: 16,
+    fontSize: isSmallTablet ? 16 : isLargeTablet ? 20 : 18,
     fontWeight: '700',
     color: '#FFFFFF',
     letterSpacing: 1,
@@ -257,5 +262,5 @@ const styles = StyleSheet.create({
     color: '#6C757D',
     textAlign: 'left',
     fontWeight: '400',
-  },
+  }
 });

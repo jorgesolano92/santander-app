@@ -2,6 +2,11 @@ import { View, Text, StyleSheet, TouchableOpacity, Modal } from 'react-native';
 import { useState } from 'react';
 import { X, Lock, Clock as Unlock, MessageCircle, DoorOpen } from 'lucide-react-native';
 import { useDoorControl } from '@/hooks/useDoorControl';
+import { Dimensions } from 'react-native';
+
+const { width } = Dimensions.get('window');
+const isSmallTablet = width < 900;
+const isLargeTablet = width >= 1200;
 
 interface DoorControlModalProps {
   visible: boolean;
@@ -213,8 +218,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingHorizontal: isSmallTablet ? 16 : isLargeTablet ? 24 : 20,
+    paddingVertical: isSmallTablet ? 12 : isLargeTablet ? 16 : 14,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
@@ -222,7 +227,7 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   headerTitle: {
-    fontSize: 11,
+    fontSize: isSmallTablet ? 11 : isLargeTablet ? 16 : 13,
     fontWeight: '600',
     color: '#FFFFFF',
     letterSpacing: 0.5,
@@ -246,20 +251,20 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    padding: 12,
+    padding: isSmallTablet ? 12 : isLargeTablet ? 20 : 16,
   },
   doorTitle: {
-    fontSize: 18,
+    fontSize: isSmallTablet ? 18 : isLargeTablet ? 24 : 21,
     fontWeight: '700',
     color: '#212529',
-    marginBottom: 8,
+    marginBottom: isSmallTablet ? 8 : isLargeTablet ? 12 : 10,
     letterSpacing: 0.5,
   },
   mainArea: {
     flex: 1,
     flexDirection: 'row',
-    gap: 16,
-    marginBottom: 12,
+    gap: isSmallTablet ? 16 : isLargeTablet ? 24 : 20,
+    marginBottom: isSmallTablet ? 12 : isLargeTablet ? 20 : 16,
   },
   videoSection: {
     flex: 2,
@@ -268,7 +273,7 @@ const styles = StyleSheet.create({
   },
   videoPlaceholder: {
     width: '100%',
-    maxWidth: 320,
+    maxWidth: isSmallTablet ? 320 : isLargeTablet ? 480 : 400,
     aspectRatio: 4/3,
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
@@ -283,33 +288,33 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   cameraIcon: {
-    width: 40,
-    height: 30,
+    width: isSmallTablet ? 40 : isLargeTablet ? 60 : 50,
+    height: isSmallTablet ? 30 : isLargeTablet ? 45 : 37,
     backgroundColor: '#E9ECEF',
     borderRadius: 6,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: isSmallTablet ? 8 : isLargeTablet ? 12 : 10,
   },
   cameraIconInner: {
-    width: 20,
-    height: 15,
+    width: isSmallTablet ? 20 : isLargeTablet ? 30 : 25,
+    height: isSmallTablet ? 15 : isLargeTablet ? 22 : 18,
     backgroundColor: '#CED4DA',
     borderRadius: 4,
   },
   videoText: {
-    fontSize: 11,
+    fontSize: isSmallTablet ? 11 : isLargeTablet ? 14 : 12,
     color: '#6C757D',
     fontWeight: '500',
   },
   controlsSection: {
     flex: 1,
     justifyContent: 'flex-start',
-    paddingTop: 12,
+    paddingTop: isSmallTablet ? 12 : isLargeTablet ? 20 : 16,
   },
   controlButtons: {
-    gap: 12,
-    marginBottom: 12,
+    gap: isSmallTablet ? 12 : isLargeTablet ? 16 : 14,
+    marginBottom: isSmallTablet ? 12 : isLargeTablet ? 20 : 16,
   },
   controlButton: {
     flexDirection: 'row',
@@ -353,8 +358,8 @@ const styles = StyleSheet.create({
   },
   statusSection: {
     backgroundColor: '#FFFFFF',
-    paddingVertical: 20,
-    paddingHorizontal: 16,
+    paddingVertical: isSmallTablet ? 24 : isLargeTablet ? 32 : 28,
+    paddingHorizontal: isSmallTablet ? 20 : isLargeTablet ? 28 : 24,
     borderRadius: 8,
     borderWidth: 1,
     borderColor: '#E9ECEF',
@@ -366,18 +371,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   statusTitle: {
-    fontSize: 11,
+    fontSize: isSmallTablet ? 13 : isLargeTablet ? 16 : 14,
     fontWeight: '700',
     color: '#212529',
-    marginBottom: 8,
+    marginBottom: isSmallTablet ? 12 : isLargeTablet ? 16 : 14,
     letterSpacing: 0.3,
   },
   statusText: {
-    fontSize: 16,
+    fontSize: isSmallTablet ? 16 : isLargeTablet ? 20 : 18,
     fontWeight: '700',
     color: '#212529',
     letterSpacing: 0.3,
-    marginBottom: 12,
+    marginBottom: isSmallTablet ? 16 : isLargeTablet ? 20 : 18,
     textAlign: 'center',
   },
   statusTextAnimated: {
@@ -387,9 +392,9 @@ const styles = StyleSheet.create({
   lockIconContainer: {
     alignItems: 'center',
     justifyContent: 'center',
-    width: 50,
-    height: 50,
-    borderRadius: 25,
+    width: isSmallTablet ? 50 : isLargeTablet ? 70 : 60,
+    height: isSmallTablet ? 50 : isLargeTablet ? 70 : 60,
+    borderRadius: isSmallTablet ? 25 : isLargeTablet ? 35 : 30,
     backgroundColor: '#F8F9FA',
     borderWidth: 2,
     borderColor: '#E9ECEF',

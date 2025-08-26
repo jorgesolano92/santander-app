@@ -11,6 +11,11 @@ import { useDoorControl } from '@/hooks/useDoorControl';
 
 const { width, height } = Dimensions.get('window');
 
+// Responsive breakpoints
+const isSmallTablet = width < 900; // 8" tablets like Oukitel RT3 Pro
+const isLargeTablet = width >= 1200; // 11" tablets like Xiaomi Redmi Pad 2
+const isMediumTablet = width >= 900 && width < 1200; // 10" tablets
+
 export default function MainScreen() {
   const {
     systemStatus,
@@ -475,8 +480,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingHorizontal: isSmallTablet ? 16 : isLargeTablet ? 32 : 24,
+    paddingVertical: isSmallTablet ? 12 : isLargeTablet ? 20 : 16,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
@@ -485,14 +490,14 @@ const styles = StyleSheet.create({
   },
   dateTimeContainer: {
     backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingHorizontal: isSmallTablet ? 12 : isLargeTablet ? 20 : 16,
+    paddingVertical: isSmallTablet ? 6 : isLargeTablet ? 10 : 8,
     borderRadius: 8,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.2)',
   },
   dateTimeText: {
-    fontSize: 12,
+    fontSize: isSmallTablet ? 12 : isLargeTablet ? 16 : 14,
     fontWeight: '600',
     color: '#FFFFFF',
     fontFamily: 'monospace',
@@ -500,47 +505,47 @@ const styles = StyleSheet.create({
   },
   notificationsButton: {
     backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
+    paddingHorizontal: isSmallTablet ? 16 : isLargeTablet ? 24 : 20,
+    paddingVertical: isSmallTablet ? 10 : isLargeTablet ? 14 : 12,
     borderRadius: 8,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.2)',
   },
   notificationsButtonText: {
-    fontSize: 14,
+    fontSize: isSmallTablet ? 14 : isLargeTablet ? 18 : 16,
     fontWeight: '600',
     color: '#FFFFFF',
     letterSpacing: 0.5,
   },
   connectionIndicator: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
+    paddingHorizontal: isSmallTablet ? 10 : isLargeTablet ? 16 : 12,
+    paddingVertical: isSmallTablet ? 5 : isLargeTablet ? 8 : 6,
     borderRadius: 12,
   },
   connectionText: {
-    fontSize: 10,
+    fontSize: isSmallTablet ? 10 : isLargeTablet ? 14 : 12,
     fontWeight: '600',
     color: '#FFFFFF',
   },
   scheduleIndicator: {
     backgroundColor: '#17A2B8',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
+    paddingHorizontal: isSmallTablet ? 10 : isLargeTablet ? 16 : 12,
+    paddingVertical: isSmallTablet ? 5 : isLargeTablet ? 8 : 6,
     borderRadius: 12,
   },
   scheduleText: {
-    fontSize: 10,
+    fontSize: isSmallTablet ? 10 : isLargeTablet ? 14 : 12,
     fontWeight: '600',
     color: '#FFFFFF',
   },
   manualModeIndicator: {
     backgroundColor: '#FFC107',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
+    paddingHorizontal: isSmallTablet ? 10 : isLargeTablet ? 16 : 12,
+    paddingVertical: isSmallTablet ? 5 : isLargeTablet ? 8 : 6,
     borderRadius: 12,
   },
   manualModeText: {
-    fontSize: 10,
+    fontSize: isSmallTablet ? 10 : isLargeTablet ? 14 : 12,
     fontWeight: '600',
     color: '#212529',
   },
@@ -548,8 +553,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#FFFFFF',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
+    paddingHorizontal: isSmallTablet ? 16 : isLargeTablet ? 24 : 20,
+    paddingVertical: isSmallTablet ? 10 : isLargeTablet ? 14 : 12,
     borderRadius: 8,
     gap: 6,
     shadowColor: '#000',
@@ -559,7 +564,7 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   configButtonText: {
-    fontSize: 12,
+    fontSize: isSmallTablet ? 12 : isLargeTablet ? 16 : 14,
     fontWeight: '600',
     color: '#333333',
   },
@@ -593,29 +598,29 @@ const styles = StyleSheet.create({
   },
   mainContent: {
     flex: 1,
-    padding: 16,
+    padding: isSmallTablet ? 16 : isLargeTablet ? 32 : 24,
   },
   emergencyContent: {
     flex: 1,
-    padding: 16,
+    padding: isSmallTablet ? 16 : isLargeTablet ? 32 : 24,
     alignItems: 'center',
   },
   logoSection: {
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: isSmallTablet ? 20 : isLargeTablet ? 32 : 24,
     marginTop: 8,
   },
   santanderLogo: {
-    width: 280,
-    height: 90,
+    width: isSmallTablet ? 280 : isLargeTablet ? 400 : 340,
+    height: isSmallTablet ? 90 : isLargeTablet ? 130 : 110,
   },
   operationSection: {
-    marginBottom: 20,
+    marginBottom: isSmallTablet ? 20 : isLargeTablet ? 32 : 24,
   },
   modeCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
-    padding: 16,
+    padding: isSmallTablet ? 16 : isLargeTablet ? 24 : 20,
     flexDirection: 'row',
     alignItems: 'center',
     shadowColor: '#000',
@@ -636,24 +641,24 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   modeTitle: {
-    fontSize: 18,
+    fontSize: isSmallTablet ? 18 : isLargeTablet ? 24 : 21,
     fontWeight: '700',
     color: '#212529',
-    marginBottom: 8,
+    marginBottom: isSmallTablet ? 8 : isLargeTablet ? 12 : 10,
     letterSpacing: 0.3,
   },
   modeDescription: {
-    fontSize: 13,
+    fontSize: isSmallTablet ? 13 : isLargeTablet ? 16 : 14,
     color: '#6C757D',
-    lineHeight: 18,
+    lineHeight: isSmallTablet ? 18 : isLargeTablet ? 24 : 20,
     fontWeight: '400',
   },
   changeModeButton: {
     backgroundColor: '#F8F9FA',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingHorizontal: isSmallTablet ? 16 : isLargeTablet ? 24 : 20,
+    paddingVertical: isSmallTablet ? 12 : isLargeTablet ? 16 : 14,
     borderRadius: 8,
-    marginLeft: 16,
+    marginLeft: isSmallTablet ? 16 : isLargeTablet ? 24 : 20,
     borderWidth: 1,
     borderColor: '#DEE2E6',
     shadowColor: '#000',
@@ -663,7 +668,7 @@ const styles = StyleSheet.create({
     elevation: 1,
   },
   changeModeButtonText: {
-    fontSize: 13,
+    fontSize: isSmallTablet ? 13 : isLargeTablet ? 16 : 14,
     fontWeight: '600',
     color: '#495057',
     letterSpacing: 0.5,

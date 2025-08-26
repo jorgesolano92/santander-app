@@ -2,6 +2,11 @@ import { View, Text, StyleSheet, TextInput, TouchableOpacity, Modal } from 'reac
 import { useState } from 'react';
 import { User, X } from 'lucide-react-native';
 import { Image } from 'react-native';
+import { Dimensions } from 'react-native';
+
+const { width } = Dimensions.get('window');
+const isSmallTablet = width < 900;
+const isLargeTablet = width >= 1200;
 
 interface LoginModalProps {
   visible: boolean;
@@ -158,9 +163,9 @@ const styles = StyleSheet.create({
   modalContainer: {
     backgroundColor: '#F8F9FA',
     borderRadius: 16,
-    width: '90%',
-    maxWidth: 600,
-    minWidth: 500,
+    width: isSmallTablet ? '90%' : isLargeTablet ? '70%' : '80%',
+    maxWidth: isSmallTablet ? 600 : isLargeTablet ? 900 : 750,
+    minWidth: isSmallTablet ? 500 : isLargeTablet ? 700 : 600,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.3,
@@ -172,13 +177,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 14,
+    paddingHorizontal: isSmallTablet ? 20 : isLargeTablet ? 32 : 24,
+    paddingVertical: isSmallTablet ? 14 : isLargeTablet ? 20 : 16,
     borderTopLeftRadius: 16,
     borderTopRightRadius: 16,
   },
   headerTitle: {
-    fontSize: 16,
+    fontSize: isSmallTablet ? 16 : isLargeTablet ? 20 : 18,
     fontWeight: '600',
     color: '#FFFFFF',
     letterSpacing: 0.5,
@@ -187,17 +192,17 @@ const styles = StyleSheet.create({
     padding: 8,
   },
   content: {
-    padding: 24,
-    paddingVertical: 20,
+    padding: isSmallTablet ? 24 : isLargeTablet ? 40 : 32,
+    paddingVertical: isSmallTablet ? 20 : isLargeTablet ? 32 : 24,
   },
   logoSection: {
     alignItems: 'center',
-    marginBottom: 20,
-    paddingVertical: 12,
+    marginBottom: isSmallTablet ? 20 : isLargeTablet ? 32 : 24,
+    paddingVertical: isSmallTablet ? 12 : isLargeTablet ? 20 : 16,
   },
   santanderLogo: {
-    width: 260,
-    height: 75,
+    width: isSmallTablet ? 260 : isLargeTablet ? 380 : 320,
+    height: isSmallTablet ? 75 : isLargeTablet ? 110 : 92,
   },
   testCredentials: {
     backgroundColor: '#E3F2FD',
