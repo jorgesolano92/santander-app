@@ -1,6 +1,6 @@
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, Modal, ScrollView, Switch } from 'react-native';
 import { useState, useEffect } from 'react';
-import { ArrowLeft, Save, X, Wifi } from 'lucide-react-native';
+import { ArrowLeft, Save, X, Wifi, RefreshCw } from 'lucide-react-native';
 import { useWindowDimensions } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -176,6 +176,11 @@ export default function NewConfigurationModal({ visible, onClose, onSave }: NewC
       default:
         return 'CONEXIÓN';
     }
+  };
+
+  const handleUpdateVersion = () => {
+    console.log('🔄 Actualizar versión presionado');
+    // Aquí iría la lógica de actualización
   };
 
   const styles = StyleSheet.create({
@@ -472,6 +477,28 @@ export default function NewConfigurationModal({ visible, onClose, onSave }: NewC
       color: '#FFFFFF',
       letterSpacing: 0.5,
     },
+    updateButton: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: '#17A2B8',
+      paddingHorizontal: isSmallTablet ? 16 : isLargeTablet ? 24 : 20,
+      paddingVertical: isSmallTablet ? 10 : isLargeTablet ? 14 : 12,
+      borderRadius: 8,
+      gap: isSmallTablet ? 4 : isLargeTablet ? 8 : 6,
+      shadowColor: '#17A2B8',
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.2,
+      shadowRadius: 8,
+      elevation: 4,
+    },
+    updateButtonText: {
+      fontSize: isSmallTablet ? 12 : isLargeTablet ? 14 : 13,
+      fontWeight: '700',
+      color: '#FFFFFF',
+      letterSpacing: 0.5,
+    },
     saveButton: {
       flex: 1,
       flexDirection: 'row',
@@ -674,6 +701,11 @@ export default function NewConfigurationModal({ visible, onClose, onSave }: NewC
             <TouchableOpacity style={styles.backButton} onPress={onClose}>
               <ArrowLeft size={20} color="#FFFFFF" />
               <Text style={styles.backButtonText}>VOLVER</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.updateButton} onPress={handleUpdateVersion}>
+              <RefreshCw size={20} color="#FFFFFF" />
+              <Text style={styles.updateButtonText}>ACTUALIZAR VERSION</Text>
             </TouchableOpacity>
 
             <TouchableOpacity style={styles.saveButton} onPress={handleSave}>

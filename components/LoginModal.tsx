@@ -334,13 +334,6 @@ export default function LoginModal({ visible, onClose, onSuccess }: LoginModalPr
             {/* Buttons */}
             <View style={styles.buttonsContainer}>
               <TouchableOpacity 
-                style={styles.closeButtonSecondary}
-                onPress={handleClose}
-              >
-                <Text style={styles.closeButtonText}>CERRAR</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity 
                 style={[styles.loginButton, isLoading && styles.loginButtonDisabled]} 
                 onPress={handleLogin}
                 disabled={isLoading}
