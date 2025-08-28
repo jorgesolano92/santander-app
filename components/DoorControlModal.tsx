@@ -430,11 +430,7 @@ export default function DoorControlModal({ visible, onClose, onCloseAll, doorId,
                 </Text>
                 
                 <View style={styles.lockIconContainer}>
-                  {isLocked ? (
-                    <Lock size={32} color="#495057" />
-                  ) : (
-                    <Unlock size={32} color="#28A745" />
-                  )}
+                  {isLocked ? <Lock size={32} color="#495057" /> : <Unlock size={32} color="#28A745" />}
                 </View>
               </View>
 
