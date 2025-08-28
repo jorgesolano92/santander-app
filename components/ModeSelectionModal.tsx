@@ -94,6 +94,32 @@ export default function ModeSelectionModal({ visible, onClose, onModeSelect }: M
   const [showCargaCajero, setShowCargaCajero] = useState<boolean>(false);
   const countdownInterval = useRef<NodeJS.Timeout | null>(null);
 
+  // Función para iniciar/reiniciar el contador
+  const startCountdown = useCallback(() => {
+    // Limpiar cualquier temporizador existente
+    if (countdownInterval.current) {
+      clearInterval(countdownInterval.current);
+      countdownInterval.current = null;
+    }
+    
+    // Reiniciar el contador
+    setCountdown(30);
+    setIsCountdownActive(true);
+    
+    // Iniciar nuevo temporizador
+    countdownInterval.current = setInterval(() => {
+      setCountdown(prev => {
+        if (prev <= 1) {
+          // Auto-activar cuando llegue a 0 - llamar directamente a onModeSelect
+          onModeSelect(selectedMode);
+          onClose();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  }, [selectedMode, onModeSelect, onClose]);
+
   // Cargar configuración para determinar si mostrar Carga de Cajero
   const loadConfiguration = useCallback(async () => {
     try {
@@ -123,21 +149,8 @@ export default function ModeSelectionModal({ visible, onClose, onModeSelect }: M
     if (visible) {
       // Cargar configuración al abrir el modal
       loadConfiguration();
-      
-      setCountdown(30);
-      setIsCountdownActive(true);
-      
-      countdownInterval.current = setInterval(() => {
-        setCountdown(prev => {
-          if (prev <= 1) {
-            // Auto-activar cuando llegue a 0 - llamar directamente a onModeSelect
-            onModeSelect(selectedMode);
-            onClose();
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
+      // Iniciar contador
+      startCountdown();
     } else {
       // Limpiar interval cuando se cierra el modal
       if (countdownInterval.current) {
@@ -153,10 +166,12 @@ export default function ModeSelectionModal({ visible, onClose, onModeSelect }: M
         clearInterval(countdownInterval.current);
       }
     };
-  }, [visible, loadConfiguration]);
+  }, [visible, loadConfiguration, startCountdown]);
 
   const handleModeSelect = (modeId: string) => {
     setSelectedMode(modeId);
+    // Reiniciar contador cuando se selecciona un nuevo modo
+    startCountdown();
   };
 
   const handleActivate = () => {
