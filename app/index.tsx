@@ -713,6 +713,7 @@ export default function MainScreen() {
         </TouchableOpacity>
       </View>
 
+      {error && (
         <View style={styles.errorBanner}>
           <Text style={styles.errorText}>⚠️ {error}</Text>
         </View>
