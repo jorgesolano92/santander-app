@@ -1,5 +1,5 @@
 import { View, Text, StyleSheet, TouchableOpacity, Modal } from 'react-native';
-import { AlertTriangle, X } from 'lucide-react-native';
+import { TriangleAlert as AlertTriangle, X } from 'lucide-react-native';
 import { useWindowDimensions } from 'react-native';
 
 interface EmergencyConfirmationModalProps {
