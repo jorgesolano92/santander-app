@@ -346,9 +346,6 @@ export default function TechnicianModal({ visible, onClose }: TechnicianModalPro
               {currentView === 'input' ? 'INTRODUCIR DNI' : 
                currentView === 'result' ? 'VISTA TÉCNICOS' : 'DNI NO ENCONTRADO'}
             </Text>
-            <TouchableOpacity style={styles.closeButton} onPress={handleClose}>
-              <X size={24} color="#FFFFFF" />
-            </TouchableOpacity>
           </View>
 
           <View style={styles.content}>

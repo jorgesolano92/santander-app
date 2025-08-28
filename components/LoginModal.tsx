@@ -320,9 +320,6 @@ export default function LoginModal({ visible, onClose, onSuccess }: LoginModalPr
                 <Text style={styles.loginButtonText}>
                   {isLoading ? 'VALIDANDO...' : 'ACCEDER'}
                 </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
         </View>
       </View>
     </Modal>

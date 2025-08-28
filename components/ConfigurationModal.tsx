@@ -78,9 +78,6 @@ export default function ConfigurationModal({ visible, onClose, onSave, officeNum
             </TouchableOpacity>
 
             <Text style={styles.headerTitle}>CONFIGURACIÓN</Text>
-            <TouchableOpacity style={styles.closeButton} onPress={onClose}>
-              <X size={24} color="#FFFFFF" />
-            </TouchableOpacity>
           </View>
 
           {/* Content */}

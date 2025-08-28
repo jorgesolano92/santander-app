@@ -428,9 +428,6 @@ export default function ModeSelectionModal({ visible, onClose, onModeSelect }: M
         {/* Header */}
         <View style={styles.header}>
           <Text style={styles.headerTitle}>SAIMA SEGURIDAD – Panel de control puertas SECURA</Text>
-          <TouchableOpacity style={styles.closeButton} onPress={handleClose}>
-            <X size={24} color="#FFFFFF" />
-          </TouchableOpacity>
         </View>
 
         <View style={styles.content}>
@@ -507,7 +504,6 @@ export default function ModeSelectionModal({ visible, onClose, onModeSelect }: M
         </View>
 
         {/* Footer */}
-        <Text style={styles.footerText}>Pantalla selección modo puertas</Text>
       </View>
     </Modal>
   );

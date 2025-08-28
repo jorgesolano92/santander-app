@@ -253,9 +253,6 @@ export default function VisualizationModal({ visible, onClose }: VisualizationMo
         {/* Header */}
         <View style={styles.header}>
           <Text style={styles.headerTitle}>VISUALIZACIÓN</Text>
-          <TouchableOpacity style={styles.closeButton} onPress={onClose}>
-            <X size={24} color="#FFFFFF" />
-          </TouchableOpacity>
         </View>
 
         <View style={styles.content}>
@@ -297,9 +294,6 @@ export default function VisualizationModal({ visible, onClose }: VisualizationMo
           </TouchableOpacity>
 
           {/* Footer Text */}
-          <Text style={styles.footerText}>
-            Pantalla acceso a videoporteros - {doorConfig.length} puerta{doorConfig.length !== 1 ? 's' : ''} configurada{doorConfig.length !== 1 ? 's' : ''}
-          </Text>
         </View>
       </View>
 

@@ -203,6 +203,28 @@ export default function MainScreen() {
       color: '#FFFFFF',
       letterSpacing: 0.5,
     },
+    statusLed: {
+      width: isSmallTablet ? 12 : isLargeTablet ? 16 : 14,
+      height: isSmallTablet ? 12 : isLargeTablet ? 16 : 14,
+      borderRadius: isSmallTablet ? 6 : isLargeTablet ? 8 : 7,
+      marginHorizontal: 8,
+    },
+    statusLedOnline: {
+      backgroundColor: '#28A745',
+      shadowColor: '#28A745',
+      shadowOffset: { width: 0, height: 0 },
+      shadowOpacity: 0.8,
+      shadowRadius: 4,
+      elevation: 4,
+    },
+    statusLedOffline: {
+      backgroundColor: '#DC3545',
+      shadowColor: '#DC3545',
+      shadowOffset: { width: 0, height: 0 },
+      shadowOpacity: 0.8,
+      shadowRadius: 4,
+      elevation: 4,
+    },
     connectionIndicator: {
       paddingHorizontal: isSmallTablet ? 10 : isLargeTablet ? 16 : 12,
       paddingVertical: isSmallTablet ? 5 : isLargeTablet ? 8 : 6,
@@ -678,26 +700,19 @@ export default function MainScreen() {
           <Text style={styles.dateTimeText}>{formatDateTime(currentDateTime)}</Text>
         </View>
         
-        {/* Indicador de conexión */}
-        <View style={[styles.connectionIndicator, { backgroundColor: connectionStatus === 'online' ? '#28A745' : '#DC3545' }]}>
-          <Text style={styles.connectionText}>
-            {connectionStatus === 'online' ? 'SANDBOX' : 'OFFLINE'}
-          </Text>
-        </View>
+        {/* LED de estado de conexión */}
+        <View style={[
+          styles.statusLed,
+          connectionStatus === 'online' ? styles.statusLedOnline : styles.statusLedOffline
+        ]} />
         
-        {/* Indicador de modo automático por horario */}
-        {currentScheduleMode && !isEmergencyActive && currentMode === currentScheduleMode && (
-          <View style={styles.scheduleIndicator}>
-            <Text style={styles.scheduleText}>AUTO: {currentScheduleMode}</Text>
-          </View>
-        )}
-        
-        {/* Indicador cuando el modo actual difiere del sugerido por horario */}
-        {currentScheduleMode && !isEmergencyActive && currentMode !== currentScheduleMode && (
-          <View style={styles.manualModeIndicator}>
-            <Text style={styles.manualModeText}>MANUAL: {currentMode}</Text>
-          </View>
-        )}
+        <TouchableOpacity 
+          style={styles.notificationsButton}
+          onPress={() => setShowTechnicianModal(true)}
+        >
+          <HardHat size={20} color="#FFFFFF" />
+          <Text style={styles.notificationsButtonText}>TÉCNICO</Text>
+        </TouchableOpacity>
         
         <TouchableOpacity 
           style={styles.configButton}
@@ -705,22 +720,6 @@ export default function MainScreen() {
         >
           <Settings size={20} color="#666666" />
           <Text style={styles.configButtonText}>CONFIGURACIÓN</Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity 
-          style={styles.configButton}
-          onPress={() => setShowTechnicianModal(true)}
-        >
-      <TouchableOpacity 
-        style={styles.notificationsButton}
-        onPress={() => setShowTechnicianModal(true)}
-      >
-        <HardHat size={20} color="#FFFFFF" />
-        <Text style={styles.notificationsButtonText}>TÉCNICO</Text>
-      </TouchableOpacity>
-      
-          <HardHat size={20} color="#666666" />
-          <Text style={styles.configButtonText}>TÉCNICO</Text>
         </TouchableOpacity>
       </View>
 
@@ -771,7 +770,6 @@ export default function MainScreen() {
           </TouchableOpacity>
 
           {/* Footer Text */}
-          <Text style={styles.footerText}>Pantalla modo emergencia</Text>
         </View>
       ) : isCargaCajeroMode ? (
         /* Carga Cajero Mode View */
@@ -818,7 +816,6 @@ export default function MainScreen() {
           </View>
 
           {/* Footer Text */}
-          <Text style={styles.footerText}>Pantalla principal logo, estado puerta</Text>
         </View>
       ) : isManualMode ? (
         /* Manual Mode View - Handled by modal at bottom */
@@ -872,7 +869,6 @@ export default function MainScreen() {
           </View>
 
           {/* Footer Text */}
-          <Text style={styles.footerText}>Pantalla principal logo, estado puerta</Text>
         </View>
       )}
 

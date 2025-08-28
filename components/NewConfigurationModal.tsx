@@ -506,9 +506,6 @@ export default function NewConfigurationModal({ visible, onClose, onSave }: NewC
         {/* Header */}
         <View style={styles.header}>
           <Text style={styles.headerTitle}>CONFIGURACIÓN DEL SISTEMA</Text>
-          <TouchableOpacity style={styles.closeButton} onPress={onClose}>
-            <X size={24} color="#FFFFFF" />
-          </TouchableOpacity>
         </View>
 
         <ScrollView style={styles.scrollView} contentContainerStyle={styles.content}>

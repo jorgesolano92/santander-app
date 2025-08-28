@@ -356,9 +356,6 @@ export default function DoorControlModal({ visible, onClose, onCloseAll, doorId,
         {/* Header */}
         <View style={styles.header}>
           <Text style={styles.headerTitle}>SAIMA SEGURIDAD – Panel de control puertas SECURA</Text>
-          <TouchableOpacity style={styles.closeButton} onPress={onClose}>
-            <X size={24} color="#FFFFFF" />
-          </TouchableOpacity>
         </View>
 
         {/* Content */}
@@ -454,7 +451,6 @@ export default function DoorControlModal({ visible, onClose, onCloseAll, doorId,
           </View>
 
           {/* Bottom Buttons */}
-          <Text style={styles.footerText}>Pantalla acceso a visualización puerta {doorName.toLowerCase()}</Text>
         </View>
       </View>
     </Modal>
