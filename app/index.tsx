@@ -10,6 +10,7 @@ import ModeSelectionModal from '@/components/ModeSelectionModal';
 import VisualizationModal from '@/components/VisualizationModal';
 import TechnicianModal from '@/components/TechnicianModal';
 import ManualModeModal from '@/components/ManualModeModal';
+import EmergencyConfirmationModal from '@/components/EmergencyConfirmationModal';
 import { useDoorControl } from '@/hooks/useDoorControl';
 
 export default function MainScreen() {
@@ -41,6 +42,7 @@ export default function MainScreen() {
   const [showVisualizationModal, setShowVisualizationModal] = useState(false);
   const [showTechnicianModal, setShowTechnicianModal] = useState(false);
   const [showManualModeModal, setShowManualModeModal] = useState(false);
+  const [showEmergencyConfirmModal, setShowEmergencyConfirmModal] = useState(false);
   const [currentDateTime, setCurrentDateTime] = useState(new Date());
 
   // Actualizar fecha y hora cada segundo
@@ -139,7 +141,13 @@ export default function MainScreen() {
     }
   };
 
-  const handleEmergencyToggle = async () => {
+  const handleEmergencyToggle = () => {
+    setShowEmergencyConfirmModal(true);
+  };
+
+  const handleEmergencyConfirm = async () => {
+    setShowEmergencyConfirmModal(false);
+    
     const newState = !isEmergencyActive;
     console.log('🚨 Emergencia (Sandbox):', newState ? 'ACTIVANDO' : 'DESACTIVANDO');
     
@@ -921,6 +929,14 @@ export default function MainScreen() {
           setShowManualModeModal(false);
           setShowVisualizationModal(true);
         }}
+      />
+
+      {/* Emergency Confirmation Modal */}
+      <EmergencyConfirmationModal
+        visible={showEmergencyConfirmModal}
+        onClose={() => setShowEmergencyConfirmModal(false)}
+        onConfirm={handleEmergencyConfirm}
+        isDeactivating={isEmergencyActive}
       />
 
     </View>
