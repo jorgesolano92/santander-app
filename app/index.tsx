@@ -193,6 +193,9 @@ export default function MainScreen() {
       borderRadius: 8,
       borderWidth: 1,
       borderColor: 'rgba(255, 255, 255, 0.2)',
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
     },
     notificationsButtonText: {
       fontSize: isSmallTablet ? 14 : isLargeTablet ? 18 : 16,
@@ -708,6 +711,14 @@ export default function MainScreen() {
           style={styles.configButton}
           onPress={() => setShowTechnicianModal(true)}
         >
+      <TouchableOpacity 
+        style={styles.notificationsButton}
+        onPress={() => setShowTechnicianModal(true)}
+      >
+        <HardHat size={20} color="#FFFFFF" />
+        <Text style={styles.notificationsButtonText}>TÉCNICO</Text>
+      </TouchableOpacity>
+      
           <HardHat size={20} color="#666666" />
           <Text style={styles.configButtonText}>TÉCNICO</Text>
         </TouchableOpacity>
@@ -870,27 +881,6 @@ export default function MainScreen() {
         visible={showLoginModal}
         onClose={() => setShowLoginModal(false)}
         onSuccess={handleLoginSuccess}
-      />
-
-      {/* New Configuration Modal */}
-      <NewConfigurationModal
-        visible={showNewConfigModal}
-        onClose={() => setShowNewConfigModal(false)}
-        onSave={handleConfigSave}
-      />
-
-      {/* Mode Selection Modal */}
-      <ModeSelectionModal
-        visible={showModeModal}
-        onClose={() => setShowModeModal(false)}
-        onModeSelect={handleModeSelect}
-      />
-
-      {/* Visualization Modal */}
-      <VisualizationModal
-        visible={showVisualizationModal}
-        onClose={() => setShowVisualizationModal(false)}
-      />
 
       {/* Technician Modal */}
       <TechnicianModal
@@ -898,14 +888,6 @@ export default function MainScreen() {
         onClose={() => setShowTechnicianModal(false)}
       />
 
-      {/* Manual Mode Modal */}
-      <ManualModeModal
-        visible={showManualModeModal || isManualMode}
-        onClose={() => setShowManualModeModal(false)}
-        onChangeMode={() => setShowModeModal(true)}
-        onEmergency={handleEmergencyToggle}
-        onVisualization={() => setShowVisualizationModal(true)}
-      />
     </View>
   );
 }
