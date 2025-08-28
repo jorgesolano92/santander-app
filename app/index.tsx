@@ -2,7 +2,7 @@ import { View, Text, StyleSheet, TouchableOpacity, Dimensions } from 'react-nati
 import { useWindowDimensions } from 'react-native';
 import { useState, useEffect, useCallback } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Settings, MessageCircle, DoorOpen, HardHat } from 'lucide-react-native';
+import { Settings, MessageCircle, DoorOpen, HardHat, Wifi } from 'lucide-react-native';
 import { Image } from 'react-native';
 import LoginModal from '@/components/LoginModal';
 import NewConfigurationModal from '@/components/NewConfigurationModal';
@@ -203,27 +203,23 @@ export default function MainScreen() {
       color: '#FFFFFF',
       letterSpacing: 0.5,
     },
-    statusLed: {
-      width: isSmallTablet ? 12 : isLargeTablet ? 16 : 14,
-      height: isSmallTablet ? 12 : isLargeTablet ? 16 : 14,
-      borderRadius: isSmallTablet ? 6 : isLargeTablet ? 8 : 7,
-      marginHorizontal: 8,
+    leftHeaderSection: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 16,
     },
-    statusLedOnline: {
-      backgroundColor: '#28A745',
-      shadowColor: '#28A745',
-      shadowOffset: { width: 0, height: 0 },
-      shadowOpacity: 0.8,
-      shadowRadius: 4,
-      elevation: 4,
+    rightHeaderSection: {
+      flexDirection: 'row',
+      alignItems: 'center',
     },
-    statusLedOffline: {
-      backgroundColor: '#DC3545',
-      shadowColor: '#DC3545',
-      shadowOffset: { width: 0, height: 0 },
-      shadowOpacity: 0.8,
-      shadowRadius: 4,
-      elevation: 4,
+    connectionIndicatorContainer: {
+      backgroundColor: 'rgba(255, 255, 255, 0.1)',
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: 'rgba(255, 255, 255, 0.2)',
+      marginRight: 16,
     },
     connectionIndicator: {
       paddingHorizontal: isSmallTablet ? 10 : isLargeTablet ? 16 : 12,
@@ -688,31 +684,38 @@ export default function MainScreen() {
       {/* Header */}
       <View style={styles.header}>
 
-        <TouchableOpacity 
-          style={styles.notificationsButton}
-          onPress={() => console.log('Notificaciones presionado')}
-        >
-          <Text style={styles.notificationsButtonText}>NOTIFICACIONES</Text>
-        </TouchableOpacity>
+        <View style={styles.leftHeaderSection}>
+          <TouchableOpacity 
+            style={styles.notificationsButton}
+            onPress={() => console.log('Notificaciones presionado')}
+          >
+            <MessageCircle size={20} color="#FFFFFF" />
+            <Text style={styles.notificationsButtonText}>NOTIFICACIONES</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            style={styles.notificationsButton}
+            onPress={() => setShowTechnicianModal(true)}
+          >
+            <HardHat size={20} color="#FFFFFF" />
+            <Text style={styles.notificationsButtonText}>TÉCNICO</Text>
+          </TouchableOpacity>
+        </View>
         
         {/* Fecha y hora */}
         <View style={styles.dateTimeContainer}>
           <Text style={styles.dateTimeText}>{formatDateTime(currentDateTime)}</Text>
         </View>
         
-        {/* LED de estado de conexión */}
-        <View style={[
-          styles.statusLed,
-          connectionStatus === 'online' ? styles.statusLedOnline : styles.statusLedOffline
-        ]} />
-        
-        <TouchableOpacity 
-          style={styles.notificationsButton}
-          onPress={() => setShowTechnicianModal(true)}
-        >
-          <HardHat size={20} color="#FFFFFF" />
-          <Text style={styles.notificationsButtonText}>TÉCNICO</Text>
-        </TouchableOpacity>
+        <View style={styles.rightHeaderSection}>
+          {/* Ícono de estado de conexión */}
+          <View style={styles.connectionIndicatorContainer}>
+            <Wifi 
+              size={20} 
+              color={connectionStatus === 'online' ? '#28A745' : '#DC3545'} 
+            />
+          </View>
+        </View>
         
         <TouchableOpacity 
           style={styles.configButton}
