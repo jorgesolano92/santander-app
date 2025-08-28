@@ -701,14 +701,9 @@ export default function MainScreen() {
           <Settings size={20} color="#666666" />
           <Text style={styles.configButtonText}>CONFIGURACIÓN</Text>
         </TouchableOpacity>
-        
-        <TouchableOpacity 
-          style={styles.configButton}
-          onPress={() => setShowTechnicianModal(true)}
-        >
+            {isDoorLocked(door.id) ? <Lock size={20} color="#212529" /> : <Unlock size={20} color="#212529" />}
           <HardHat size={20} color="#666666" />
           <Text style={styles.configButtonText}>TÉCNICO</Text>
-        </TouchableOpacity>
       </View>
 
       {/* Error Display */}
