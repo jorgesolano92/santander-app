@@ -881,6 +881,7 @@ export default function MainScreen() {
         visible={showLoginModal}
         onClose={() => setShowLoginModal(false)}
         onSuccess={handleLoginSuccess}
+      />
 
       {/* Technician Modal */}
       <TechnicianModal
@@ -889,6 +890,5 @@ export default function MainScreen() {
       />
 
     </View>
-  )
   );
 }
