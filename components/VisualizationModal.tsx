@@ -229,7 +229,7 @@ export default function VisualizationModal({ visible, onClose }: VisualizationMo
       elevation: 4,
     },
     backButtonText: {
-      fontSize: isSmallTablet ? 16 : isLargeTablet ? 20 : 18,
+      fontSize: isSmallTablet ? 15 : isLargeTablet ? 18 : 16,
       fontWeight: '700',
       color: '#FFFFFF',
       letterSpacing: 1,

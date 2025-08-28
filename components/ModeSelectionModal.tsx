@@ -130,8 +130,9 @@ export default function ModeSelectionModal({ visible, onClose, onModeSelect }: M
       countdownInterval.current = setInterval(() => {
         setCountdown(prev => {
           if (prev <= 1) {
-            // Auto-activar cuando llegue a 0
-            handleActivate();
+            // Auto-activar cuando llegue a 0 - llamar directamente a onModeSelect
+            onModeSelect(selectedMode);
+            onClose();
             return 0;
           }
           return prev - 1;
