@@ -9,6 +9,7 @@ import NewConfigurationModal from '@/components/NewConfigurationModal';
 import ModeSelectionModal from '@/components/ModeSelectionModal';
 import VisualizationModal from '@/components/VisualizationModal';
 import TechnicianModal from '@/components/TechnicianModal';
+import ManualModeModal from '@/components/ManualModeModal';
 import { useDoorControl } from '@/hooks/useDoorControl';
 
 export default function MainScreen() {
@@ -39,6 +40,7 @@ export default function MainScreen() {
   const [showModeModal, setShowModeModal] = useState(false);
   const [showVisualizationModal, setShowVisualizationModal] = useState(false);
   const [showTechnicianModal, setShowTechnicianModal] = useState(false);
+  const [showManualModeModal, setShowManualModeModal] = useState(false);
   const [currentDateTime, setCurrentDateTime] = useState(new Date());
 
   // Actualizar fecha y hora cada segundo
@@ -810,90 +812,13 @@ export default function MainScreen() {
         </View>
       ) : isManualMode ? (
         /* Manual Mode View */
-        <View style={styles.mainContent}>
-          {/* Manual Mode Header */}
-          <View style={styles.manualModeHeader}>
-            <View style={styles.infoIcon}>
-              <Text style={styles.infoIconText}>i</Text>
-            </View>
-            <View style={styles.manualModeHeaderContent}>
-              <Text style={styles.manualModeTitle}>MODO MANUAL</Text>
-              <Text style={styles.manualModeDescription}>
-                La puerta P1 y la puerta P2 actúan de forma manual, es decir, tanto si se va en dirección entrada como de salida, será necesario pulsar el botón de llamada de los video porteros ubicados en la parte exterior de las puertas o los pulsadores retro iluminados ubicados en el interior de las puertas. Los detectores de movimiento interiores y exteriores actuarán sólo en modo seguridad, es decir, cuando la puerta esté abierta, protegerán a los usuarios frente al atrapamiento cuando ésta se cierre. Las puertas trabajan en modo esclusa; es decir una puerta no abre hasta que la otra esté cerrada.
-              </Text>
-            </View>
-            <TouchableOpacity 
-              style={styles.changeModeButtonManual}
-              onPress={() => setShowModeModal(true)}
-            >
-              <Text style={styles.changeModeButtonTextManual}>CAMBIAR MODO</Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Door Controls */}
-          <View style={styles.doorControlsContainer}>
-            {/* Puerta Oficina */}
-            <View style={styles.doorControlSection}>
-              <Text style={styles.doorControlTitle}>PUERTA OFICINA</Text>
-              <View style={styles.doorControlCard}>
-                <TouchableOpacity 
-                  style={styles.doorControlButton}
-                  onPress={() => console.log('Comunicar Puerta Oficina')}
-                >
-                  <MessageCircle size={16} color="#495057" />
-                  <Text style={styles.doorControlButtonText}>COMUNICAR</Text>
-                </TouchableOpacity>
-                <TouchableOpacity 
-                  style={styles.doorControlButton}
-                  onPress={() => console.log('Abrir Puerta Oficina')}
-                >
-                  <DoorOpen size={16} color="#495057" />
-                  <Text style={styles.doorControlButtonText}>ABRIR</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-
-            {/* Puerta Calle */}
-            <View style={styles.doorControlSection}>
-              <Text style={styles.doorControlTitle}>PUERTA CALLE</Text>
-              <View style={styles.doorControlCard}>
-                <TouchableOpacity 
-                  style={styles.doorControlButton}
-                  onPress={() => console.log('Comunicar Puerta Calle')}
-                >
-                  <MessageCircle size={16} color="#495057" />
-                  <Text style={styles.doorControlButtonText}>COMUNICAR</Text>
-                </TouchableOpacity>
-                <TouchableOpacity 
-                  style={styles.doorControlButton}
-                  onPress={() => console.log('Abrir Puerta Calle')}
-                >
-                  <DoorOpen size={16} color="#495057" />
-                  <Text style={styles.doorControlButtonText}>ABRIR</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
-
-          {/* Bottom Buttons */}
-          <View style={styles.bottomButtons}>
-            <TouchableOpacity 
-              style={styles.emergencyButton}
-              onPress={handleEmergencyToggle}
-            >
-              <Text style={styles.emergencyButtonText}>EMERGENCIA</Text>
-            </TouchableOpacity>
-            <TouchableOpacity 
-              style={styles.visualizationButton}
-              onPress={() => setShowVisualizationModal(true)}
-            >
-              <Text style={styles.visualizationButtonText}>VISUALIZACIÓN</Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Footer Text */}
-          <Text style={styles.footerText}>Pantalla principal logo, estado puerta</Text>
-        </View>
+        <ManualModeModal
+          visible={true}
+          onClose={() => {}}
+          onChangeMode={() => setShowModeModal(true)}
+          onEmergency={handleEmergencyToggle}
+          onVisualization={() => setShowVisualizationModal(true)}
+        />
       ) : (
         /* Normal Mode View */
         <View style={styles.mainContent}>
@@ -976,6 +901,15 @@ export default function MainScreen() {
       <TechnicianModal
         visible={showTechnicianModal}
         onClose={() => setShowTechnicianModal(false)}
+      />
+
+      {/* Manual Mode Modal */}
+      <ManualModeModal
+        visible={showManualModeModal}
+        onClose={() => setShowManualModeModal(false)}
+        onChangeMode={() => setShowModeModal(true)}
+        onEmergency={handleEmergencyToggle}
+        onVisualization={() => setShowVisualizationModal(true)}
       />
     </View>
   );
