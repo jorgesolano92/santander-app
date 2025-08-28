@@ -283,10 +283,7 @@ export default function VisualizationModal({ visible, onClose }: VisualizationMo
                   <Text style={styles.statusLabel}>ESTADO DE PUERTA</Text>
                   <View style={styles.statusRow}>
                     <Text style={styles.statusText}>{getDoorStatusText(door.id)}</Text>
-                    {isDoorLocked(door.id) ? (
-                  {isDoorLocked(door.id) ? <Lock size={20} color="#212529" /> : <Unlock size={20} color="#212529" />}
-                )
-                }
+                    {isDoorLocked(door.id) ? <Lock size={20} color="#212529" /> : <Unlock size={20} color="#212529" />}
                 </View>
                 
               </View>
