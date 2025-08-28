@@ -159,11 +159,6 @@ export default function ConfigurationModal({ visible, onClose, onSave, officeNum
                 <Text style={styles.backButtonText}>VOLVER</Text>
               </TouchableOpacity>
             </View>
-
-            {/* Footer Text */}
-            <Text style={styles.footerText}>
-              Pantalla de configuración, solo se podrá acceder a esta pantalla después de meter un usuario y contraseña
-            </Text>
           </ScrollView>
         </View>
       </Modal>

@@ -263,9 +263,6 @@ export default function DetailedConfigurationModal({
           </View>
 
           {/* Footer Text */}
-          <Text style={styles.footerText}>
-            Pantalla de configuración, solo se podrá acceder a esta pantalla después de meter un usuario y contraseña
-          </Text>
         </ScrollView>
       </View>
     </Modal>
