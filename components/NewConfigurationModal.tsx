@@ -66,10 +66,13 @@ export default function NewConfigurationModal({ visible, onClose, onSave }: NewC
   });
 
   const [connectionStatus, setConnectionStatus] = useState<{ [key: string]: 'testing' | 'success' | 'error' | null }>({});
+  const [availableVersion, setAvailableVersion] = useState<string | null>(null);
+  const [checkingVersion, setCheckingVersion] = useState(false);
 
   useEffect(() => {
     if (visible) {
       loadSavedConfiguration();
+      checkForUpdates();
     }
   }, [visible]);
 
@@ -82,6 +85,32 @@ export default function NewConfigurationModal({ visible, onClose, onSave }: NewC
       }
     } catch (error) {
       console.error('Error loading configuration:', error);
+    }
+  };
+
+  const checkForUpdates = async () => {
+    setCheckingVersion(true);
+    try {
+      // Simular verificación de actualizaciones
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      // Simular que hay una actualización disponible (70% de probabilidad)
+      const hasUpdate = Math.random() > 0.3;
+      
+      if (hasUpdate) {
+        const versions = ['2.1.0', '2.0.5', '2.0.3', '1.9.8'];
+        const randomVersion = versions[Math.floor(Math.random() * versions.length)];
+        setAvailableVersion(randomVersion);
+        console.log(`📦 Actualización disponible: v${randomVersion}`);
+      } else {
+        setAvailableVersion(null);
+        console.log('✅ No hay actualizaciones disponibles');
+      }
+    } catch (error) {
+      console.error('Error verificando actualizaciones:', error);
+      setAvailableVersion(null);
+    } finally {
+      setCheckingVersion(false);
     }
   };
 
@@ -180,7 +209,13 @@ export default function NewConfigurationModal({ visible, onClose, onSave }: NewC
 
   const handleUpdateVersion = () => {
     console.log('🔄 Actualizar versión presionado');
-    // Aquí iría la lógica de actualización
+    if (availableVersion) {
+      console.log(`🔄 Iniciando actualización a versión ${availableVersion}`);
+      // Aquí iría la lógica de actualización real
+    } else {
+      // Verificar actualizaciones manualmente
+      checkForUpdates();
+    }
   };
 
   const styles = StyleSheet.create({
@@ -705,7 +740,14 @@ export default function NewConfigurationModal({ visible, onClose, onSave }: NewC
 
             <TouchableOpacity style={styles.updateButton} onPress={handleUpdateVersion}>
               <RefreshCw size={20} color="#FFFFFF" />
-              <Text style={styles.updateButtonText}>ACTUALIZAR VERSION</Text>
+              <Text style={styles.updateButtonText}>
+                {checkingVersion 
+                  ? 'VERIFICANDO...' 
+                  : availableVersion 
+                    ? `ACTUALIZAR A v${availableVersion}` 
+                    : 'VERIFICAR ACTUALIZACIONES'
+                }
+              </Text>
             </TouchableOpacity>
 
             <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
