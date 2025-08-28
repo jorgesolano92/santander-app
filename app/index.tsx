@@ -811,14 +811,10 @@ export default function MainScreen() {
           <Text style={styles.footerText}>Pantalla principal logo, estado puerta</Text>
         </View>
       ) : isManualMode ? (
-        /* Manual Mode View */
-        <ManualModeModal
-          visible={true}
-          onClose={() => {}}
-          onChangeMode={() => setShowModeModal(true)}
-          onEmergency={handleEmergencyToggle}
-          onVisualization={() => setShowVisualizationModal(true)}
-        />
+        /* Manual Mode View - Handled by modal at bottom */
+        <View style={styles.mainContent}>
+          {/* Content handled by ManualModeModal */}
+        </View>
       ) : (
         /* Normal Mode View */
         <View style={styles.mainContent}>
@@ -905,7 +901,7 @@ export default function MainScreen() {
 
       {/* Manual Mode Modal */}
       <ManualModeModal
-        visible={showManualModeModal}
+        visible={showManualModeModal || isManualMode}
         onClose={() => setShowManualModeModal(false)}
         onChangeMode={() => setShowModeModal(true)}
         onEmergency={handleEmergencyToggle}
