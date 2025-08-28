@@ -889,5 +889,6 @@ export default function MainScreen() {
       />
 
     </View>
+  )
   );
 }
