@@ -291,6 +291,9 @@ export default function VisualizationModal({ visible, onClose }: VisualizationMo
             )
             }
           </View>
+            )
+            )
+            }
 
           {/* Back Button */}
           <TouchableOpacity style={styles.backButton} onPress={onClose}>
