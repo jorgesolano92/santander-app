@@ -888,6 +888,41 @@ export default function MainScreen() {
         onClose={() => setShowTechnicianModal(false)}
       />
 
+      {/* New Configuration Modal */}
+      <NewConfigurationModal
+        visible={showNewConfigModal}
+        onClose={() => setShowNewConfigModal(false)}
+        onSave={handleConfigSave}
+      />
+
+      {/* Mode Selection Modal */}
+      <ModeSelectionModal
+        visible={showModeModal}
+        onClose={() => setShowModeModal(false)}
+        onModeSelect={handleModeSelect}
+      />
+
+      {/* Visualization Modal */}
+      <VisualizationModal
+        visible={showVisualizationModal}
+        onClose={() => setShowVisualizationModal(false)}
+      />
+
+      {/* Manual Mode Modal */}
+      <ManualModeModal
+        visible={showManualModeModal}
+        onClose={() => setShowManualModeModal(false)}
+        onChangeMode={() => {
+          setShowManualModeModal(false);
+          setShowModeModal(true);
+        }}
+        onEmergency={handleEmergencyToggle}
+        onVisualization={() => {
+          setShowManualModeModal(false);
+          setShowVisualizationModal(true);
+        }}
+      />
+
     </View>
   );
 }
