@@ -77,6 +77,11 @@ export default function ConfigurationModal({ visible, onClose, onSave, officeNum
               <Text style={styles.updateButtonText}>ACTUALIZAR VERSION</Text>
             </TouchableOpacity>
 
+            <TouchableOpacity style={styles.updateButton} onPress={handleUpdateVersion}>
+              <RefreshCw size={20} color="#FFFFFF" />
+              <Text style={styles.updateButtonText}>ACTUALIZAR VERSION</Text>
+            </TouchableOpacity>
+
             <Text style={styles.headerTitle}>CONFIGURACIÓN</Text>
           </View>
 
