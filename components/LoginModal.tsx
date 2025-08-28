@@ -227,6 +227,28 @@ export default function LoginModal({ visible, onClose, onSuccess }: LoginModalPr
       color: '#FFFFFF',
       letterSpacing: 0.5,
     },
+    updateButton: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: '#17A2B8',
+      paddingHorizontal: 24,
+      paddingVertical: 14,
+      borderRadius: 8,
+      gap: 6,
+      shadowColor: '#17A2B8',
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.2,
+      shadowRadius: 8,
+      elevation: 4,
+    },
+    updateButtonText: {
+      fontSize: 14,
+      fontWeight: '700',
+      color: '#FFFFFF',
+      letterSpacing: 0.5,
+    },
   });
 
   return (
@@ -248,6 +270,13 @@ export default function LoginModal({ visible, onClose, onSuccess }: LoginModalPr
 
           <View style={styles.content}>
             {/* Santander Logo */}
+            <TouchableOpacity 
+              style={styles.updateButton}
+              onPress={() => console.log('Actualizar versión presionado')}
+            >
+              <Text style={styles.updateButtonText}>ACTUALIZAR VERSION</Text>
+            </TouchableOpacity>
+
             <View style={styles.logoSection}>
               <Image 
                 source={require('@/assets/images/banco-santander-seeklogo.png')}
