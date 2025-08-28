@@ -292,8 +292,6 @@ export default function VisualizationModal({ visible, onClose }: VisualizationMo
           <TouchableOpacity style={styles.backButton} onPress={onClose}>
             <Text style={styles.backButtonText}>VOLVER</Text>
           </TouchableOpacity>
-
-          {/* Footer Text */}
         </View>
       </View>
 
