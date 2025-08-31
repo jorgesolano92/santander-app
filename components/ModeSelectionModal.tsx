@@ -521,7 +521,7 @@ export default function ModeSelectionModal({ visible, onClose, onModeSelect }: M
             </TouchableOpacity>
           </View>
         </View>
-
+      </View>
     </Modal>
   );
 }
