@@ -19,11 +19,57 @@ export default function LoginModal({ visible, onClose, onSuccess }: LoginModalPr
   const [password, setPassword] = useState<string>('');
   const [error, setError] = useState<string>('');
   const [isLoading, setIsLoading] = useState(false);
+  const [availableVersion, setAvailableVersion] = useState<string | null>(null);
+  const [checkingVersion, setCheckingVersion] = useState(false);
 
   // Credenciales de prueba
   const TEST_CREDENTIALS = {
     ordinal: 'admin',
     password: '123456'
+  };
+
+  // Verificar actualizaciones al abrir el modal
+  useEffect(() => {
+    if (visible) {
+      checkForUpdates();
+    }
+  }, [visible]);
+
+  const checkForUpdates = async () => {
+    setCheckingVersion(true);
+    try {
+      // Simular verificación de actualizaciones
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      // Simular que hay una actualización disponible (70% de probabilidad)
+      const hasUpdate = Math.random() > 0.3;
+      
+      if (hasUpdate) {
+        const versions = ['2.1.0', '2.0.5', '2.0.3', '1.9.8'];
+        const randomVersion = versions[Math.floor(Math.random() * versions.length)];
+        setAvailableVersion(randomVersion);
+        console.log(`📦 Actualización disponible: v${randomVersion}`);
+      } else {
+        setAvailableVersion(null);
+        console.log('✅ No hay actualizaciones disponibles');
+      }
+    } catch (error) {
+      console.error('Error verificando actualizaciones:', error);
+      setAvailableVersion(null);
+    } finally {
+      setCheckingVersion(false);
+    }
+  };
+
+  const handleUpdateVersion = () => {
+    console.log('🔄 Actualizar versión presionado');
+    if (availableVersion) {
+      console.log(`🔄 Iniciando actualización a versión ${availableVersion}`);
+      // Aquí iría la lógica de actualización real
+    } else {
+      // Verificar actualizaciones manualmente
+      checkForUpdates();
+    }
   };
 
   const handleLogin = () => {
@@ -249,6 +295,28 @@ export default function LoginModal({ visible, onClose, onSuccess }: LoginModalPr
       color: '#FFFFFF',
       letterSpacing: 0.5,
     },
+    updateButton: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: '#17A2B8',
+      paddingHorizontal: 24,
+      paddingVertical: 14,
+      borderRadius: 8,
+      gap: 6,
+      shadowColor: '#17A2B8',
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.2,
+      shadowRadius: 8,
+      elevation: 4,
+    },
+    updateButtonText: {
+      fontSize: 14,
+      fontWeight: '700',
+      color: '#FFFFFF',
+      letterSpacing: 0.5,
+    },
   });
 
   return (
@@ -270,13 +338,6 @@ export default function LoginModal({ visible, onClose, onSuccess }: LoginModalPr
 
           <View style={styles.content}>
             {/* Santander Logo */}
-            <TouchableOpacity 
-              style={styles.updateButton}
-              onPress={() => console.log('Actualizar versión presionado')}
-            >
-              <Text style={styles.updateButtonText}>ACTUALIZAR VERSION</Text>
-            </TouchableOpacity>
-
             <View style={styles.logoSection}>
               <Image 
                 source={require('@/assets/images/banco-santander-seeklogo.png')}
@@ -333,6 +394,20 @@ export default function LoginModal({ visible, onClose, onSuccess }: LoginModalPr
 
             {/* Buttons */}
             <View style={styles.buttonsContainer}>
+              <TouchableOpacity 
+                style={styles.updateButton}
+                onPress={handleUpdateVersion}
+              >
+                <Text style={styles.updateButtonText}>
+                  {checkingVersion 
+                    ? 'VERIFICANDO...' 
+                    : availableVersion 
+                      ? `ACTUALIZAR A v${availableVersion}` 
+                      : 'VERIFICAR ACTUALIZACIONES'
+                  }
+                </Text>
+              </TouchableOpacity>
+
               <TouchableOpacity 
                 style={[styles.loginButton, isLoading && styles.loginButtonDisabled]} 
                 onPress={handleLogin}

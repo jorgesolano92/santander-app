@@ -66,13 +66,10 @@ export default function NewConfigurationModal({ visible, onClose, onSave }: NewC
   });
 
   const [connectionStatus, setConnectionStatus] = useState<{ [key: string]: 'testing' | 'success' | 'error' | null }>({});
-  const [availableVersion, setAvailableVersion] = useState<string | null>(null);
-  const [checkingVersion, setCheckingVersion] = useState(false);
 
   useEffect(() => {
     if (visible) {
       loadSavedConfiguration();
-      checkForUpdates();
     }
   }, [visible]);
 
@@ -85,32 +82,6 @@ export default function NewConfigurationModal({ visible, onClose, onSave }: NewC
       }
     } catch (error) {
       console.error('Error loading configuration:', error);
-    }
-  };
-
-  const checkForUpdates = async () => {
-    setCheckingVersion(true);
-    try {
-      // Simular verificación de actualizaciones
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // Simular que hay una actualización disponible (70% de probabilidad)
-      const hasUpdate = Math.random() > 0.3;
-      
-      if (hasUpdate) {
-        const versions = ['2.1.0', '2.0.5', '2.0.3', '1.9.8'];
-        const randomVersion = versions[Math.floor(Math.random() * versions.length)];
-        setAvailableVersion(randomVersion);
-        console.log(`📦 Actualización disponible: v${randomVersion}`);
-      } else {
-        setAvailableVersion(null);
-        console.log('✅ No hay actualizaciones disponibles');
-      }
-    } catch (error) {
-      console.error('Error verificando actualizaciones:', error);
-      setAvailableVersion(null);
-    } finally {
-      setCheckingVersion(false);
     }
   };
 
@@ -204,17 +175,6 @@ export default function NewConfigurationModal({ visible, onClose, onSave }: NewC
         return 'ERROR';
       default:
         return 'CONEXIÓN';
-    }
-  };
-
-  const handleUpdateVersion = () => {
-    console.log('🔄 Actualizar versión presionado');
-    if (availableVersion) {
-      console.log(`🔄 Iniciando actualización a versión ${availableVersion}`);
-      // Aquí iría la lógica de actualización real
-    } else {
-      // Verificar actualizaciones manualmente
-      checkForUpdates();
     }
   };
 
@@ -512,28 +472,6 @@ export default function NewConfigurationModal({ visible, onClose, onSave }: NewC
       color: '#FFFFFF',
       letterSpacing: 0.5,
     },
-    updateButton: {
-      flex: 1,
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'center',
-      backgroundColor: '#17A2B8',
-      paddingHorizontal: isSmallTablet ? 16 : isLargeTablet ? 24 : 20,
-      paddingVertical: isSmallTablet ? 10 : isLargeTablet ? 14 : 12,
-      borderRadius: 8,
-      gap: isSmallTablet ? 4 : isLargeTablet ? 8 : 6,
-      shadowColor: '#17A2B8',
-      shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.2,
-      shadowRadius: 8,
-      elevation: 4,
-    },
-    updateButtonText: {
-      fontSize: isSmallTablet ? 12 : isLargeTablet ? 14 : 13,
-      fontWeight: '700',
-      color: '#FFFFFF',
-      letterSpacing: 0.5,
-    },
     saveButton: {
       flex: 1,
       flexDirection: 'row',
@@ -736,18 +674,6 @@ export default function NewConfigurationModal({ visible, onClose, onSave }: NewC
             <TouchableOpacity style={styles.backButton} onPress={onClose}>
               <ArrowLeft size={20} color="#FFFFFF" />
               <Text style={styles.backButtonText}>VOLVER</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={styles.updateButton} onPress={handleUpdateVersion}>
-              <RefreshCw size={20} color="#FFFFFF" />
-              <Text style={styles.updateButtonText}>
-                {checkingVersion 
-                  ? 'VERIFICANDO...' 
-                  : availableVersion 
-                    ? `ACTUALIZAR A v${availableVersion}` 
-                    : 'VERIFICAR ACTUALIZACIONES'
-                }
-              </Text>
             </TouchableOpacity>
 
             <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
