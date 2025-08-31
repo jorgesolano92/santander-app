@@ -45,6 +45,7 @@ export default function MainScreen() {
   const [showManualModeModal, setShowManualModeModal] = useState(false);
   const [showEmergencyConfirmModal, setShowEmergencyConfirmModal] = useState(false);
   const [currentDateTime, setCurrentDateTime] = useState(new Date());
+  const [communicatingDoors, setCommunicatingDoors] = useState<Set<string>>(new Set());
 
   // Actualizar fecha y hora cada segundo
   useEffect(() => {
@@ -163,18 +164,60 @@ export default function MainScreen() {
     }
   };
 
-  const handleCommunicate = (doorName: string) => {
+  const handleCommunicate = (doorId: string, doorName: string) => {
     console.log(`📞 Comunicar con ${doorName}`);
+    
+    // Agregar puerta a la lista de comunicación
+    setCommunicatingDoors(prev => new Set(prev).add(doorId));
+    
+    // Simular comunicación por 5 segundos
+    setTimeout(() => {
+      setCommunicatingDoors(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(doorId);
+        return newSet;
+      });
+    }, 5000);
   };
 
   const handleOpenDoor = async (doorId: 'P1' | 'P2', doorName: string) => {
-    console.log(`🚪 Abrir ${doorName}`);
-    const success = await controlDoor(doorId, 'open');
+    const door = systemStatus?.doors[doorId];
+    const isOpen = door?.status === 'open';
+    const action = isOpen ? 'close' : 'open';
+    
+    console.log(`🚪 ${action === 'open' ? 'Abrir' : 'Cerrar'} ${doorName}`);
+    const success = await controlDoor(doorId, action);
     if (success) {
-      console.log(`✅ ${doorName} - Comando abrir ejecutado correctamente`);
+      console.log(`✅ ${doorName} - Comando ${action} ejecutado correctamente`);
     } else {
-      console.error(`❌ Error abriendo ${doorName}`);
+      console.error(`❌ Error ejecutando comando ${action} en ${doorName}`);
     }
+  };
+
+  // Función para obtener el estado de la puerta
+  const getDoorStatus = (doorId: 'P1' | 'P2' | 'P3' | 'P4') => {
+    const door = systemStatus?.doors[doorId];
+    return {
+      status: door?.status || 'closed',
+      isOpen: door?.status === 'open',
+      isOpening: door?.status === 'opening',
+      isClosing: door?.status === 'closing',
+    };
+  };
+
+  // Función para obtener el texto del botón de abrir/cerrar
+  const getDoorButtonText = (doorId: 'P1' | 'P2' | 'P3' | 'P4') => {
+    const { isOpen, isOpening, isClosing } = getDoorStatus(doorId);
+    
+    if (isOpening) return 'ABRIENDO...';
+    if (isClosing) return 'CERRANDO...';
+    return isOpen ? 'CERRAR' : 'ABRIR';
+  };
+
+  // Función para determinar si el botón está deshabilitado
+  const isDoorButtonDisabled = (doorId: 'P1' | 'P2' | 'P3' | 'P4') => {
+    const { isOpening, isClosing } = getDoorStatus(doorId);
+    return isOpening || isClosing;
   };
 
   // Create styles inside component with access to responsive variables
@@ -716,6 +759,23 @@ export default function MainScreen() {
       shadowRadius: 4,
       elevation: 2,
     },
+    doorControlButtonCommunicating: {
+      backgroundColor: '#28A745',
+      borderColor: '#1E7E34',
+    },
+    doorControlButtonCommunicatingText: {
+      color: '#FFFFFF',
+    },
+    doorControlButtonClose: {
+      backgroundColor: '#DC3545',
+      borderColor: '#C82333',
+    },
+    doorControlButtonCloseText: {
+      color: '#FFFFFF',
+    },
+    doorControlButtonDisabled: {
+      opacity: 0.6,
+    },
     doorControlButtonText: {
       fontSize: isSmallTablet ? 13 : isLargeTablet ? 16 : 14,
       fontWeight: '600',
@@ -892,19 +952,38 @@ export default function MainScreen() {
                 
                 <View style={styles.doorControlButtons}>
                   <TouchableOpacity 
-                    style={styles.doorControlButton}
-                    onPress={() => handleCommunicate('Puerta Oficina')}
+                    style={[
+                      styles.doorControlButton,
+                      communicatingDoors.has('P2') && styles.doorControlButtonCommunicating
+                    ]}
+                    onPress={() => handleCommunicate('P2', 'Puerta Oficina')}
+                    disabled={communicatingDoors.has('P2')}
                   >
-                    <MessageCircle size={16} color="#495057" />
-                    <Text style={styles.doorControlButtonText}>COMUNICAR</Text>
+                    <MessageCircle size={16} color={communicatingDoors.has('P2') ? "#FFFFFF" : "#495057"} />
+                    <Text style={[
+                      styles.doorControlButtonText,
+                      communicatingDoors.has('P2') && styles.doorControlButtonCommunicatingText
+                    ]}>
+                      {communicatingDoors.has('P2') ? 'COMUNICANDO...' : 'COMUNICAR'}
+                    </Text>
                   </TouchableOpacity>
                   
                   <TouchableOpacity 
-                    style={styles.doorControlButton}
+                    style={[
+                      styles.doorControlButton,
+                      isDoorButtonDisabled('P2') && styles.doorControlButtonDisabled,
+                      getDoorStatus('P2').isOpen && styles.doorControlButtonClose
+                    ]}
                     onPress={() => handleOpenDoor('P2', 'Puerta Oficina')}
+                    disabled={isDoorButtonDisabled('P2')}
                   >
-                    <DoorOpen size={16} color="#495057" />
-                    <Text style={styles.doorControlButtonText}>ABRIR</Text>
+                    <DoorOpen size={16} color={getDoorStatus('P2').isOpen ? "#FFFFFF" : "#495057"} />
+                    <Text style={[
+                      styles.doorControlButtonText,
+                      getDoorStatus('P2').isOpen && styles.doorControlButtonCloseText
+                    ]}>
+                      {getDoorButtonText('P2')}
+                    </Text>
                   </TouchableOpacity>
                 </View>
               </View>
@@ -921,19 +1000,38 @@ export default function MainScreen() {
                 
                 <View style={styles.doorControlButtons}>
                   <TouchableOpacity 
-                    style={styles.doorControlButton}
-                    onPress={() => handleCommunicate('Puerta Calle')}
+                    style={[
+                      styles.doorControlButton,
+                      communicatingDoors.has('P1') && styles.doorControlButtonCommunicating
+                    ]}
+                    onPress={() => handleCommunicate('P1', 'Puerta Calle')}
+                    disabled={communicatingDoors.has('P1')}
                   >
-                    <MessageCircle size={16} color="#495057" />
-                    <Text style={styles.doorControlButtonText}>COMUNICAR</Text>
+                    <MessageCircle size={16} color={communicatingDoors.has('P1') ? "#FFFFFF" : "#495057"} />
+                    <Text style={[
+                      styles.doorControlButtonText,
+                      communicatingDoors.has('P1') && styles.doorControlButtonCommunicatingText
+                    ]}>
+                      {communicatingDoors.has('P1') ? 'COMUNICANDO...' : 'COMUNICAR'}
+                    </Text>
                   </TouchableOpacity>
                   
                   <TouchableOpacity 
-                    style={styles.doorControlButton}
+                    style={[
+                      styles.doorControlButton,
+                      isDoorButtonDisabled('P1') && styles.doorControlButtonDisabled,
+                      getDoorStatus('P1').isOpen && styles.doorControlButtonClose
+                    ]}
                     onPress={() => handleOpenDoor('P1', 'Puerta Calle')}
+                    disabled={isDoorButtonDisabled('P1')}
                   >
-                    <DoorOpen size={16} color="#495057" />
-                    <Text style={styles.doorControlButtonText}>ABRIR</Text>
+                    <DoorOpen size={16} color={getDoorStatus('P1').isOpen ? "#FFFFFF" : "#495057"} />
+                    <Text style={[
+                      styles.doorControlButtonText,
+                      getDoorStatus('P1').isOpen && styles.doorControlButtonCloseText
+                    ]}>
+                      {getDoorButtonText('P1')}
+                    </Text>
                   </TouchableOpacity>
                 </View>
               </View>
