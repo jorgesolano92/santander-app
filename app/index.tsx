@@ -34,6 +34,7 @@ export default function MainScreen() {
     configure,
     validateDevice,
     determineScheduleMode,
+    controlDoor,
   } = useDoorControl();
 
   const [showLoginModal, setShowLoginModal] = useState(false);
@@ -78,6 +79,7 @@ export default function MainScreen() {
       console.log(`📅 Modo sugerido por horario: ${currentScheduleMode}`);
     }
   }, [currentScheduleMode]);
+
   // Validar dispositivo al iniciar
   useEffect(() => {
     const checkDevice = async () => {
@@ -127,7 +129,8 @@ export default function MainScreen() {
       'horario_manual': 'HORARIO MANUAL',
       'oficina_cerrada': 'OFICINA CERRADA',
       'carga_cajero': 'CARGA DE CAJERO',
-      'emergencia': 'EMERGENCIA'
+      'emergencia': 'EMERGENCIA',
+      'manual': 'MANUAL'
     };
     
     const targetMode = modeMap[mode] || mode;
@@ -139,6 +142,7 @@ export default function MainScreen() {
     } else {
       console.error('❌ Error cambiando modo a:', targetMode);
     }
+    setShowModeModal(false);
   };
 
   const handleEmergencyToggle = () => {
@@ -156,6 +160,20 @@ export default function MainScreen() {
       console.log('✅ Emergencia:', newState ? 'ACTIVADA' : 'DESACTIVADA');
     } else {
       console.error('❌ Error cambiando estado de emergencia');
+    }
+  };
+
+  const handleCommunicate = (doorName: string) => {
+    console.log(`📞 Comunicar con ${doorName}`);
+  };
+
+  const handleOpenDoor = async (doorId: 'P1' | 'P2', doorName: string) => {
+    console.log(`🚪 Abrir ${doorName}`);
+    const success = await controlDoor(doorId, 'open');
+    if (success) {
+      console.log(`✅ ${doorName} - Comando abrir ejecutado correctamente`);
+    } else {
+      console.error(`❌ Error abriendo ${doorName}`);
     }
   };
 
@@ -260,25 +278,6 @@ export default function MainScreen() {
       fontSize: isSmallTablet ? 10 : isLargeTablet ? 14 : 12,
       fontWeight: '600',
       color: '#212529',
-    },
-    cameraIcon: {
-      width: isSmallTablet ? 40 : isLargeTablet ? 60 : 50,
-      height: isSmallTablet ? 30 : isLargeTablet ? 45 : 37,
-      backgroundColor: '#CED4DA',
-      borderRadius: 6,
-      justifyContent: 'center',
-      alignItems: 'center',
-      marginBottom: isSmallTablet ? 8 : isLargeTablet ? 12 : 10,
-    },
-    cameraIconInner: {
-      width: isSmallTablet ? 20 : isLargeTablet ? 30 : 25,
-      height: isSmallTablet ? 15 : isLargeTablet ? 22 : 18,
-      backgroundColor: '#ADB5BD',
-      borderRadius: 4,
-    },
-    doorControlButtons: {
-      gap: isSmallTablet ? 8 : isLargeTablet ? 12 : 10,
-      width: '100%',
     },
     configButton: {
       flexDirection: 'row',
@@ -517,7 +516,7 @@ export default function MainScreen() {
       fontWeight: '400',
     },
     cargaCajeroCard: {
-      backgroundColor: '#F0F466', // Amarillo como en la imagen
+      backgroundColor: '#F0F466',
       borderRadius: 12,
       padding: 16,
       flexDirection: 'row',
@@ -543,13 +542,13 @@ export default function MainScreen() {
     cargaCajeroTitle: {
       fontSize: 18,
       fontWeight: '700',
-      color: '#4A5D23', // Verde oscuro para el título sobre fondo amarillo
+      color: '#4A5D23',
       marginBottom: 8,
       letterSpacing: 0.3,
     },
     cargaCajeroDescription: {
       fontSize: 13,
-      color: '#5D6B2F', // Verde medio para la descripción sobre fondo amarillo
+      color: '#5D6B2F',
       lineHeight: 18,
       fontWeight: '400',
     },
@@ -573,13 +572,14 @@ export default function MainScreen() {
       color: '#4A5D23',
       letterSpacing: 0.5,
     },
+    // Estilos para modo manual
     manualModeHeader: {
       backgroundColor: '#FFFFFF',
       borderRadius: 12,
-      padding: 16,
+      padding: isSmallTablet ? 16 : isLargeTablet ? 24 : 20,
       flexDirection: 'row',
       alignItems: 'flex-start',
-      marginBottom: 16,
+      marginBottom: isSmallTablet ? 20 : isLargeTablet ? 32 : 24,
       shadowColor: '#000',
       shadowOffset: { width: 0, height: 4 },
       shadowOpacity: 0.08,
@@ -607,24 +607,24 @@ export default function MainScreen() {
       flex: 1,
     },
     manualModeTitle: {
-      fontSize: 18,
+      fontSize: isSmallTablet ? 18 : isLargeTablet ? 24 : 21,
       fontWeight: '700',
       color: '#212529',
-      marginBottom: 8,
+      marginBottom: isSmallTablet ? 8 : isLargeTablet ? 12 : 10,
       letterSpacing: 0.3,
     },
     manualModeDescription: {
-      fontSize: 13,
+      fontSize: isSmallTablet ? 13 : isLargeTablet ? 16 : 14,
       color: '#6C757D',
-      lineHeight: 18,
+      lineHeight: isSmallTablet ? 18 : isLargeTablet ? 24 : 20,
       fontWeight: '400',
     },
     changeModeButtonManual: {
       backgroundColor: '#F8F9FA',
-      paddingHorizontal: 16,
-      paddingVertical: 12,
+      paddingHorizontal: isSmallTablet ? 16 : isLargeTablet ? 24 : 20,
+      paddingVertical: isSmallTablet ? 12 : isLargeTablet ? 16 : 14,
       borderRadius: 8,
-      marginLeft: 16,
+      marginLeft: isSmallTablet ? 16 : isLargeTablet ? 24 : 20,
       borderWidth: 1,
       borderColor: '#DEE2E6',
       shadowColor: '#000',
@@ -635,32 +635,33 @@ export default function MainScreen() {
       alignSelf: 'flex-start',
     },
     changeModeButtonTextManual: {
-      fontSize: 13,
+      fontSize: isSmallTablet ? 13 : isLargeTablet ? 16 : 14,
       fontWeight: '600',
       color: '#495057',
       letterSpacing: 0.5,
     },
     doorControlsContainer: {
       flexDirection: 'row',
-      gap: 16,
-      marginBottom: 20,
+      gap: isSmallTablet ? 16 : isLargeTablet ? 32 : 24,
+      marginBottom: isSmallTablet ? 20 : isLargeTablet ? 32 : 24,
       justifyContent: 'center',
     },
     doorControlSection: {
       flex: 1,
-      maxWidth: 280,
+      maxWidth: isSmallTablet ? 280 : isLargeTablet ? 350 : 320,
     },
     doorControlTitle: {
-      fontSize: 16,
+      fontSize: isSmallTablet ? 16 : isLargeTablet ? 20 : 18,
       fontWeight: '700',
       color: '#212529',
-      marginBottom: 12,
+      marginBottom: isSmallTablet ? 12 : isLargeTablet ? 16 : 14,
       letterSpacing: 0.3,
+      textAlign: 'center',
     },
     doorControlCard: {
       backgroundColor: '#FFFFFF',
       borderRadius: 12,
-      padding: 16,
+      padding: isSmallTablet ? 16 : isLargeTablet ? 24 : 20,
       alignItems: 'center',
       shadowColor: '#000',
       shadowOffset: { width: 0, height: 4 },
@@ -671,24 +672,42 @@ export default function MainScreen() {
       borderColor: '#E9ECEF',
     },
     doorControlImagePlaceholder: {
-      width: 180,
-      height: 135,
+      width: isSmallTablet ? 200 : isLargeTablet ? 260 : 230,
+      height: isSmallTablet ? 150 : isLargeTablet ? 195 : 172,
       backgroundColor: '#E9ECEF',
       borderRadius: 12,
-      marginBottom: 20,
+      marginBottom: isSmallTablet ? 16 : isLargeTablet ? 24 : 20,
       justifyContent: 'center',
       alignItems: 'center',
+    },
+    cameraIcon: {
+      width: isSmallTablet ? 40 : isLargeTablet ? 60 : 50,
+      height: isSmallTablet ? 30 : isLargeTablet ? 45 : 37,
+      backgroundColor: '#CED4DA',
+      borderRadius: 6,
+      justifyContent: 'center',
+      alignItems: 'center',
+      marginBottom: isSmallTablet ? 8 : isLargeTablet ? 12 : 10,
+    },
+    cameraIconInner: {
+      width: isSmallTablet ? 20 : isLargeTablet ? 30 : 25,
+      height: isSmallTablet ? 15 : isLargeTablet ? 22 : 18,
+      backgroundColor: '#ADB5BD',
+      borderRadius: 4,
+    },
+    doorControlButtons: {
+      gap: isSmallTablet ? 8 : isLargeTablet ? 12 : 10,
+      width: '100%',
     },
     doorControlButton: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',
       backgroundColor: '#E9ECEF',
-      paddingVertical: 12,
-      paddingHorizontal: 20,
+      paddingVertical: isSmallTablet ? 12 : isLargeTablet ? 16 : 14,
+      paddingHorizontal: isSmallTablet ? 16 : isLargeTablet ? 24 : 20,
       borderRadius: 8,
-      marginBottom: 8,
-      width: '100%',
+      gap: 6,
       borderWidth: 1,
       borderColor: '#CED4DA',
       shadowColor: '#000',
@@ -696,10 +715,9 @@ export default function MainScreen() {
       shadowOpacity: 0.05,
       shadowRadius: 4,
       elevation: 2,
-      gap: 6,
     },
     doorControlButtonText: {
-      fontSize: 13,
+      fontSize: isSmallTablet ? 13 : isLargeTablet ? 16 : 14,
       fontWeight: '600',
       color: '#495057',
       letterSpacing: 0.5,
@@ -710,7 +728,6 @@ export default function MainScreen() {
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-
         <View style={styles.leftHeaderSection}>
           <TouchableOpacity 
             style={styles.notificationsButton}
@@ -728,9 +745,11 @@ export default function MainScreen() {
             <Text style={styles.notificationsButtonText}>TÉCNICO</Text>
           </TouchableOpacity>
         </View>
+
         <View style={styles.dateTimeContainer}>
           <Text style={styles.dateTimeText}>{formatDateTime(currentDateTime)}</Text>
         </View>
+
         <View style={styles.rightHeaderSection}>
           <View style={styles.connectionIndicatorContainer}>
             <Wifi 
@@ -738,14 +757,15 @@ export default function MainScreen() {
               color={connectionStatus === 'online' ? '#28A745' : '#DC3545'} 
             />
           </View>
+
+          <TouchableOpacity 
+            style={styles.configButton}
+            onPress={() => setShowLoginModal(true)}
+          >
+            <Settings size={20} color="#666666" />
+            <Text style={styles.configButtonText}>CONFIGURACIÓN</Text>
+          </TouchableOpacity>
         </View>
-        <TouchableOpacity 
-          style={styles.configButton}
-          onPress={() => setShowLoginModal(true)}
-        >
-          <Settings size={20} color="#666666" />
-          <Text style={styles.configButtonText}>CONFIGURACIÓN</Text>
-        </TouchableOpacity>
       </View>
 
       {error && (
@@ -765,7 +785,6 @@ export default function MainScreen() {
       {isEmergencyActive ? (
         /* Emergency Mode View */
         <View style={styles.emergencyContent}>
-          {/* Santander Logo Area */}
           <View style={styles.logoSection}>
             <Image 
               source={require('@/assets/images/banco-santander-seeklogo.png')}
@@ -774,7 +793,6 @@ export default function MainScreen() {
             />
           </View>
 
-          {/* Emergency Alert Card */}
           <View style={styles.emergencyCard}>
             <View style={styles.emergencyTextContent}>
               <Text style={styles.emergencyTitle}>MODO EMERGENCIA ACTIVADO</Text>
@@ -786,20 +804,15 @@ export default function MainScreen() {
             </View>
           </View>
 
-          {/* Deactivate Emergency Button */}
           <TouchableOpacity 
             style={styles.deactivateEmergencyButton}
             onPress={handleEmergencyToggle}
           >
             <Text style={styles.deactivateEmergencyButtonText}>DESACTIVAR EMERGENCIA</Text>
           </TouchableOpacity>
-
-          {/* Footer Text */}
         </View>
       ) : isCargaCajeroMode ? (
         <View style={styles.mainContent}>
-          {/* Carga Cajero Mode View */}
-          {/* Santander Logo Area */}
           <View style={styles.logoSection}>
             <Image 
               source={require('@/assets/images/banco-santander-seeklogo.png')}
@@ -808,7 +821,6 @@ export default function MainScreen() {
             />
           </View>
 
-          {/* Carga Cajero Card */}
           <View style={styles.cargaCajeroCard}>
             <View style={styles.cargaCajeroContent}>
               <Text style={styles.cargaCajeroTitle}>CARGA CAJERO</Text>
@@ -824,7 +836,6 @@ export default function MainScreen() {
             </TouchableOpacity>
           </View>
 
-          {/* Bottom Buttons */}
           <View style={styles.bottomButtons}>
             <TouchableOpacity 
               style={styles.emergencyButton}
@@ -839,12 +850,10 @@ export default function MainScreen() {
               <Text style={styles.visualizationButtonText}>VISUALIZACIÓN</Text>
             </TouchableOpacity>
           </View>
-
-          {/* Footer Text */}
         </View>
       ) : isManualMode ? (
+        /* Manual Mode View - Inline */
         <View style={styles.mainContent}>
-          {/* Santander Logo Area */}
           <View style={styles.logoSection}>
             <Image 
               source={require('@/assets/images/banco-santander-seeklogo.png')}
@@ -853,7 +862,6 @@ export default function MainScreen() {
             />
           </View>
 
-          {/* Manual Mode Header */}
           <View style={styles.manualModeHeader}>
             <View style={styles.infoIcon}>
               <Text style={styles.infoIconText}>i</Text>
@@ -872,9 +880,7 @@ export default function MainScreen() {
             </TouchableOpacity>
           </View>
 
-          {/* Door Controls */}
           <View style={styles.doorControlsContainer}>
-            {/* Puerta Oficina */}
             <View style={styles.doorControlSection}>
               <Text style={styles.doorControlTitle}>PUERTA OFICINA</Text>
               <View style={styles.doorControlCard}>
@@ -887,7 +893,7 @@ export default function MainScreen() {
                 <View style={styles.doorControlButtons}>
                   <TouchableOpacity 
                     style={styles.doorControlButton}
-                    onPress={() => console.log('📞 Comunicar con Puerta Oficina')}
+                    onPress={() => handleCommunicate('Puerta Oficina')}
                   >
                     <MessageCircle size={16} color="#495057" />
                     <Text style={styles.doorControlButtonText}>COMUNICAR</Text>
@@ -895,7 +901,7 @@ export default function MainScreen() {
                   
                   <TouchableOpacity 
                     style={styles.doorControlButton}
-                    onPress={() => console.log('🚪 Abrir Puerta Oficina')}
+                    onPress={() => handleOpenDoor('P2', 'Puerta Oficina')}
                   >
                     <DoorOpen size={16} color="#495057" />
                     <Text style={styles.doorControlButtonText}>ABRIR</Text>
@@ -904,7 +910,6 @@ export default function MainScreen() {
               </View>
             </View>
 
-            {/* Puerta Calle */}
             <View style={styles.doorControlSection}>
               <Text style={styles.doorControlTitle}>PUERTA CALLE</Text>
               <View style={styles.doorControlCard}>
@@ -917,7 +922,7 @@ export default function MainScreen() {
                 <View style={styles.doorControlButtons}>
                   <TouchableOpacity 
                     style={styles.doorControlButton}
-                    onPress={() => console.log('📞 Comunicar con Puerta Calle')}
+                    onPress={() => handleCommunicate('Puerta Calle')}
                   >
                     <MessageCircle size={16} color="#495057" />
                     <Text style={styles.doorControlButtonText}>COMUNICAR</Text>
@@ -925,7 +930,7 @@ export default function MainScreen() {
                   
                   <TouchableOpacity 
                     style={styles.doorControlButton}
-                    onPress={() => console.log('🚪 Abrir Puerta Calle')}
+                    onPress={() => handleOpenDoor('P1', 'Puerta Calle')}
                   >
                     <DoorOpen size={16} color="#495057" />
                     <Text style={styles.doorControlButtonText}>ABRIR</Text>
@@ -935,7 +940,6 @@ export default function MainScreen() {
             </View>
           </View>
 
-          {/* Bottom Buttons */}
           <View style={styles.bottomButtons}>
             <TouchableOpacity 
               style={styles.emergencyButton}
@@ -954,8 +958,6 @@ export default function MainScreen() {
         </View>
       ) : (
         <View style={styles.mainContent}>
-          {/* Normal Mode View */}
-          {/* Santander Logo Area */}
           <View style={styles.logoSection}>
             <Image 
               source={require('@/assets/images/banco-santander-seeklogo.png')}
@@ -964,7 +966,6 @@ export default function MainScreen() {
             />
           </View>
 
-          {/* Operation Mode Section */}
           <View style={styles.operationSection}>
             <View style={styles.modeCard}>
               <View style={styles.modeContent}>
@@ -982,7 +983,6 @@ export default function MainScreen() {
             </View>
           </View>
 
-          {/* Bottom Buttons */}
           <View style={styles.bottomButtons}>
             <TouchableOpacity 
               style={styles.emergencyButton}
@@ -997,45 +997,37 @@ export default function MainScreen() {
               <Text style={styles.visualizationButtonText}>VISUALIZACIÓN</Text>
             </TouchableOpacity>
           </View>
-
-          {/* Footer Text */}
         </View>
       )}
 
-      {/* Login Modal */}
       <LoginModal
         visible={showLoginModal}
         onClose={() => setShowLoginModal(false)}
         onSuccess={handleLoginSuccess}
       />
 
-      {/* Technician Modal */}
       <TechnicianModal
         visible={showTechnicianModal}
         onClose={() => setShowTechnicianModal(false)}
       />
 
-      {/* New Configuration Modal */}
       <NewConfigurationModal
         visible={showNewConfigModal}
         onClose={() => setShowNewConfigModal(false)}
         onSave={handleConfigSave}
       />
 
-      {/* Mode Selection Modal */}
       <ModeSelectionModal
         visible={showModeModal}
         onClose={() => setShowModeModal(false)}
         onModeSelect={handleModeSelect}
       />
 
-      {/* Visualization Modal */}
       <VisualizationModal
         visible={showVisualizationModal}
         onClose={() => setShowVisualizationModal(false)}
       />
 
-      {/* Manual Mode Modal */}
       <ManualModeModal
         visible={showManualModeModal}
         onClose={() => setShowManualModeModal(false)}
@@ -1050,14 +1042,12 @@ export default function MainScreen() {
         }}
       />
 
-      {/* Emergency Confirmation Modal */}
       <EmergencyConfirmationModal
         visible={showEmergencyConfirmModal}
         onClose={() => setShowEmergencyConfirmModal(false)}
         onConfirm={handleEmergencyConfirm}
         isDeactivating={isEmergencyActive}
       />
-
     </View>
   );
 }
