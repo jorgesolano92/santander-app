@@ -85,7 +85,7 @@ export default function ConfigurationModal({ visible, onClose, onSave, officeNum
             <Text style={styles.headerTitle}>CONFIGURACIÓN</Text>
           </View>
 
-          {/* Content */}
+          {/* Footer Text */}
           <ScrollView style={styles.scrollView} contentContainerStyle={styles.contentContainer}>
             {/* Title */}
             <Text style={styles.pageTitle}>CONFIGURACION</Text>
