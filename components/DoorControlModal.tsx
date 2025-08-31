@@ -442,7 +442,13 @@ export default function DoorControlModal({ visible, onClose, onCloseAll, doorId,
 
                 <TouchableOpacity 
                   style={styles.visualizationButton}
-                  onPress={onClose}
+                  onPress={() => {
+                    if (onCloseAll) {
+                      onCloseAll();
+                    } else {
+                      onClose();
+                    }
+                  }}
                 >
                   <Text style={styles.visualizationButtonText}>VOLVER</Text>
                 </TouchableOpacity>
