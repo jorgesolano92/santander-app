@@ -709,14 +709,10 @@ export default function MainScreen() {
             <Text style={styles.notificationsButtonText}>TÉCNICO</Text>
           </TouchableOpacity>
         </View>
-        
-        {/* Fecha y hora */}
         <View style={styles.dateTimeContainer}>
           <Text style={styles.dateTimeText}>{formatDateTime(currentDateTime)}</Text>
         </View>
-        
         <View style={styles.rightHeaderSection}>
-          {/* Ícono de estado de conexión */}
           <View style={styles.connectionIndicatorContainer}>
             <Wifi 
               size={20} 
@@ -724,7 +720,6 @@ export default function MainScreen() {
             />
           </View>
         </View>
-        
         <TouchableOpacity 
           style={styles.configButton}
           onPress={() => setShowLoginModal(true)}
