@@ -442,9 +442,9 @@ export default function DoorControlModal({ visible, onClose, onCloseAll, doorId,
 
                 <TouchableOpacity 
                   style={styles.visualizationButton}
-                  onPress={handleVisualization}
+                  onPress={onClose}
                 >
-                  <Text style={styles.visualizationButtonText}>VISUALIZACIÓN</Text>
+                  <Text style={styles.visualizationButtonText}>VOLVER</Text>
                 </TouchableOpacity>
               </View>
             </View>
