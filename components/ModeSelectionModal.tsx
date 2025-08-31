@@ -458,14 +458,12 @@ export default function ModeSelectionModal({ visible, onClose, onModeSelect }: M
               
               return (
                 <View key={category} style={styles.section}>
-                  {/* Mostrar título de categoría solo si no está vacío */}
-                  {categoryDisplayNames[category] && (
+                  {categoryDisplayNames[category] ? (
                     <Text style={styles.sectionTitleStatic}>
                       {categoryDisplayNames[category]}
                     </Text>
-                  )}
+                  ) : null}
                   
-                  {/* Botones de los modos */}
                   {categoryModes.map(mode => (
                     <TouchableOpacity
                       key={mode.id}
