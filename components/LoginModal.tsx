@@ -1,5 +1,5 @@
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, Modal } from 'react-native';
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { User, X } from 'lucide-react-native';
 import { Image } from 'react-native';
 import { useWindowDimensions } from 'react-native';
@@ -14,6 +14,7 @@ export default function LoginModal({ visible, onClose, onSuccess }: LoginModalPr
   const { width = 0 } = useWindowDimensions();
   const isSmallTablet = width < 900;
   const isLargeTablet = width >= 1200;
+  const isMounted = useRef(false);
 
   const [ordinal, setOrdinal] = useState<string>('');
   const [password, setPassword] = useState<string>('');
@@ -30,16 +31,24 @@ export default function LoginModal({ visible, onClose, onSuccess }: LoginModalPr
 
   // Verificar actualizaciones al abrir el modal
   useEffect(() => {
+    isMounted.current = true;
     if (visible) {
       checkForUpdates();
     }
+    
+    return () => {
+      isMounted.current = false;
+    };
   }, [visible]);
 
   const checkForUpdates = async () => {
+    if (!isMounted.current) return;
     setCheckingVersion(true);
     try {
       // Simular verificación de actualizaciones
       await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      if (!isMounted.current) return;
       
       // Simular que hay una actualización disponible (70% de probabilidad)
       const hasUpdate = Math.random() > 0.3;
@@ -47,16 +56,20 @@ export default function LoginModal({ visible, onClose, onSuccess }: LoginModalPr
       if (hasUpdate) {
         const versions = ['2.1.0', '2.0.5', '2.0.3', '1.9.8'];
         const randomVersion = versions[Math.floor(Math.random() * versions.length)];
+        if (!isMounted.current) return;
         setAvailableVersion(randomVersion);
         console.log(`📦 Actualización disponible: v${randomVersion}`);
       } else {
+        if (!isMounted.current) return;
         setAvailableVersion(null);
         console.log('✅ No hay actualizaciones disponibles');
       }
     } catch (error) {
       console.error('Error verificando actualizaciones:', error);
+      if (!isMounted.current) return;
       setAvailableVersion(null);
     } finally {
+      if (!isMounted.current) return;
       setCheckingVersion(false);
     }
   };
