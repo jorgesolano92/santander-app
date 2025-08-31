@@ -783,8 +783,8 @@ export default function MainScreen() {
           {/* Footer Text */}
         </View>
       ) : isCargaCajeroMode ? (
-        {/* Carga Cajero Mode View */}
         <View style={styles.mainContent}>
+          {/* Carga Cajero Mode View */}
           {/* Santander Logo Area */}
           <View style={styles.logoSection}>
             <Image 
@@ -829,13 +829,13 @@ export default function MainScreen() {
           {/* Footer Text */}
         </View>
       ) : isManualMode ? (
-        {/* Manual Mode View - Handled by modal at bottom */}
         <View style={styles.mainContent}>
+          {/* Manual Mode View - Handled by modal at bottom */}
           {/* Content handled by ManualModeModal */}
         </View>
       ) : (
-        {/* Normal Mode View */}
         <View style={styles.mainContent}>
+          {/* Normal Mode View */}
           {/* Santander Logo Area */}
           <View style={styles.logoSection}>
             <Image 
