@@ -285,7 +285,6 @@ export default function VisualizationModal({ visible, onClose }: VisualizationMo
                 </View>
               </View>
             ))}
-            }
           </View>
 
           {/* Back Button */}
