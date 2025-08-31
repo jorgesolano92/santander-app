@@ -92,14 +92,14 @@ export default function ModeSelectionModal({ visible, onClose, onModeSelect }: M
   const [countdown, setCountdown] = useState<number>(30);
   const [isCountdownActive, setIsCountdownActive] = useState<boolean>(false);
   const [showCargaCajero, setShowCargaCajero] = useState<boolean>(false);
-  const countdownInterval = useRef<NodeJS.Timeout | null>(null);
+  const countdownIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // Función para iniciar/reiniciar el contador
   const startCountdown = useCallback(() => {
     // Limpiar cualquier temporizador existente
-    if (countdownInterval.current) {
-      clearInterval(countdownInterval.current);
-      countdownInterval.current = null;
+    if (countdownIntervalRef.current) {
+      clearInterval(countdownIntervalRef.current);
+      countdownIntervalRef.current = null;
     }
     
     // Reiniciar el contador
@@ -107,12 +107,16 @@ export default function ModeSelectionModal({ visible, onClose, onModeSelect }: M
     setIsCountdownActive(true);
     
     // Iniciar nuevo temporizador
-    countdownInterval.current = setInterval(() => {
+    countdownIntervalRef.current = setInterval(() => {
       setCountdown(prev => {
         if (prev <= 1) {
           // Auto-activar cuando llegue a 0 - llamar directamente a onModeSelect
+          if (countdownIntervalRef.current) {
+            clearInterval(countdownIntervalRef.current);
+            countdownIntervalRef.current = null;
+          }
+          setIsCountdownActive(false);
           onModeSelect(selectedMode);
-          onClose();
           return 0;
         }
         return prev - 1;
@@ -153,17 +157,17 @@ export default function ModeSelectionModal({ visible, onClose, onModeSelect }: M
       startCountdown();
     } else {
       // Limpiar interval cuando se cierra el modal
-      if (countdownInterval.current) {
-        clearInterval(countdownInterval.current);
-        countdownInterval.current = null;
+      if (countdownIntervalRef.current) {
+        clearInterval(countdownIntervalRef.current);
+        countdownIntervalRef.current = null;
       }
       setIsCountdownActive(false);
       setCountdown(30);
     }
 
     return () => {
-      if (countdownInterval.current) {
-        clearInterval(countdownInterval.current);
+      if (countdownIntervalRef.current) {
+        clearInterval(countdownIntervalRef.current);
       }
     };
   }, [visible, loadConfiguration, startCountdown]);
@@ -176,9 +180,9 @@ export default function ModeSelectionModal({ visible, onClose, onModeSelect }: M
 
   const handleActivate = () => {
     // Detener cuenta atrás
-    if (countdownInterval.current) {
-      clearInterval(countdownInterval.current);
-      countdownInterval.current = null;
+    if (countdownIntervalRef.current) {
+      clearInterval(countdownIntervalRef.current);
+      countdownIntervalRef.current = null;
     }
     setIsCountdownActive(false);
     
@@ -188,9 +192,9 @@ export default function ModeSelectionModal({ visible, onClose, onModeSelect }: M
 
   const handleClose = () => {
     // Detener cuenta atrás al cerrar
-    if (countdownInterval.current) {
-      clearInterval(countdownInterval.current);
-      countdownInterval.current = null;
+    if (countdownIntervalRef.current) {
+      clearInterval(countdownIntervalRef.current);
+      countdownIntervalRef.current = null;
     }
     setIsCountdownActive(false);
     setCountdown(30);
