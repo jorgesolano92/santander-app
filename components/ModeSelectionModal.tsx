@@ -522,8 +522,6 @@ export default function ModeSelectionModal({ visible, onClose, onModeSelect }: M
           </View>
         </View>
 
-        </View>
-      </View>
     </Modal>
   );
 }
