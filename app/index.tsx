@@ -261,6 +261,25 @@ export default function MainScreen() {
       fontWeight: '600',
       color: '#212529',
     },
+    cameraIcon: {
+      width: isSmallTablet ? 40 : isLargeTablet ? 60 : 50,
+      height: isSmallTablet ? 30 : isLargeTablet ? 45 : 37,
+      backgroundColor: '#CED4DA',
+      borderRadius: 6,
+      justifyContent: 'center',
+      alignItems: 'center',
+      marginBottom: isSmallTablet ? 8 : isLargeTablet ? 12 : 10,
+    },
+    cameraIconInner: {
+      width: isSmallTablet ? 20 : isLargeTablet ? 30 : 25,
+      height: isSmallTablet ? 15 : isLargeTablet ? 22 : 18,
+      backgroundColor: '#ADB5BD',
+      borderRadius: 4,
+    },
+    doorControlButtons: {
+      gap: isSmallTablet ? 8 : isLargeTablet ? 12 : 10,
+      width: '100%',
+    },
     configButton: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -825,8 +844,113 @@ export default function MainScreen() {
         </View>
       ) : isManualMode ? (
         <View style={styles.mainContent}>
-          {/* Manual Mode View - Handled by modal at bottom */}
-          {/* Content handled by ManualModeModal */}
+          {/* Santander Logo Area */}
+          <View style={styles.logoSection}>
+            <Image 
+              source={require('@/assets/images/banco-santander-seeklogo.png')}
+              style={styles.santanderLogo}
+              resizeMode="contain"
+            />
+          </View>
+
+          {/* Manual Mode Header */}
+          <View style={styles.manualModeHeader}>
+            <View style={styles.infoIcon}>
+              <Text style={styles.infoIconText}>i</Text>
+            </View>
+            <View style={styles.manualModeHeaderContent}>
+              <Text style={styles.manualModeTitle}>MODO MANUAL</Text>
+              <Text style={styles.manualModeDescription}>
+                La puerta P1 y la puerta P2 actúan de forma manual, es decir, tanto si se va en dirección entrada como de salida, será necesario pulsar el botón de llamada de los video porteros ubicados en la parte exterior de las puertas o los pulsadores retro iluminados ubicados en el interior de las puertas. Los detectores de movimiento interiores y exteriores actuarán sólo en modo seguridad, es decir, cuando la puerta esté abierta, protegerán a los usuarios frente al atrapamiento cuando ésta se cierre. Las puertas trabajan en modo esclusa; es decir una puerta no abre hasta que la otra esté cerrada.
+              </Text>
+            </View>
+            <TouchableOpacity 
+              style={styles.changeModeButtonManual}
+              onPress={() => setShowModeModal(true)}
+            >
+              <Text style={styles.changeModeButtonTextManual}>CAMBIAR MODO</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Door Controls */}
+          <View style={styles.doorControlsContainer}>
+            {/* Puerta Oficina */}
+            <View style={styles.doorControlSection}>
+              <Text style={styles.doorControlTitle}>PUERTA OFICINA</Text>
+              <View style={styles.doorControlCard}>
+                <View style={styles.doorControlImagePlaceholder}>
+                  <View style={styles.cameraIcon}>
+                    <View style={styles.cameraIconInner} />
+                  </View>
+                </View>
+                
+                <View style={styles.doorControlButtons}>
+                  <TouchableOpacity 
+                    style={styles.doorControlButton}
+                    onPress={() => console.log('📞 Comunicar con Puerta Oficina')}
+                  >
+                    <MessageCircle size={16} color="#495057" />
+                    <Text style={styles.doorControlButtonText}>COMUNICAR</Text>
+                  </TouchableOpacity>
+                  
+                  <TouchableOpacity 
+                    style={styles.doorControlButton}
+                    onPress={() => console.log('🚪 Abrir Puerta Oficina')}
+                  >
+                    <DoorOpen size={16} color="#495057" />
+                    <Text style={styles.doorControlButtonText}>ABRIR</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+
+            {/* Puerta Calle */}
+            <View style={styles.doorControlSection}>
+              <Text style={styles.doorControlTitle}>PUERTA CALLE</Text>
+              <View style={styles.doorControlCard}>
+                <View style={styles.doorControlImagePlaceholder}>
+                  <View style={styles.cameraIcon}>
+                    <View style={styles.cameraIconInner} />
+                  </View>
+                </View>
+                
+                <View style={styles.doorControlButtons}>
+                  <TouchableOpacity 
+                    style={styles.doorControlButton}
+                    onPress={() => console.log('📞 Comunicar con Puerta Calle')}
+                  >
+                    <MessageCircle size={16} color="#495057" />
+                    <Text style={styles.doorControlButtonText}>COMUNICAR</Text>
+                  </TouchableOpacity>
+                  
+                  <TouchableOpacity 
+                    style={styles.doorControlButton}
+                    onPress={() => console.log('🚪 Abrir Puerta Calle')}
+                  >
+                    <DoorOpen size={16} color="#495057" />
+                    <Text style={styles.doorControlButtonText}>ABRIR</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          </View>
+
+          {/* Bottom Buttons */}
+          <View style={styles.bottomButtons}>
+            <TouchableOpacity 
+              style={styles.emergencyButton}
+              onPress={handleEmergencyToggle}
+            >
+              <Text style={styles.emergencyButtonText}>EMERGENCIA</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={styles.visualizationButton}
+              onPress={() => setShowVisualizationModal(true)}
+            >
+              <Text style={styles.visualizationButtonText}>VISUALIZACIÓN</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       ) : (
         <View style={styles.mainContent}>
