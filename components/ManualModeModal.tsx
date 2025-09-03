@@ -1,5 +1,6 @@
 import { View, Text, StyleSheet, TouchableOpacity, Modal } from 'react-native';
 import { X, MessageCircle, DoorOpen } from 'lucide-react-native';
+import { ScrollView } from 'react-native';
 import { useWindowDimensions } from 'react-native';
 import { useDoorControl } from '@/hooks/useDoorControl';
 
@@ -43,6 +44,9 @@ export default function ManualModeModal({
       flex: 1,
       backgroundColor: '#F8F9FA',
     },
+    scrollContent: {
+      flexGrow: 1,
+    },
     header: {
       backgroundColor: '#495057',
       flexDirection: 'row',
@@ -82,9 +86,10 @@ export default function ManualModeModal({
       padding: 8,
     },
     content: {
-      flex: 1,
+      flexGrow: 1,
       paddingHorizontal: isSmallTablet ? 12 : isLargeTablet ? 32 : 20,
       paddingVertical: isSmallTablet ? 8 : isLargeTablet ? 24 : 16,
+      minHeight: 600,
     },
     modeHeader: {
       backgroundColor: '#FFFFFF',
@@ -295,10 +300,13 @@ export default function ManualModeModal({
       transparent={false}
       onRequestClose={onClose}
     >
-      <View style={styles.container}>
+      <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
         {/* Header */}
         <View style={styles.header}>
           <Text style={styles.headerTitle}>SAIMA SEGURIDAD – Panel de control puertas SECURA</Text>
+          <TouchableOpacity style={styles.closeButton} onPress={onClose}>
+            <X size={24} color="#FFFFFF" />
+          </TouchableOpacity>
         </View>
 
         <View style={styles.content}>
@@ -403,7 +411,7 @@ export default function ManualModeModal({
 
           {/* Footer Text */}
         </View>
-      </View>
+      </ScrollView>
     </Modal>
   );
 }
