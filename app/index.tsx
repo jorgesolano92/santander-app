@@ -164,11 +164,6 @@ export default function MainScreen() {
     const success = await changeMode(targetMode);
     if (success) {
       console.log('✅ Modo cambiado exitosamente a:', targetMode);
-      
-      // Si el modo seleccionado es MANUAL, abrir directamente el modal de control manual
-      if (targetMode === 'MANUAL') {
-        setShowManualModeModal(true);
-      }
     } else {
       console.error('❌ Error cambiando modo a:', targetMode);
     }
