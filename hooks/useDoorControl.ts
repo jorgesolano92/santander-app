@@ -18,6 +18,7 @@ interface SavedConfiguration {
 }
 export function useDoorControl() {
   const isMounted = useRef(false);
+  const changeModeRef = useRef<((mode: string) => Promise<boolean>) | null>(null);
   const [systemStatus, setSystemStatus] = useState<SystemStatus | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -82,16 +83,16 @@ export function useDoorControl() {
   // Verificar y aplicar modo automático según horario
   const checkAndApplyScheduleMode = useCallback(async () => {
     const scheduledMode = await determineScheduleMode();
-    if (scheduledMode && scheduledMode !== currentScheduleMode) {
+    if (scheduledMode && scheduledMode !== currentScheduleMode && isMounted.current) {
       console.log(`🕐 Modo automático por horario: ${scheduledMode}`);
       setCurrentScheduleMode(scheduledMode);
       
       // Solo aplicar si no hay modo de emergencia activo
-      if (!systemStatus?.emergencyActive) {
-        await changeMode(scheduledMode);
+      if (!systemStatus?.emergencyActive && changeModeRef.current) {
+        await changeModeRef.current(scheduledMode);
       }
     }
-  }, [currentScheduleMode, systemStatus?.emergencyActive, changeMode]);
+  }, [currentScheduleMode, systemStatus?.emergencyActive, determineScheduleMode]);
   // Obtener estado del sistema
   const refreshStatus = useCallback(async () => {
     try {
@@ -152,6 +153,11 @@ export function useDoorControl() {
       }
     }
   }, [refreshStatus]);
+
+  // Actualizar la referencia de changeMode
+  useEffect(() => {
+    changeModeRef.current = changeMode;
+  }, [changeMode]);
 
   // Activar/Desactivar emergencia
   const toggleEmergency = useCallback(async (activate: boolean): Promise<boolean> => {
@@ -274,7 +280,6 @@ export function useDoorControl() {
     isMounted.current = true;
     
     refreshStatus();
-    checkAndApplyScheduleMode();
     
     // Actualizar estado cada 10 segundos
     const interval = setInterval(refreshStatus, 10000);
@@ -287,7 +292,14 @@ export function useDoorControl() {
       clearInterval(interval);
       clearInterval(scheduleInterval);
     };
-  }, [refreshStatus, checkAndApplyScheduleMode]);
+  }, [refreshStatus]);
+
+  // Efecto separado para la verificación inicial de horarios
+  useEffect(() => {
+    if (isMounted.current && changeModeRef.current) {
+      checkAndApplyScheduleMode();
+    }
+  }, [checkAndApplyScheduleMode]);
 
   return {
     systemStatus,
