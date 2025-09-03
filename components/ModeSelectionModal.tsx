@@ -1,6 +1,7 @@
 import { View, Text, StyleSheet, TouchableOpacity, Modal, ScrollView } from 'react-native';
-import { useState, useEffect, useRef } from 'react';
-import { X } from 'lucide-react-native';
+import React from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { X, ChevronDown, ChevronRight } from 'lucide-react-native';
 import { Image } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useWindowDimensions } from 'react-native';
@@ -19,6 +20,7 @@ interface ModeOption {
 }
 
 const modeOptions: ModeOption[] = [
+  // COMERCIAL
   {
     id: 'comercial_automatico',
     category: 'COMERCIAL',
@@ -31,6 +33,8 @@ const modeOptions: ModeOption[] = [
     name: 'ESCLUSA',
     description: 'La puerta P1 y la puerta P2 actúan de forma automática con funcionamiento en esclusa estricta. Los detectores de movimiento actuarán como apertura de puerta en cortesía. Una puerta no abre hasta que la otra esté completamente cerrada, garantizando máxima seguridad en el acceso.'
   },
+  
+  // HORARIO
   {
     id: 'horario_extendido',
     category: 'HORARIO',
@@ -43,18 +47,24 @@ const modeOptions: ModeOption[] = [
     name: 'AUTOSERVICIO',
     description: 'Modo de funcionamiento para horarios de autoservicio. Las puertas funcionan de forma automática permitiendo el acceso a los cajeros automáticos fuera del horario comercial normal.'
   },
+  
+  // OFICINA CERRADA
   {
     id: 'oficina_cerrada',
     category: 'INDIVIDUAL',
     name: 'OFICINA CERRADA',
     description: 'Modo de funcionamiento destinado a horarios sin empleados. Solo se permite acceso mediante llave o de forma remota en caso que la instalación se haya dado de alta en los servidores del cliente. Todas las puertas permanecen bloqueadas.'
   },
+  
+  // CARGA DE CAJERO
   {
     id: 'carga_cajero',
     category: 'INDIVIDUAL',
     name: 'CARGA DE CAJERO',
     description: 'Es el modo de funcionamiento destinado la carga de cajero en los casos que exista en el uno en el zaguán. La puerta P1 permanece cerrada y es necesario pulsar para que haga llamada a las consolas interiores. La puerta P2 permanece abierta para facilitar el desarrollo de la actividad.'
   },
+  
+  // MANUAL
   {
     id: 'manual',
     category: 'INDIVIDUAL',
@@ -63,22 +73,13 @@ const modeOptions: ModeOption[] = [
   }
 ];
 
+// Orden específico de categorías según la imagen
 const categoryOrder = ['COMERCIAL', 'HORARIO', 'INDIVIDUAL'];
 
 const categoryDisplayNames = {
   'COMERCIAL': 'COMERCIAL',
   'HORARIO': 'HORARIO',
-  'INDIVIDUAL': '',
-};
-
-const modeMap: { [key: string]: string } = {
-  'comercial_automatico': 'COMERCIAL AUTOMÁTICO',
-  'comercial_esclusa': 'COMERCIAL ESCLUSA',
-  'horario_extendido': 'HORARIO EXTENDIDO',
-  'horario_autoservicio': 'AUTOSERVICIO',
-  'oficina_cerrada': 'OFICINA CERRADA',
-  'carga_cajero': 'CARGA DE CAJERO',
-  'manual': 'MANUAL'
+  'INDIVIDUAL': '', // Sin título para los modos individuales
 };
 
 export default function ModeSelectionModal({ visible, onClose, onModeSelect }: ModeSelectionModalProps) {
@@ -87,89 +88,151 @@ export default function ModeSelectionModal({ visible, onClose, onModeSelect }: M
   const isLargeTablet = width >= 1200;
 
   const [selectedMode, setSelectedMode] = useState<string>('comercial_automatico');
+  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
   const [countdown, setCountdown] = useState<number>(30);
   const [isCountdownActive, setIsCountdownActive] = useState<boolean>(false);
   const [showCargaCajero, setShowCargaCajero] = useState<boolean>(false);
-  const timerRef = useRef<any>(null);
+  const countdownIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Cargar configuración
-  const loadConfiguration = async () => {
+  // Función para iniciar/reiniciar el contador
+  const startCountdown = useCallback(() => {
+    // Limpiar cualquier temporizador existente
+    if (countdownIntervalRef.current) {
+      clearInterval(countdownIntervalRef.current);
+      countdownIntervalRef.current = null;
+    }
+    
+    // Reiniciar el contador
+    setCountdown(30);
+    setIsCountdownActive(true);
+    
+    // Iniciar nuevo temporizador
+    countdownIntervalRef.current = setInterval(() => {
+      setCountdown(prev => {
+        if (prev <= 1) {
+          // Auto-activar cuando llegue a 0 - llamar directamente a onModeSelect
+          if (countdownIntervalRef.current) {
+            clearInterval(countdownIntervalRef.current);
+            countdownIntervalRef.current = null;
+          }
+          setIsCountdownActive(false);
+          // Obtener el modo seleccionado y activarlo
+          const selectedModeOption = modeOptions.find(mode => mode.id === selectedMode);
+          if (selectedModeOption) {
+            const modeMap: { [key: string]: string } = {
+              'comercial_automatico': 'COMERCIAL AUTOMÁTICO',
+              'comercial_esclusa': 'COMERCIAL ESCLUSA',
+              'horario_extendido': 'HORARIO EXTENDIDO',
+              'horario_autoservicio': 'AUTOSERVICIO',
+              'oficina_cerrada': 'OFICINA CERRADA',
+              'carga_cajero': 'CARGA DE CAJERO',
+              'manual': 'MANUAL'
+            };
+            const targetMode = modeMap[selectedMode] || selectedMode;
+            onModeSelect(targetMode);
+          }
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  }, [selectedMode, onModeSelect, onClose]);
+
+  // Cargar configuración para determinar si mostrar Carga de Cajero
+  const loadConfiguration = useCallback(async () => {
     try {
       const savedConfig = await AsyncStorage.getItem('new_door_config');
       if (savedConfig) {
         const config = JSON.parse(savedConfig);
         setShowCargaCajero(config.officeWithATM === true);
       } else {
-        setShowCargaCajero(false);
+        // Si no hay configuración, revisar la configuración antigua
+        const oldConfig = await AsyncStorage.getItem('detailed_door_config');
+        if (oldConfig) {
+          const config = JSON.parse(oldConfig);
+          // En la configuración antigua no hay este campo, así que por defecto false
+          setShowCargaCajero(false);
+        } else {
+          setShowCargaCajero(false);
+        }
       }
     } catch (error) {
+      console.error('Error loading configuration:', error);
       setShowCargaCajero(false);
     }
-  };
+  }, []);
 
-  // Limpiar timer
-  const clearTimer = () => {
-    if (timerRef.current) {
-      clearInterval(timerRef.current);
-      timerRef.current = null;
-    }
-  };
-
-  // Iniciar countdown
-  const startCountdown = () => {
-    clearTimer();
-    setCountdown(30);
-    setIsCountdownActive(true);
-    
-    timerRef.current = setInterval(() => {
-      setCountdown(prev => {
-        const newValue = prev - 1;
-        if (newValue <= 0) {
-          clearTimer();
-          setIsCountdownActive(false);
-          // Auto-activar modo
-          const targetMode = modeMap[selectedMode] || selectedMode;
-          onModeSelect(targetMode);
-          return 0;
-        }
-        return newValue;
-      });
-    }, 1000);
-  };
-
-  // Efectos
+  // Iniciar cuenta atrás cuando se abre el modal
   useEffect(() => {
     if (visible) {
+      // Cargar configuración al abrir el modal
       loadConfiguration();
+      // Iniciar contador
       startCountdown();
     } else {
-      clearTimer();
+      // Limpiar interval cuando se cierra el modal
+      if (countdownIntervalRef.current) {
+        clearInterval(countdownIntervalRef.current);
+        countdownIntervalRef.current = null;
+      }
       setIsCountdownActive(false);
       setCountdown(30);
     }
 
     return () => {
-      clearTimer();
+      if (countdownIntervalRef.current) {
+        clearInterval(countdownIntervalRef.current);
+      }
     };
-  }, [visible]);
+  }, [visible, loadConfiguration, startCountdown]);
 
   const handleModeSelect = (modeId: string) => {
     setSelectedMode(modeId);
+    // Reiniciar contador cuando se selecciona un nuevo modo
     startCountdown();
   };
 
   const handleActivate = () => {
-    clearTimer();
+    // Detener cuenta atrás
+    if (countdownIntervalRef.current) {
+      clearInterval(countdownIntervalRef.current);
+      countdownIntervalRef.current = null;
+    }
     setIsCountdownActive(false);
+    
+    // Mapear el ID del modo a un texto descriptivo
+    const modeMap: { [key: string]: string } = {
+      'comercial_automatico': 'COMERCIAL AUTOMÁTICO',
+      'comercial_esclusa': 'COMERCIAL ESCLUSA',
+      'horario_extendido': 'HORARIO EXTENDIDO',
+      'horario_autoservicio': 'AUTOSERVICIO',
+      'oficina_cerrada': 'OFICINA CERRADA',
+      'carga_cajero': 'CARGA DE CAJERO',
+      'manual': 'MANUAL'
+    };
+    
     const targetMode = modeMap[selectedMode] || selectedMode;
     onModeSelect(targetMode);
   };
 
   const handleClose = () => {
-    clearTimer();
+    // Detener cuenta atrás al cerrar
+    if (countdownIntervalRef.current) {
+      clearInterval(countdownIntervalRef.current);
+      countdownIntervalRef.current = null;
+    }
     setIsCountdownActive(false);
     setCountdown(30);
     onClose();
+  };
+  const toggleCategory = (category: string) => {
+    const newExpanded = new Set(expandedCategories);
+    if (newExpanded.has(category)) {
+      newExpanded.delete(category);
+    } else {
+      newExpanded.add(category);
+    }
+    setExpandedCategories(newExpanded);
   };
 
   const getSelectedModeDetails = () => {
@@ -177,16 +240,6 @@ export default function ModeSelectionModal({ visible, onClose, onModeSelect }: M
   };
 
   const selectedModeDetails = getSelectedModeDetails();
-
-  const getFilteredModes = () => {
-    let filteredModes = [...modeOptions];
-    if (!showCargaCajero) {
-      filteredModes = filteredModes.filter(mode => mode.id !== 'carga_cajero');
-    }
-    return filteredModes;
-  };
-
-  const filteredModes = getFilteredModes();
 
   const styles = StyleSheet.create({
     container: {
@@ -208,6 +261,20 @@ export default function ModeSelectionModal({ visible, onClose, onModeSelect }: M
     },
     headerTitle: {
       fontSize: isSmallTablet ? 16 : isLargeTablet ? 20 : 18,
+      fontWeight: '600',
+      color: '#FFFFFF',
+      letterSpacing: 0.5,
+    },
+    notificationsButton: {
+      backgroundColor: 'rgba(255, 255, 255, 0.1)',
+      paddingHorizontal: 20,
+      paddingVertical: 12,
+      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: 'rgba(255, 255, 255, 0.2)',
+    },
+    notificationsButtonText: {
+      fontSize: 16,
       fontWeight: '600',
       color: '#FFFFFF',
       letterSpacing: 0.5,
@@ -238,15 +305,22 @@ export default function ModeSelectionModal({ visible, onClose, onModeSelect }: M
     section: {
       marginBottom: 16,
     },
-    sectionTitleStatic: {
-      fontSize: 13,
+    categoryHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      paddingVertical: 10,
+      marginBottom: 12,
+    },
+    sectionTitle: {
+      fontSize: 14,
       fontWeight: '700',
       color: '#212529',
       textAlign: 'left',
       letterSpacing: 0.5,
-      marginBottom: 10,
-      paddingVertical: 6,
-      paddingHorizontal: 4,
+    },
+    submodeContainer: {
+      paddingLeft: 8,
     },
     modeButton: {
       backgroundColor: '#495057',
@@ -279,6 +353,16 @@ export default function ModeSelectionModal({ visible, onClose, onModeSelect }: M
     selectedModeButtonText: {
       color: '#FFFFFF',
       fontWeight: '700',
+    },
+    sectionTitleStatic: {
+      fontSize: 13,
+      fontWeight: '700',
+      color: '#212529',
+      textAlign: 'left',
+      letterSpacing: 0.5,
+      marginBottom: 10,
+      paddingVertical: 6,
+      paddingHorizontal: 4,
     },
     rightPanel: {
       flex: 2,
@@ -353,24 +437,45 @@ export default function ModeSelectionModal({ visible, onClose, onModeSelect }: M
       color: '#FFFFFF',
       letterSpacing: 1,
     },
+    footerText: {
+      fontSize: 12,
+      color: '#6C757D',
+      textAlign: 'left',
+      fontWeight: '400',
+      paddingHorizontal: 20,
+      paddingBottom: 12,
+    },
   });
+
+  // Agrupar modos por categoría
+  const getFilteredModes = () => {
+    let filteredModes = [...modeOptions];
+    
+    // Filtrar CARGA CAJERO si no está habilitado
+    if (!showCargaCajero) {
+      filteredModes = filteredModes.filter(mode => mode.id !== 'carga_cajero');
+    }
+    
+    return filteredModes;
+  };
+
+  const filteredModes = getFilteredModes();
 
   return (
     <Modal
       visible={visible}
       animationType="slide"
       transparent={false}
-      onRequestClose={handleClose}
+      onRequestClose={onClose}
     >
       <View style={styles.container}>
+        {/* Header */}
         <View style={styles.header}>
           <Text style={styles.headerTitle}>SAIMA SEGURIDAD – Panel de control puertas SECURA</Text>
-          <TouchableOpacity style={styles.closeButton} onPress={handleClose}>
-            <X size={24} color="#FFFFFF" />
-          </TouchableOpacity>
         </View>
 
         <View style={styles.content}>
+          {/* Left Panel - Mode Selection (más estrecho) */}
           <ScrollView style={styles.leftPanel} contentContainerStyle={styles.leftPanelContent}>
             {categoryOrder.map(category => {
               const categoryModes = filteredModes.filter(mode => mode.category === category);
@@ -406,7 +511,9 @@ export default function ModeSelectionModal({ visible, onClose, onModeSelect }: M
             })}
           </ScrollView>
 
+          {/* Right Panel - Details */}
           <View style={styles.rightPanel}>
+            {/* Santander Logo */}
             <View style={styles.logoSection}>
               <Image 
                 source={require('@/assets/images/banco-santander-seeklogo.png')}
@@ -415,9 +522,9 @@ export default function ModeSelectionModal({ visible, onClose, onModeSelect }: M
               />
             </View>
 
+            {/* Mode Details Card */}
             <ScrollView style={styles.detailsScrollView}>
               <View style={styles.detailsCard}>
-                <View style={styles.detailsImagePlaceholder} />
                 <View style={styles.detailsContent}>
                   <Text style={styles.detailsTitle}>
                     {selectedModeDetails?.name}
@@ -429,6 +536,7 @@ export default function ModeSelectionModal({ visible, onClose, onModeSelect }: M
               </View>
             </ScrollView>
 
+            {/* Activate Button */}
             <TouchableOpacity style={styles.activateButton} onPress={handleActivate}>
               <Text style={styles.activateButtonText}>
                 {isCountdownActive ? `ACTIVAR (${countdown}s)` : 'ACTIVAR'}
