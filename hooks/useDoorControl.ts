@@ -18,7 +18,6 @@ interface SavedConfiguration {
 }
 export function useDoorControl() {
   const isMounted = useRef(false);
-  const changeModeRef = useRef<((mode: string) => Promise<boolean>) | null>(null);
   const [systemStatus, setSystemStatus] = useState<SystemStatus | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -81,18 +80,19 @@ export function useDoorControl() {
   }, []);
 
   // Verificar y aplicar modo automático según horario
-  const checkAndApplyScheduleMode = useCallback(async () => {
+  const checkAndApplyScheduleMode = useCallback(async (changeModeFunction?: (mode: string) => Promise<boolean>) => {
     const scheduledMode = await determineScheduleMode();
     if (scheduledMode && scheduledMode !== currentScheduleMode && isMounted.current) {
       console.log(`🕐 Modo automático por horario: ${scheduledMode}`);
       setCurrentScheduleMode(scheduledMode);
       
       // Solo aplicar si no hay modo de emergencia activo
-      if (!systemStatus?.emergencyActive && changeModeRef.current) {
-        await changeModeRef.current(scheduledMode);
+      if (!systemStatus?.emergencyActive && changeModeFunction) {
+        await changeModeFunction(scheduledMode);
       }
     }
   }, [currentScheduleMode, systemStatus?.emergencyActive, determineScheduleMode]);
+
   // Obtener estado del sistema
   const refreshStatus = useCallback(async () => {
     try {
@@ -153,11 +153,6 @@ export function useDoorControl() {
       }
     }
   }, [refreshStatus]);
-
-  // Actualizar la referencia de changeMode
-  useEffect(() => {
-    changeModeRef.current = changeMode;
-  }, [changeMode]);
 
   // Activar/Desactivar emergencia
   const toggleEmergency = useCallback(async (activate: boolean): Promise<boolean> => {
@@ -285,21 +280,21 @@ export function useDoorControl() {
     const interval = setInterval(refreshStatus, 10000);
     
     // Verificar horarios cada minuto
-    const scheduleInterval = setInterval(checkAndApplyScheduleMode, 60000);
+    const scheduleInterval = setInterval(() => checkAndApplyScheduleMode(changeMode), 60000);
     
     return () => {
       isMounted.current = false;
       clearInterval(interval);
       clearInterval(scheduleInterval);
     };
-  }, [refreshStatus]);
+  }, [refreshStatus, changeMode, checkAndApplyScheduleMode]);
 
   // Efecto separado para la verificación inicial de horarios
   useEffect(() => {
-    if (isMounted.current && changeModeRef.current) {
-      checkAndApplyScheduleMode();
+    if (isMounted.current) {
+      checkAndApplyScheduleMode(changeMode);
     }
-  }, [checkAndApplyScheduleMode]);
+  }, [checkAndApplyScheduleMode, changeMode]);
 
   return {
     systemStatus,

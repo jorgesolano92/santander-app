@@ -1,5 +1,4 @@
 import { View, Text, StyleSheet, TouchableOpacity, Modal, ScrollView } from 'react-native';
-import React from 'react';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { X, ChevronDown, ChevronRight } from 'lucide-react-native';
 import { Image } from 'react-native';
@@ -102,7 +101,7 @@ export default function ModeSelectionModal({ visible, onClose, onModeSelect }: M
   const [countdown, setCountdown] = useState<number>(30);
   const [isCountdownActive, setIsCountdownActive] = useState<boolean>(false);
   const [showCargaCajero, setShowCargaCajero] = useState<boolean>(false);
-  const countdownIntervalRef = useRef<any>(null);
+  const countdownIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
 
   // Cargar configuración para determinar si mostrar Carga de Cajero
@@ -139,7 +138,7 @@ export default function ModeSelectionModal({ visible, onClose, onModeSelect }: M
 
   // Función para iniciar/reiniciar el contador
   const startCountdown = useCallback(() => {
-    console.log('🕐 Iniciando contador de 30 segundos');
+    // console.log('🕐 Iniciando contador de 30 segundos');
     
     // Limpiar cualquier temporizador existente
     clearCountdownTimer();
@@ -170,7 +169,8 @@ export default function ModeSelectionModal({ visible, onClose, onModeSelect }: M
     }, 1000);
     
     countdownIntervalRef.current = intervalId;
-  }, [selectedMode, onModeSelect]);
+  }, [selectedMode, onModeSelect, clearCountdownTimer]);
+
   // Iniciar cuenta atrás cuando se abre el modal
   useEffect(() => {
     if (visible) {
