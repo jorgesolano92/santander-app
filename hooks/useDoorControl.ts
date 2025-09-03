@@ -6,13 +6,13 @@ export interface UseDoorControlReturn {
   isLoading: boolean;
   error: string | null;
   connectionStatus: 'connected' | 'disconnected' | 'connecting';
-  currentScheduleMode: 'automatic' | 'manual' | null;
-  changeMode: (mode: 'automatic' | 'manual') => Promise<void>;
-  toggleEmergency: () => Promise<void>;
+  currentScheduleMode: string | null;
+  changeMode: (mode: string) => Promise<boolean>;
+  toggleEmergency: (newState: boolean) => Promise<boolean>;
   configure: (config: ConfigurationData) => void;
   validateDevice: () => Promise<boolean>;
-  determineScheduleMode: () => 'automatic' | 'manual';
-  controlDoor: (doorId: string, action: 'open' | 'close') => Promise<void>;
+  determineScheduleMode: () => string;
+  controlDoor: (doorId: string, action: 'open' | 'close') => Promise<boolean>;
 }
 
 // Create a singleton instance
@@ -23,7 +23,7 @@ export function useDoorControl(): UseDoorControlReturn {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [connectionStatus, setConnectionStatus] = useState<'connected' | 'disconnected' | 'connecting'>('disconnected');
-  const [currentScheduleMode, setCurrentScheduleMode] = useState<'automatic' | 'manual' | null>(null);
+  const [currentScheduleMode, setCurrentScheduleMode] = useState<string | null>(null);
 
   const updateSystemStatus = useCallback(async () => {
     try {
@@ -46,7 +46,7 @@ export function useDoorControl(): UseDoorControlReturn {
     }
   }, []);
 
-  const changeMode = useCallback(async (mode: 'automatic' | 'manual') => {
+  const changeMode = useCallback(async (mode: string): Promise<boolean> => {
     try {
       setIsLoading(true);
       setError(null);
@@ -56,24 +56,28 @@ export function useDoorControl(): UseDoorControlReturn {
       
       // Refresh system status after mode change
       await updateSystemStatus();
+      return true;
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error al cambiar modo');
+      return false;
     } finally {
       setIsLoading(false);
     }
   }, [updateSystemStatus]);
 
-  const toggleEmergency = useCallback(async () => {
+  const toggleEmergency = useCallback(async (newState: boolean): Promise<boolean> => {
     try {
       setIsLoading(true);
       setError(null);
       
-      await doorControlService.toggleEmergencyMode();
+      await doorControlService.toggleEmergencyMode(newState);
       
       // Refresh system status after emergency toggle
       await updateSystemStatus();
+      return true;
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error en modo emergencia');
+      return false;
     } finally {
       setIsLoading(false);
     }
@@ -113,15 +117,15 @@ export function useDoorControl(): UseDoorControlReturn {
     }
   }, [updateSystemStatus]);
 
-  const determineScheduleMode = useCallback((): 'automatic' | 'manual' => {
-    if (!systemStatus) return 'manual';
+  const determineScheduleMode = useCallback((): string => {
+    if (!systemStatus) return 'MANUAL';
     
     // Based on the API response, determine mode from system status
     // This logic should be adjusted based on how the API indicates the current mode
-    return systemStatus.mode || 'manual';
+    return systemStatus.mode || 'MANUAL';
   }, [systemStatus]);
 
-  const controlDoor = useCallback(async (doorId: string, action: 'open' | 'close') => {
+  const controlDoor = useCallback(async (doorId: string, action: 'open' | 'close'): Promise<boolean> => {
     try {
       setIsLoading(true);
       setError(null);
@@ -130,8 +134,10 @@ export function useDoorControl(): UseDoorControlReturn {
       
       // Refresh system status after door control
       await updateSystemStatus();
+      return true;
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error al controlar puerta');
+      return false;
     } finally {
       setIsLoading(false);
     }
