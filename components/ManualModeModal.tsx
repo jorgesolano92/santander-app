@@ -341,19 +341,40 @@ export default function ManualModeModal({
                 
                 <View style={styles.doorControlButtons}>
                   <TouchableOpacity 
-                    style={styles.doorControlButton}
-                    onPress={() => handleCommunicate('Puerta Oficina')}
+                    style={[
+                      styles.doorControlButton,
+                      communicatingDoors.has('P2') && styles.doorControlButtonCommunicating
+                    ]}
+                    onPress={() => handleCommunicate('P2', 'Puerta Oficina')}
                   >
                     <MessageCircle size={16} color="#495057" />
-                    <Text style={styles.doorControlButtonText}>COMUNICAR</Text>
+                    <Text style={[
+                      styles.doorControlButtonText,
+                      communicatingDoors.has('P2') && styles.doorControlButtonCommunicatingText
+                    ]}>
+                      {communicatingDoors.has('P2') ? 'COMUNICANDO...' : 'COMUNICAR'}
+                    </Text>
                   </TouchableOpacity>
                   
                   <TouchableOpacity 
-                    style={styles.doorControlButton}
+                    style={[
+                      styles.doorControlButton,
+                      getDoorStatus('P2').isOpen && styles.doorControlButtonClose,
+                      isDoorButtonDisabled('P2') && styles.doorControlButtonDisabled
+                    ]}
                     onPress={() => handleOpenDoor('P2', 'Puerta Oficina')}
+                    disabled={isDoorButtonDisabled('P2')}
                   >
-                    <DoorOpen size={16} color="#495057" />
-                    <Text style={styles.doorControlButtonText}>ABRIR</Text>
+                    <DoorOpen 
+                      size={16} 
+                      color={getDoorStatus('P2').isOpen ? "#FFFFFF" : "#495057"} 
+                    />
+                    <Text style={[
+                      styles.doorControlButtonText,
+                      getDoorStatus('P2').isOpen && styles.doorControlButtonCloseText
+                    ]}>
+                      {getDoorButtonText('P2')}
+                    </Text>
                   </TouchableOpacity>
                 </View>
               </View>
@@ -371,19 +392,40 @@ export default function ManualModeModal({
                 
                 <View style={styles.doorControlButtons}>
                   <TouchableOpacity 
-                    style={styles.doorControlButton}
-                    onPress={() => handleCommunicate('Puerta Calle')}
+                    style={[
+                      styles.doorControlButton,
+                      communicatingDoors.has('P1') && styles.doorControlButtonCommunicating
+                    ]}
+                    onPress={() => handleCommunicate('P1', 'Puerta Calle')}
                   >
                     <MessageCircle size={16} color="#495057" />
-                    <Text style={styles.doorControlButtonText}>COMUNICAR</Text>
+                    <Text style={[
+                      styles.doorControlButtonText,
+                      communicatingDoors.has('P1') && styles.doorControlButtonCommunicatingText
+                    ]}>
+                      {communicatingDoors.has('P1') ? 'COMUNICANDO...' : 'COMUNICAR'}
+                    </Text>
                   </TouchableOpacity>
                   
                   <TouchableOpacity 
-                    style={styles.doorControlButton}
+                    style={[
+                      styles.doorControlButton,
+                      getDoorStatus('P1').isOpen && styles.doorControlButtonClose,
+                      isDoorButtonDisabled('P1') && styles.doorControlButtonDisabled
+                    ]}
                     onPress={() => handleOpenDoor('P1', 'Puerta Calle')}
+                    disabled={isDoorButtonDisabled('P1')}
                   >
-                    <DoorOpen size={16} color="#495057" />
-                    <Text style={styles.doorControlButtonText}>ABRIR</Text>
+                    <DoorOpen 
+                      size={16} 
+                      color={getDoorStatus('P1').isOpen ? "#FFFFFF" : "#495057"} 
+                    />
+                    <Text style={[
+                      styles.doorControlButtonText,
+                      getDoorStatus('P1').isOpen && styles.doorControlButtonCloseText
+                    ]}>
+                      {getDoorButtonText('P1')}
+                    </Text>
                   </TouchableOpacity>
                 </View>
               </View>
