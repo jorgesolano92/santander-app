@@ -1037,6 +1037,9 @@ export default function MainScreen() {
         onEmergency={handleEmergencyToggle}
         communicatingDoors={communicatingDoors}
         onCommunicate={handleCommunicate}
+        getDoorStatus={getDoorStatus}
+        isDoorButtonDisabled={isDoorButtonDisabled}
+        getDoorButtonText={getDoorButtonText}
       />
 
       <EmergencyConfirmationModal
