@@ -7,7 +7,6 @@ import { Image } from 'react-native';
 import LoginModal from '@/components/LoginModal';
 import NewConfigurationModal from '@/components/NewConfigurationModal';
 import ModeSelectionModal from '@/components/ModeSelectionModal';
-import VisualizationModal from '@/components/VisualizationModal';
 import TechnicianModal from '@/components/TechnicianModal';
 import ManualModeModal from '@/components/ManualModeModal';
 import EmergencyConfirmationModal from '@/components/EmergencyConfirmationModal';
@@ -40,7 +39,6 @@ export default function MainScreen() {
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [showNewConfigModal, setShowNewConfigModal] = useState(false);
   const [showModeModal, setShowModeModal] = useState(false);
-  const [showVisualizationModal, setShowVisualizationModal] = useState(false);
   const [showTechnicianModal, setShowTechnicianModal] = useState(false);
   const [showManualModeModal, setShowManualModeModal] = useState(false);
   const [showEmergencyConfirmModal, setShowEmergencyConfirmModal] = useState(false);
@@ -910,9 +908,9 @@ export default function MainScreen() {
             </TouchableOpacity>
             <TouchableOpacity 
               style={styles.visualizationButton}
-              onPress={() => setShowVisualizationModal(true)}
+              onPress={() => setShowManualModeModal(true)}
             >
-              <Text style={styles.visualizationButtonText}>VISUALIZACIÓN</Text>
+              <Text style={styles.visualizationButtonText}>CONTROL MANUAL</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -993,9 +991,9 @@ export default function MainScreen() {
             </TouchableOpacity>
             <TouchableOpacity 
               style={styles.visualizationButton}
-              onPress={() => setShowVisualizationModal(true)}
+              onPress={() => setShowManualModeModal(true)}
             >
-              <Text style={styles.visualizationButtonText}>VISUALIZACIÓN</Text>
+              <Text style={styles.visualizationButtonText}>CONTROL MANUAL</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -1024,11 +1022,6 @@ export default function MainScreen() {
         onModeSelect={handleModeSelect}
       />
 
-      <VisualizationModal
-        visible={showVisualizationModal}
-        onClose={() => setShowVisualizationModal(false)}
-      />
-
       <ManualModeModal
         visible={showManualModeModal}
         onClose={() => setShowManualModeModal(false)}
@@ -1037,10 +1030,6 @@ export default function MainScreen() {
           setShowModeModal(true);
         }}
         onEmergency={handleEmergencyToggle}
-        onVisualization={() => {
-          setShowManualModeModal(false);
-          setShowVisualizationModal(true);
-        }}
       />
 
       <EmergencyConfirmationModal

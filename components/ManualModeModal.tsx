@@ -9,15 +9,13 @@ interface ManualModeModalProps {
   onClose: () => void;
   onChangeMode: () => void;
   onEmergency: () => void;
-  onVisualization: () => void;
 }
 
 export default function ManualModeModal({ 
   visible, 
   onClose, 
   onChangeMode, 
-  onEmergency, 
-  onVisualization 
+  onEmergency
 }: ManualModeModalProps) {
   const { width = 0 } = useWindowDimensions();
   const isSmallTablet = width < 900;
@@ -403,9 +401,9 @@ export default function ManualModeModal({
             
             <TouchableOpacity 
               style={styles.visualizationButton}
-              onPress={onVisualization}
+              onPress={onClose}
             >
-              <Text style={styles.visualizationButtonText}>VISUALIZACIÓN</Text>
+              <Text style={styles.visualizationButtonText}>VOLVER</Text>
             </TouchableOpacity>
           </View>
 
