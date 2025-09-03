@@ -18,8 +18,6 @@ export interface UseDoorControlReturn {
 // Create a singleton instance
 const doorControlService = new DoorControlService();
 
-const doorControlService = new DoorControlService();
-
 export function useDoorControl(): UseDoorControlReturn {
   const [systemStatus, setSystemStatus] = useState<SystemStatus | null>(null);
   const [isLoading, setIsLoading] = useState(false);
