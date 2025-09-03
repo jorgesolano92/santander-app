@@ -36,6 +36,32 @@ export default function MainScreen() {
     controlDoor,
   } = useDoorControl();
 
+  // Función para obtener el estado de la puerta
+  const getDoorStatus = (doorId: 'P1' | 'P2' | 'P3' | 'P4') => {
+    const door = systemStatus?.doors[doorId];
+    return {
+      status: door?.status || 'closed',
+      isOpen: door?.status === 'open',
+      isOpening: door?.status === 'opening',
+      isClosing: door?.status === 'closing',
+    };
+  };
+
+  // Función para obtener el texto del botón de abrir/cerrar
+  const getDoorButtonText = (doorId: 'P1' | 'P2' | 'P3' | 'P4') => {
+    const { isOpen, isOpening, isClosing } = getDoorStatus(doorId);
+    
+    if (isOpening) return 'ABRIENDO...';
+    if (isClosing) return 'CERRANDO...';
+    return isOpen ? 'CERRAR' : 'ABRIR';
+  };
+
+  // Función para determinar si el botón está deshabilitado
+  const isDoorButtonDisabled = (doorId: 'P1' | 'P2' | 'P3' | 'P4') => {
+    const { isOpening, isClosing } = getDoorStatus(doorId);
+    return isOpening || isClosing;
+  };
+
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [showNewConfigModal, setShowNewConfigModal] = useState(false);
   const [showModeModal, setShowModeModal] = useState(false);
@@ -195,32 +221,6 @@ export default function MainScreen() {
     } else {
       console.error(`❌ Error ejecutando comando ${action} en ${doorName}`);
     }
-  };
-
-  // Función para obtener el estado de la puerta
-  const getDoorStatus = (doorId: 'P1' | 'P2' | 'P3' | 'P4') => {
-    const door = systemStatus?.doors[doorId];
-    return {
-      status: door?.status || 'closed',
-      isOpen: door?.status === 'open',
-      isOpening: door?.status === 'opening',
-      isClosing: door?.status === 'closing',
-    };
-  };
-
-  // Función para obtener el texto del botón de abrir/cerrar
-  const getDoorButtonText = (doorId: 'P1' | 'P2' | 'P3' | 'P4') => {
-    const { isOpen, isOpening, isClosing } = getDoorStatus(doorId);
-    
-    if (isOpening) return 'ABRIENDO...';
-    if (isClosing) return 'CERRANDO...';
-    return isOpen ? 'CERRAR' : 'ABRIR';
-  };
-
-  // Función para determinar si el botón está deshabilitado
-  const isDoorButtonDisabled = (doorId: 'P1' | 'P2' | 'P3' | 'P4') => {
-    const { isOpening, isClosing } = getDoorStatus(doorId);
-    return isOpening || isClosing;
   };
 
   // Create styles inside component with access to responsive variables
