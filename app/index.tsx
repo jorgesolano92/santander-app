@@ -685,7 +685,6 @@ export default function MainScreen() {
       letterSpacing: 0.5,
     },
     doorControlsContainer: {
-      flexDirection: 'row',
       flexDirection: isSmallTablet ? 'column' : 'row',
       gap: isSmallTablet ? 12 : isLargeTablet ? 32 : 24,
       marginBottom: isSmallTablet ? 16 : isLargeTablet ? 32 : 24,
@@ -799,6 +798,16 @@ export default function MainScreen() {
       flex: 1,
       maxWidth: '100%',
       alignSelf: 'center',
+    },
+    manualModeLogoSection: {
+      alignItems: 'center',
+      marginBottom: isSmallTablet ? 20 : isLargeTablet ? 32 : 24,
+      marginTop: 8,
+    },
+    manualModeSantanderLogo: {
+      width: isSmallTablet ? 280 : isLargeTablet ? 400 : 340,
+      height: isSmallTablet ? 90 : isLargeTablet ? 130 : 110,
+    },
   });
 
   return (
