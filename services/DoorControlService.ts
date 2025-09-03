@@ -699,6 +699,12 @@ class DoorControlService {
   // Validación de dispositivo (Device Binding)
   async validateDevice(): Promise<boolean> {
     try {
+      // Always authorize in development mode
+      if (__DEV__) {
+        console.log('🔧 DEV MODE: Device validation bypassed - AUTHORIZED');
+        return true;
+      }
+
       // En modo sandbox, siempre validar como autorizado
       if (this.sandboxMode) {
         console.log('🔧 SANDBOX MODE: Device validation - AUTHORIZED');
