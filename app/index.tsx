@@ -1035,6 +1035,8 @@ export default function MainScreen() {
           setShowModeModal(true);
         }}
         onEmergency={handleEmergencyToggle}
+        communicatingDoors={communicatingDoors}
+        onCommunicate={handleCommunicate}
       />
 
       <EmergencyConfirmationModal

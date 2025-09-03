@@ -9,13 +9,17 @@ interface ManualModeModalProps {
   onClose: () => void;
   onChangeMode: () => void;
   onEmergency: () => void;
+  communicatingDoors: Set<string>;
+  onCommunicate: (doorId: string, doorName: string) => void;
 }
 
 export default function ManualModeModal({ 
   visible, 
   onClose, 
   onChangeMode, 
-  onEmergency
+  onEmergency,
+  communicatingDoors,
+  onCommunicate
 }: ManualModeModalProps) {
   const { width = 0 } = useWindowDimensions();
   const isSmallTablet = width < 900;
@@ -23,8 +27,8 @@ export default function ManualModeModal({
 
   const { controlDoor } = useDoorControl();
 
-  const handleCommunicate = (doorName: string) => {
-    console.log(`📞 Comunicar con ${doorName}`);
+  const handleCommunicate = (doorId: string, doorName: string) => {
+    onCommunicate(doorId, doorName);
   };
 
   const handleOpenDoor = async (doorId: 'P1' | 'P2', doorName: string) => {
