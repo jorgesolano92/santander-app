@@ -116,21 +116,20 @@ export default function ModeSelectionModal({ visible, onClose, onModeSelect }: M
             countdownIntervalRef.current = null;
           }
           setIsCountdownActive(false);
-          // Obtener el modo seleccionado y activarlo
-          const selectedModeOption = modeOptions.find(mode => mode.id === selectedMode);
-          if (selectedModeOption) {
-            const modeMap: { [key: string]: string } = {
-              'comercial_automatico': 'COMERCIAL AUTOMÁTICO',
-              'comercial_esclusa': 'COMERCIAL ESCLUSA',
-              'horario_extendido': 'HORARIO EXTENDIDO',
-              'horario_autoservicio': 'AUTOSERVICIO',
-              'oficina_cerrada': 'OFICINA CERRADA',
-              'carga_cajero': 'CARGA DE CAJERO',
-              'manual': 'MANUAL'
-            };
-            const targetMode = modeMap[selectedMode] || selectedMode;
-            onModeSelect(targetMode);
-          }
+          
+          // Mapear el ID del modo a un texto descriptivo
+          const modeMap: { [key: string]: string } = {
+            'comercial_automatico': 'COMERCIAL AUTOMÁTICO',
+            'comercial_esclusa': 'COMERCIAL ESCLUSA',
+            'horario_extendido': 'HORARIO EXTENDIDO',
+            'horario_autoservicio': 'AUTOSERVICIO',
+            'oficina_cerrada': 'OFICINA CERRADA',
+            'carga_cajero': 'CARGA DE CAJERO',
+            'manual': 'MANUAL'
+          };
+          
+          const targetMode = modeMap[selectedMode] || selectedMode;
+          onModeSelect(targetMode);
           return 0;
         }
         return prev - 1;
@@ -200,7 +199,19 @@ export default function ModeSelectionModal({ visible, onClose, onModeSelect }: M
     }
     setIsCountdownActive(false);
     
-    onModeSelect(selectedMode);
+    // Mapear el ID del modo a un texto descriptivo
+    const modeMap: { [key: string]: string } = {
+      'comercial_automatico': 'COMERCIAL AUTOMÁTICO',
+      'comercial_esclusa': 'COMERCIAL ESCLUSA',
+      'horario_extendido': 'HORARIO EXTENDIDO',
+      'horario_autoservicio': 'AUTOSERVICIO',
+      'oficina_cerrada': 'OFICINA CERRADA',
+      'carga_cajero': 'CARGA DE CAJERO',
+      'manual': 'MANUAL'
+    };
+    
+    const targetMode = modeMap[selectedMode] || selectedMode;
+    onModeSelect(targetMode);
   };
 
   const handleClose = () => {
