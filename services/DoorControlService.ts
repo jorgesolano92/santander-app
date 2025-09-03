@@ -813,5 +813,8 @@ class DoorControlService {
   }
 }
 
-// Export the class for instantiation
-export { DoorControlService };
+// Create and export singleton instance
+const doorControlService = new DoorControlService();
+
+// Export both the class and singleton instance
+export { DoorControlService, doorControlService };

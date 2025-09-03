@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { DoorControlService, ConfigurationData, SystemStatus } from '../services/DoorControlService';
+import { doorControlService, ConfigurationData, SystemStatus } from '../services/DoorControlService';
 
 export interface UseDoorControlReturn {
   systemStatus: SystemStatus | null;
@@ -15,13 +15,17 @@ export interface UseDoorControlReturn {
   controlDoor: (doorId: string, action: 'open' | 'close') => Promise<boolean>;
 }
 
-// Create a singleton instance
 export function useDoorControl(): UseDoorControlReturn {
   const [systemStatus, setSystemStatus] = useState<SystemStatus | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [connectionStatus, setConnectionStatus] = useState<'connected' | 'disconnected' | 'connecting'>('disconnected');
   const [currentScheduleMode, setCurrentScheduleMode] = useState<string | null>(null);
+
+  // Initialize sandbox mode on mount
+  useEffect(() => {
+    doorControlService.setSandboxMode(true);
+  }, []);
 
   const updateSystemStatus = useCallback(async () => {
     try {
