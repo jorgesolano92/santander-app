@@ -16,6 +16,7 @@ interface SavedConfiguration {
   };
   officeWithATM: boolean;
 }
+
 export function useDoorControl() {
   const isMounted = useRef(false);
   const [systemStatus, setSystemStatus] = useState<SystemStatus | null>(null);
@@ -45,10 +46,8 @@ export function useDoorControl() {
         const time2 = h2 * 60 + m2;
         
         if (time1 <= time2) {
-          // Rango normal (ej: 08:00 - 14:00)
           return timeNow >= time1 && timeNow <= time2;
         } else {
-          // Rango que cruza medianoche (ej: 22:00 - 08:00)
           return timeNow >= time1 || timeNow <= time2;
         }
       };
@@ -70,46 +69,28 @@ export function useDoorControl() {
         return 'OFICINA CERRADA';
       }
       
-      // Por defecto, oficina cerrada
       return 'OFICINA CERRADA';
       
     } catch (error) {
-      console.error('Error determining schedule mode:', error);
       return null;
     }
   }, []);
 
-  // Verificar y aplicar modo automático según horario
-  const checkAndApplyScheduleMode = useCallback(async (changeModeFunction?: (mode: string) => Promise<boolean>) => {
-    const scheduledMode = await determineScheduleMode();
-    if (scheduledMode && scheduledMode !== currentScheduleMode && isMounted.current) {
-      console.log(`🕐 Modo automático por horario: ${scheduledMode}`);
-      setCurrentScheduleMode(scheduledMode);
-      
-      // Solo aplicar si no hay modo de emergencia activo
-      if (!systemStatus?.emergencyActive && changeModeFunction) {
-        await changeModeFunction(scheduledMode);
-      }
-    }
-  }, [currentScheduleMode, systemStatus?.emergencyActive, determineScheduleMode]);
-
   // Obtener estado del sistema
   const refreshStatus = useCallback(async () => {
+    if (!isMounted.current) return;
+    
     try {
       setIsLoading(true);
       setError(null);
       
       const status = await doorControlService.getSystemStatus();
-      if (status) {
-        if (isMounted.current) {
-          setSystemStatus(status);
-          setConnectionStatus(status.connectionStatus);
-        }
-      } else {
-        if (isMounted.current) {
-          setConnectionStatus('offline');
-          setError('No se pudo obtener el estado del sistema');
-        }
+      if (status && isMounted.current) {
+        setSystemStatus(status);
+        setConnectionStatus(status.connectionStatus);
+      } else if (isMounted.current) {
+        setConnectionStatus('offline');
+        setError('No se pudo obtener el estado del sistema');
       }
     } catch (err) {
       if (isMounted.current) {
@@ -125,23 +106,21 @@ export function useDoorControl() {
 
   // Cambiar modo de operación
   const changeMode = useCallback(async (mode: string): Promise<boolean> => {
+    if (!isMounted.current) return false;
+    
     try {
-      if (isMounted.current) {
-        setIsLoading(true);
-        setError(null);
-      }
+      setIsLoading(true);
+      setError(null);
       
       const success = await doorControlService.changeMode(mode);
-      if (success) {
-        // Actualizar estado después del cambio
+      if (success && isMounted.current) {
         await refreshStatus();
         return true;
-      } else {
-        if (isMounted.current) {
-          setError('Error al cambiar el modo de operación');
-        }
+      } else if (isMounted.current) {
+        setError('Error al cambiar el modo de operación');
         return false;
       }
+      return false;
     } catch (err) {
       if (isMounted.current) {
         setError(err instanceof Error ? err.message : 'Error al cambiar modo');
@@ -156,23 +135,21 @@ export function useDoorControl() {
 
   // Activar/Desactivar emergencia
   const toggleEmergency = useCallback(async (activate: boolean): Promise<boolean> => {
+    if (!isMounted.current) return false;
+    
     try {
-      if (isMounted.current) {
-        setIsLoading(true);
-        setError(null);
-      }
+      setIsLoading(true);
+      setError(null);
       
       const success = await doorControlService.toggleEmergencyMode(activate);
-      if (success) {
-        // Actualizar estado después del cambio
+      if (success && isMounted.current) {
         await refreshStatus();
         return true;
-      } else {
-        if (isMounted.current) {
-          setError(`Error al ${activate ? 'activar' : 'desactivar'} modo emergencia`);
-        }
+      } else if (isMounted.current) {
+        setError(`Error al ${activate ? 'activar' : 'desactivar'} modo emergencia`);
         return false;
       }
+      return false;
     } catch (err) {
       if (isMounted.current) {
         setError(err instanceof Error ? err.message : 'Error en modo emergencia');
@@ -187,23 +164,21 @@ export function useDoorControl() {
 
   // Control manual de puertas
   const controlDoor = useCallback(async (doorId: 'P1' | 'P2' | 'P3' | 'P4', action: 'open' | 'close'): Promise<boolean> => {
+    if (!isMounted.current) return false;
+    
     try {
-      if (isMounted.current) {
-        setIsLoading(true);
-        setError(null);
-      }
+      setIsLoading(true);
+      setError(null);
       
       const success = await doorControlService.controlDoor(doorId, action);
-      if (success) {
-        // Actualizar estado después del control
+      if (success && isMounted.current) {
         await refreshStatus();
         return true;
-      } else {
-        if (isMounted.current) {
-          setError(`Error al ${action === 'open' ? 'abrir' : 'cerrar'} la puerta ${doorId}`);
-        }
+      } else if (isMounted.current) {
+        setError(`Error al ${action === 'open' ? 'abrir' : 'cerrar'} la puerta ${doorId}`);
         return false;
       }
+      return false;
     } catch (err) {
       if (isMounted.current) {
         setError(err instanceof Error ? err.message : 'Error controlando puerta');
@@ -218,22 +193,21 @@ export function useDoorControl() {
 
   // Configurar sistema
   const configure = useCallback(async (config: ConfigurationData): Promise<boolean> => {
+    if (!isMounted.current) return false;
+    
     try {
-      if (isMounted.current) {
-        setIsLoading(true);
-        setError(null);
-      }
+      setIsLoading(true);
+      setError(null);
       
       const success = await doorControlService.setConfiguration(config);
-      if (success) {
+      if (success && isMounted.current) {
         await refreshStatus();
         return true;
-      } else {
-        if (isMounted.current) {
-          setError('Error al configurar la conexión');
-        }
+      } else if (isMounted.current) {
+        setError('Error al configurar la conexión');
         return false;
       }
+      return false;
     } catch (err) {
       if (isMounted.current) {
         setError(err instanceof Error ? err.message : 'Error de configuración');
@@ -270,31 +244,59 @@ export function useDoorControl() {
     }
   }, []);
 
-  // Efecto para cargar estado inicial
+  // Verificar y aplicar modo automático según horario
+  const checkAndApplyScheduleMode = useCallback(async () => {
+    if (!isMounted.current) return;
+    
+    try {
+      const scheduledMode = await determineScheduleMode();
+      if (scheduledMode && scheduledMode !== currentScheduleMode && isMounted.current) {
+        setCurrentScheduleMode(scheduledMode);
+        
+        // Solo aplicar si no hay modo de emergencia activo
+        if (!systemStatus?.emergencyActive) {
+          await changeMode(scheduledMode);
+        }
+      }
+    } catch (error) {
+      // Silenciar errores de horario para no interrumpir la app
+    }
+  }, [currentScheduleMode, systemStatus?.emergencyActive, determineScheduleMode, changeMode]);
+
+  // Efecto para cargar estado inicial y configurar intervalos
   useEffect(() => {
     isMounted.current = true;
     
+    // Cargar estado inicial
     refreshStatus();
     
     // Actualizar estado cada 10 segundos
-    const interval = setInterval(refreshStatus, 10000);
+    const statusInterval = setInterval(() => {
+      if (isMounted.current) {
+        refreshStatus();
+      }
+    }, 10000);
     
     // Verificar horarios cada minuto
-    const scheduleInterval = setInterval(() => checkAndApplyScheduleMode(changeMode), 60000);
+    const scheduleInterval = setInterval(() => {
+      if (isMounted.current) {
+        checkAndApplyScheduleMode();
+      }
+    }, 60000);
     
     return () => {
       isMounted.current = false;
-      clearInterval(interval);
+      clearInterval(statusInterval);
       clearInterval(scheduleInterval);
     };
-  }, [refreshStatus, changeMode, checkAndApplyScheduleMode]);
+  }, []);
 
-  // Efecto separado para la verificación inicial de horarios
+  // Efecto separado para verificación inicial de horarios
   useEffect(() => {
-    if (isMounted.current) {
-      checkAndApplyScheduleMode(changeMode);
+    if (isMounted.current && systemStatus) {
+      checkAndApplyScheduleMode();
     }
-  }, [checkAndApplyScheduleMode, changeMode]);
+  }, [systemStatus]);
 
   return {
     systemStatus,
