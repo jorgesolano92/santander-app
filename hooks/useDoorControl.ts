@@ -91,7 +91,7 @@ export function useDoorControl() {
         await changeMode(scheduledMode);
       }
     }
-  }, [currentScheduleMode, systemStatus?.emergencyActive]);
+  }, [currentScheduleMode, systemStatus?.emergencyActive, changeMode]);
   // Obtener estado del sistema
   const refreshStatus = useCallback(async () => {
     try {

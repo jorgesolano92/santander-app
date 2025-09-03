@@ -77,7 +77,7 @@ export default function MainScreen() {
   // Mostrar información del modo automático por horario
   useEffect(() => {
     if (currentScheduleMode) {
-      console.log(`📅 Modo sugerido por horario: ${currentScheduleMode}`);
+      // console.log(`📅 Modo sugerido por horario: ${currentScheduleMode}`);
     }
   }, [currentScheduleMode]);
 
@@ -86,17 +86,17 @@ export default function MainScreen() {
     const checkDevice = async () => {
       const isValid = await validateDevice();
       if (!isValid) {
-        console.error('🚫 Dispositivo no autorizado');
+        // console.error('🚫 Dispositivo no autorizado');
         // En producción, aquí mostrarías un error y cerrarías la app
       } else {
-        console.log('✅ Dispositivo autorizado - Modo Sandbox Activo');
+        // console.log('✅ Dispositivo autorizado - Modo Sandbox Activo');
       }
     };
     checkDevice();
   }, [validateDevice]);
 
   const handleConfigSave = async (config: any) => {
-    console.log('💾 Configuración guardada (Sandbox):', config);
+    // console.log('💾 Configuración guardada (Sandbox):', config);
     
     // Configurar el servicio con los datos reales
     const configData = {
@@ -110,9 +110,9 @@ export default function MainScreen() {
     
     const success = await configure(configData);
     if (success) {
-      console.log('✅ Configuración aplicada correctamente (Sandbox)');
+      // console.log('✅ Configuración aplicada correctamente (Sandbox)');
     } else {
-      console.error('❌ Error aplicando configuración');
+      // console.error('❌ Error aplicando configuración');
     }
   };
 
