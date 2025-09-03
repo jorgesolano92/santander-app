@@ -92,7 +92,7 @@ export default function ModeSelectionModal({ visible, onClose, onModeSelect }: M
   const [countdown, setCountdown] = useState<number>(30);
   const [isCountdownActive, setIsCountdownActive] = useState<boolean>(false);
   const [showCargaCajero, setShowCargaCajero] = useState<boolean>(false);
-  const countdownIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const countdownIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // Función para iniciar/reiniciar el contador
   const startCountdown = useCallback(() => {
@@ -117,25 +117,14 @@ export default function ModeSelectionModal({ visible, onClose, onModeSelect }: M
           }
           setIsCountdownActive(false);
           
-          // Mapear el ID del modo a un texto descriptivo
-          const modeMap: { [key: string]: string } = {
-            'comercial_automatico': 'COMERCIAL AUTOMÁTICO',
-            'comercial_esclusa': 'COMERCIAL ESCLUSA',
-            'horario_extendido': 'HORARIO EXTENDIDO',
-            'horario_autoservicio': 'AUTOSERVICIO',
-            'oficina_cerrada': 'OFICINA CERRADA',
-            'carga_cajero': 'CARGA DE CAJERO',
-            'manual': 'MANUAL'
-          };
-          
-          const targetMode = modeMap[selectedMode] || selectedMode;
-          onModeSelect(targetMode);
+          // Activar el modo seleccionado
+          onModeSelect(selectedMode);
           return 0;
         }
         return prev - 1;
       });
     }, 1000);
-  }, [selectedMode, onModeSelect, onClose]);
+  }, [selectedMode, onModeSelect]);
 
   // Cargar configuración para determinar si mostrar Carga de Cajero
   const loadConfiguration = useCallback(async () => {
@@ -199,19 +188,8 @@ export default function ModeSelectionModal({ visible, onClose, onModeSelect }: M
     }
     setIsCountdownActive(false);
     
-    // Mapear el ID del modo a un texto descriptivo
-    const modeMap: { [key: string]: string } = {
-      'comercial_automatico': 'COMERCIAL AUTOMÁTICO',
-      'comercial_esclusa': 'COMERCIAL ESCLUSA',
-      'horario_extendido': 'HORARIO EXTENDIDO',
-      'horario_autoservicio': 'AUTOSERVICIO',
-      'oficina_cerrada': 'OFICINA CERRADA',
-      'carga_cajero': 'CARGA DE CAJERO',
-      'manual': 'MANUAL'
-    };
-    
-    const targetMode = modeMap[selectedMode] || selectedMode;
-    onModeSelect(targetMode);
+    // Activar el modo seleccionado
+    onModeSelect(selectedMode);
   };
 
   const handleClose = () => {
@@ -429,12 +407,15 @@ export default function ModeSelectionModal({ visible, onClose, onModeSelect }: M
       shadowOpacity: 0.2,
       shadowRadius: 8,
       elevation: 4,
+      alignItems: 'center',
+      justifyContent: 'center',
     },
     activateButtonText: {
       fontSize: 16,
       fontWeight: '700',
       color: '#FFFFFF',
       letterSpacing: 1,
+      textAlign: 'center',
     },
     footerText: {
       fontSize: 12,
