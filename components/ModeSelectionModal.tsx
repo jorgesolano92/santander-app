@@ -102,7 +102,7 @@ export default function ModeSelectionModal({ visible, onClose, onModeSelect }: M
   const [countdown, setCountdown] = useState<number>(30);
   const [isCountdownActive, setIsCountdownActive] = useState<boolean>(false);
   const [showCargaCajero, setShowCargaCajero] = useState<boolean>(false);
-  const countdownIntervalRef = useRef<number | null>(null);
+  const countdownIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
 
   // Cargar configuración para determinar si mostrar Carga de Cajero
@@ -151,9 +151,10 @@ export default function ModeSelectionModal({ visible, onClose, onModeSelect }: M
     // Iniciar nuevo temporizador
     countdownIntervalRef.current = setInterval(() => {
       setCountdown(prev => {
-        console.log(`⏰ Contador: ${prev - 1}`);
+        const newValue = prev - 1;
+        console.log(`⏰ Contador: ${newValue}`);
         
-        if (prev <= 1) {
+        if (newValue <= 0) {
           console.log('⏰ Contador llegó a 0 - Auto-activando modo');
           
           // Limpiar temporizador
@@ -172,9 +173,9 @@ export default function ModeSelectionModal({ visible, onClose, onModeSelect }: M
           
           return 0;
         }
-        return prev - 1;
+        return newValue;
       });
-    }, 1000) as unknown as number;
+    }, 1000);
   }, [selectedMode, onModeSelect, clearCountdownTimer]);
   // Iniciar cuenta atrás cuando se abre el modal
   useEffect(() => {
