@@ -686,29 +686,30 @@ export default function MainScreen() {
     },
     doorControlsContainer: {
       flexDirection: 'row',
-      gap: isSmallTablet ? 16 : isLargeTablet ? 32 : 24,
-      marginBottom: isSmallTablet ? 20 : isLargeTablet ? 32 : 24,
+      flexDirection: isSmallTablet ? 'column' : 'row',
+      gap: isSmallTablet ? 12 : isLargeTablet ? 32 : 24,
+      marginBottom: isSmallTablet ? 16 : isLargeTablet ? 32 : 24,
       justifyContent: 'center',
-      flexWrap: isSmallTablet ? 'wrap' : 'nowrap',
+      alignItems: isSmallTablet ? 'stretch' : 'flex-start',
     },
     doorControlSection: {
-      flex: isSmallTablet ? 0 : 1,
-      width: isSmallTablet ? '100%' : 'auto',
-      maxWidth: isSmallTablet ? '100%' : isLargeTablet ? 400 : 350,
-      minWidth: isSmallTablet ? 280 : isLargeTablet ? 320 : 300,
+      flex: 1,
+      width: '100%',
+      maxWidth: isSmallTablet ? '100%' : isLargeTablet ? 450 : 400,
+      minWidth: isSmallTablet ? '100%' : isLargeTablet ? 350 : 320,
     },
     doorControlTitle: {
       fontSize: isSmallTablet ? 16 : isLargeTablet ? 20 : 18,
       fontWeight: '700',
       color: '#212529',
-      marginBottom: isSmallTablet ? 12 : isLargeTablet ? 16 : 14,
+      marginBottom: isSmallTablet ? 8 : isLargeTablet ? 16 : 12,
       letterSpacing: 0.3,
       textAlign: 'center',
     },
     doorControlCard: {
       backgroundColor: '#FFFFFF',
       borderRadius: 12,
-      padding: isSmallTablet ? 16 : isLargeTablet ? 24 : 20,
+      padding: isSmallTablet ? 12 : isLargeTablet ? 24 : 18,
       alignItems: 'center',
       shadowColor: '#000',
       shadowOffset: { width: 0, height: 4 },
@@ -719,44 +720,44 @@ export default function MainScreen() {
       borderColor: '#E9ECEF',
     },
     doorControlImagePlaceholder: {
-      width: isSmallTablet ? 200 : isLargeTablet ? 260 : 230,
-      height: isSmallTablet ? 150 : isLargeTablet ? 195 : 172,
+      width: isSmallTablet ? 160 : isLargeTablet ? 260 : 220,
+      height: isSmallTablet ? 120 : isLargeTablet ? 195 : 165,
       backgroundColor: '#E9ECEF',
       borderRadius: 12,
-      marginBottom: isSmallTablet ? 16 : isLargeTablet ? 24 : 20,
+      marginBottom: isSmallTablet ? 12 : isLargeTablet ? 20 : 16,
       justifyContent: 'center',
       alignItems: 'center',
       alignSelf: 'center',
     },
     cameraIcon: {
-      width: isSmallTablet ? 40 : isLargeTablet ? 60 : 50,
-      height: isSmallTablet ? 30 : isLargeTablet ? 45 : 37,
+      width: isSmallTablet ? 32 : isLargeTablet ? 60 : 50,
+      height: isSmallTablet ? 24 : isLargeTablet ? 45 : 37,
       backgroundColor: '#CED4DA',
       borderRadius: 6,
       justifyContent: 'center',
       alignItems: 'center',
-      marginBottom: isSmallTablet ? 8 : isLargeTablet ? 12 : 10,
+      marginBottom: isSmallTablet ? 6 : isLargeTablet ? 12 : 8,
     },
     cameraIconInner: {
-      width: isSmallTablet ? 20 : isLargeTablet ? 30 : 25,
-      height: isSmallTablet ? 15 : isLargeTablet ? 22 : 18,
+      width: isSmallTablet ? 16 : isLargeTablet ? 30 : 25,
+      height: isSmallTablet ? 12 : isLargeTablet ? 22 : 18,
       backgroundColor: '#ADB5BD',
       borderRadius: 4,
     },
     doorControlButtons: {
-      gap: isSmallTablet ? 8 : isLargeTablet ? 12 : 10,
+      gap: isSmallTablet ? 6 : isLargeTablet ? 12 : 8,
       width: '100%',
-      paddingHorizontal: isSmallTablet ? 8 : 0,
+      paddingHorizontal: isSmallTablet ? 4 : 0,
     },
     doorControlButton: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',
       backgroundColor: '#E9ECEF',
-      paddingVertical: isSmallTablet ? 12 : isLargeTablet ? 16 : 14,
-      paddingHorizontal: isSmallTablet ? 16 : isLargeTablet ? 24 : 20,
+      paddingVertical: isSmallTablet ? 10 : isLargeTablet ? 16 : 13,
+      paddingHorizontal: isSmallTablet ? 12 : isLargeTablet ? 24 : 18,
       borderRadius: 8,
-      gap: 6,
+      gap: isSmallTablet ? 4 : 6,
       borderWidth: 1,
       borderColor: '#CED4DA',
       shadowColor: '#000',
@@ -783,7 +784,7 @@ export default function MainScreen() {
       opacity: 0.6,
     },
     doorControlButtonText: {
-      fontSize: isSmallTablet ? 13 : isLargeTablet ? 16 : 14,
+      fontSize: isSmallTablet ? 11 : isLargeTablet ? 16 : 13,
       fontWeight: '600',
       color: '#495057',
       letterSpacing: 0.5,
@@ -791,14 +792,13 @@ export default function MainScreen() {
     // Estilos adicionales para modo manual responsivo
     manualModeContainer: {
       flex: 1,
-      padding: isSmallTablet ? 12 : isLargeTablet ? 32 : 24,
+      paddingHorizontal: isSmallTablet ? 8 : isLargeTablet ? 32 : 24,
+      paddingVertical: isSmallTablet ? 8 : isLargeTablet ? 24 : 16,
     },
     manualModeContent: {
       flex: 1,
-      maxWidth: isSmallTablet ? '100%' : 1200,
+      maxWidth: '100%',
       alignSelf: 'center',
-      width: '100%',
-    },
   });
 
   return (
@@ -932,10 +932,10 @@ export default function MainScreen() {
         /* Manual Mode View - Inline */
         <View style={styles.manualModeContainer}>
           <View style={styles.manualModeContent}>
-            <View style={styles.logoSection}>
+            <View style={styles.manualModeLogoSection}>
               <Image 
                 source={require('@/assets/images/banco-santander-seeklogo.png')}
-                style={styles.santanderLogo}
+                style={styles.manualModeSantanderLogo}
                 resizeMode="contain"
               />
             </View>
