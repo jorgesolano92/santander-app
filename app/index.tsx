@@ -919,47 +919,6 @@ export default function MainScreen() {
             </TouchableOpacity>
           </View>
         </View>
-      ) : isManualMode ? (
-        /* Manual Mode View - Use Modal */
-        <View style={styles.mainContent}>
-          <View style={styles.logoSection}>
-            <Image 
-              source={require('@/assets/images/banco-santander-seeklogo.png')}
-              style={styles.santanderLogo}
-              resizeMode="contain"
-            />
-          </View>
-
-          <View style={styles.modeCard}>
-            <View style={styles.modeContent}>
-              <Text style={styles.modeTitle}>Modo de Operación Actual: {currentMode}</Text>
-              <Text style={styles.modeDescription}>
-                Modo manual activado. Use los controles para gestionar las puertas individualmente.
-              </Text>
-            </View>
-            <TouchableOpacity 
-              style={styles.changeModeButton}
-              onPress={() => setShowModeModal(true)}
-            >
-              <Text style={styles.changeModeButtonText}>CAMBIAR MODO</Text>
-            </TouchableOpacity>
-          </View>
-
-          <View style={styles.bottomButtons}>
-            <TouchableOpacity 
-              style={styles.emergencyButton}
-              onPress={handleEmergencyToggle}
-            >
-              <Text style={styles.emergencyButtonText}>EMERGENCIA</Text>
-            </TouchableOpacity>
-            <TouchableOpacity 
-              style={styles.visualizationButton}
-              onPress={() => setShowManualModeModal(true)}
-            >
-              <Text style={styles.visualizationButtonText}>CONTROL MANUAL</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
       ) : (
         <View style={styles.mainContent}>
           <View style={styles.logoSection}>
