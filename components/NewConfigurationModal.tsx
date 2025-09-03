@@ -29,6 +29,11 @@ interface ConfigurationData {
     netmask: string;
     gateway: string;
   };
+  api: {
+    port: number;
+    username: string;
+    password: string;
+  };
   schedules: {
     comercial: ScheduleConfig;
     extendido: ScheduleConfig;
@@ -55,6 +60,11 @@ export default function NewConfigurationModal({ visible, onClose, onSave }: NewC
       consoleIP: '192.168.1.25',
       netmask: '255.255.255.0',
       gateway: '192.168.1.1',
+    },
+    api: {
+      port: 443,
+      username: 'Scati2023',
+      password: 'Scati2023',
     },
     schedules: {
       comercial: { ini1: '08:00', ini2: '14:00' },
@@ -102,6 +112,12 @@ export default function NewConfigurationModal({ visible, onClose, onSave }: NewC
       username: 'admin', // Usuario por defecto
       password: '123456', // Password por defecto  
       officeNumber: '1234', // Número de oficina por defecto
+      serverIP: config.network.consoleIP,
+      apiPort: config.api.port,
+      apiUsername: config.api.username,
+      apiPassword: config.api.password,
+      updateServerURL: 'http://192.168.1.200/updates',
+      deviceId: 'device_id_placeholder',
       ...config // Spread de toda la configuración
     };
     
@@ -123,6 +139,12 @@ export default function NewConfigurationModal({ visible, onClose, onSave }: NewC
     }));
   };
 
+  const updateApi = (field: keyof typeof config.api, value: string | number) => {
+    setConfig(prev => ({
+      ...prev,
+      api: { ...prev.api, [field]: value }
+    }));
+  };
   const updateSchedule = (type: keyof typeof config.schedules, field: keyof ScheduleConfig, value: string) => {
     setConfig(prev => ({
       ...prev,
@@ -615,6 +637,44 @@ export default function NewConfigurationModal({ visible, onClose, onSave }: NewC
                   >
                     <Wifi size={12} color="#FFFFFF" />
                   </TouchableOpacity>
+                </View>
+              </View>
+              
+              {/* Configuración API */}
+              <Text style={[styles.sectionTitle, { marginTop: 16 }]}>CONFIGURACIÓN API</Text>
+              <View style={styles.networkCard}>
+                <View style={styles.networkRow}>
+                  <Text style={styles.networkLabel}>Puerto:</Text>
+                  <TextInput
+                    style={styles.networkInput}
+                    value={config.api.port.toString()}
+                    onChangeText={(text) => updateApi('port', parseInt(text) || 443)}
+                    placeholder="443"
+                    keyboardType="numeric"
+                  />
+                </View>
+                
+                <View style={styles.networkRow}>
+                  <Text style={styles.networkLabel}>Usuario:</Text>
+                  <TextInput
+                    style={styles.networkInput}
+                    value={config.api.username}
+                    onChangeText={(text) => updateApi('username', text)}
+                    placeholder="Scati2023"
+                    autoCapitalize="none"
+                  />
+                </View>
+                
+                <View style={styles.networkRow}>
+                  <Text style={styles.networkLabel}>Contraseña:</Text>
+                  <TextInput
+                    style={styles.networkInput}
+                    value={config.api.password}
+                    onChangeText={(text) => updateApi('password', text)}
+                    placeholder="Scati2023"
+                    autoCapitalize="none"
+                    secureTextEntry={true}
+                  />
                 </View>
               </View>
             </View>

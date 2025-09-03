@@ -71,8 +71,9 @@ export interface ModeChangeRequest {
 
 export interface ConfigurationData {
   serverIP: string;
-  serverPort: number;
-  authToken: string;
+  apiPort: number;
+  apiUsername: string;
+  apiPassword: string;
   username: string;
   updateServerURL: string;
   deviceId: string;
@@ -80,7 +81,8 @@ export interface ConfigurationData {
 
 class DoorControlService {
   private baseURL: string = '';
-  private authToken: string = '';
+  private apiUsername: string = '';
+  private apiPassword: string = '';
   private config: ConfigurationData | null = null;
   private connectionStatus: 'online' | 'offline' = 'offline';
   private statusCheckInterval: NodeJS.Timeout | null = null;
@@ -197,8 +199,9 @@ class DoorControlService {
       }
 
       this.config = config;
-      this.baseURL = `http://${config.serverIP}:${config.serverPort}`;
-      this.authToken = config.authToken;
+      this.baseURL = `https://${config.serverIP}:${config.apiPort}`;
+      this.apiUsername = config.apiUsername;
+      this.apiPassword = config.apiPassword;
       
       // Guardar configuración localmente
       await this.saveConfiguration(config);
@@ -212,6 +215,13 @@ class DoorControlService {
       console.error('Error setting configuration:', error);
       return false;
     }
+  }
+
+  // Generar header de autenticación BASIC
+  private getBasicAuthHeader(): string {
+    const credentials = `${this.apiUsername}:${this.apiPassword}`;
+    const encoded = btoa(credentials); // Base64 encoding
+    return `Basic ${encoded}`;
   }
 
   // Obtener estado actual del sistema
@@ -229,15 +239,14 @@ class DoorControlService {
 
       // Usar la API real del cliente
       const mSecCambio = Date.now() - this.lastChangeTime;
-      const apiUrl = `${this.baseURL}/API2/gettags?mSecCambio=${mSecCambio}&id=${this.lastEventId}`;
+      const apiUrl = `${this.baseURL}/gettags?mSecCambio=${mSecCambio}&id=${this.lastEventId}`;
       
       const response = await fetch(apiUrl, {
         method: 'GET',
         headers: {
-          'Authorization': `Bearer ${this.authToken}`,
+          'Authorization': this.getBasicAuthHeader(),
           'Content-Type': 'application/json',
         },
-        timeout: 5000,
       });
 
       if (!response.ok) {
@@ -336,7 +345,7 @@ class DoorControlService {
     };
 
     // Mapeo de salidas digitales a puertas
-    // Asumiendo que las primeras salidas controlan las puertas principales
+    // Basado en el ejemplo de respuesta de la API
     const doorOutputs = {
       P1: ['smcse_do_01_01_01', 'smcse_do_01_01_02'], // Puerta Calle
       P2: ['smcse_do_01_01_03', 'smcse_do_01_01_04'], // Puerta Oficina
@@ -350,8 +359,8 @@ class DoorControlService {
       
       if (doorTags.length > 0) {
         // Determinar estado basado en las salidas
-        const hasActiveOutput = doorTags.some(tag => tag.St === 1001); // 1001 = encendida
-        const hasOpenCommand = doorTags.some(tag => tag.v === '1001');
+        const hasActiveOutput = doorTags.some(tag => tag.St === 1); // 1 = activo
+        const hasOpenCommand = doorTags.some(tag => tag.v === '1'); // '1' = comando activo
         
         if (hasActiveOutput || hasOpenCommand) {
           doors[doorKey].status = 'open';
@@ -389,15 +398,14 @@ class DoorControlService {
         return null;
       }
 
-      const apiUrl = `${this.baseURL}/API2/gettags?mSecCambio=${mSecCambio}&id=${eventId}`;
+      const apiUrl = `${this.baseURL}/gettags?mSecCambio=${mSecCambio}&id=${eventId}`;
       
       const response = await fetch(apiUrl, {
         method: 'GET',
         headers: {
-          'Authorization': `Bearer ${this.authToken}`,
+          'Authorization': this.getBasicAuthHeader(),
           'Content-Type': 'application/json',
         },
-        timeout: 5000,
       });
 
       if (!response.ok) {
@@ -462,11 +470,10 @@ class DoorControlService {
       const response = await fetch(`${this.baseURL}/api/modo`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${this.authToken}`,
+          'Authorization': this.getBasicAuthHeader(),
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(modeRequest),
-        timeout: 10000,
       });
 
       if (!response.ok) {
@@ -537,11 +544,10 @@ class DoorControlService {
       const response = await fetch(`${this.baseURL}/api/emergencia`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${this.authToken}`,
+          'Authorization': this.getBasicAuthHeader(),
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(emergencyRequest),
-        timeout: 10000,
       });
 
       if (!response.ok) {
@@ -612,11 +618,10 @@ class DoorControlService {
       const response = await fetch(`${this.baseURL}/api/control`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${this.authToken}`,
+          'Authorization': this.getBasicAuthHeader(),
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(controlRequest),
-        timeout: 10000,
       });
 
       if (!response.ok) {
@@ -726,8 +731,9 @@ class DoorControlService {
       if (configStr) {
         this.config = JSON.parse(configStr);
         if (this.config) {
-          this.baseURL = `http://${this.config.serverIP}:${this.config.serverPort}`;
-          this.authToken = this.config.authToken;
+          this.baseURL = `https://${this.config.serverIP}:${this.config.apiPort}`;
+          this.apiUsername = this.config.apiUsername;
+          this.apiPassword = this.config.apiPassword;
         }
       }
     } catch (error) {
@@ -752,9 +758,8 @@ class DoorControlService {
       const response = await fetch(`${this.baseURL}/api/ping`, {
         method: 'GET',
         headers: {
-          'Authorization': `Bearer ${this.authToken}`,
+          'Authorization': this.getBasicAuthHeader(),
         },
-        timeout: 3000,
       });
       return response.ok;
     } catch (error) {
