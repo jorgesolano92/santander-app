@@ -511,14 +511,14 @@ export default function MainScreen() {
     },
     bottomButtons: {
       flexDirection: 'row',
-      gap: 16,
-      marginBottom: 16,
-      paddingHorizontal: isSmallTablet ? 16 : 0,
+      gap: isSmallTablet ? 12 : isLargeTablet ? 24 : 18,
+      marginBottom: isSmallTablet ? 12 : isLargeTablet ? 24 : 18,
+      paddingHorizontal: isSmallTablet ? 8 : 0,
     },
     emergencyButton: {
       flex: 1,
       backgroundColor: '#EC1C24',
-      paddingVertical: 16,
+      paddingVertical: isSmallTablet ? 12 : isLargeTablet ? 20 : 16,
       borderRadius: 12,
       alignItems: 'center',
       justifyContent: 'center',
@@ -529,7 +529,7 @@ export default function MainScreen() {
       elevation: 6,
     },
     emergencyButtonText: {
-      fontSize: 15,
+      fontSize: isSmallTablet ? 12 : isLargeTablet ? 18 : 14,
       fontWeight: '700',
       color: '#FFFFFF',
       letterSpacing: 1,
@@ -537,7 +537,7 @@ export default function MainScreen() {
     visualizationButton: {
       flex: 1,
       backgroundColor: '#495057',
-      paddingVertical: 16,
+      paddingVertical: isSmallTablet ? 12 : isLargeTablet ? 20 : 16,
       borderRadius: 12,
       alignItems: 'center',
       justifyContent: 'center',
@@ -548,7 +548,7 @@ export default function MainScreen() {
       elevation: 4,
     },
     visualizationButtonText: {
-      fontSize: 15,
+      fontSize: isSmallTablet ? 12 : isLargeTablet ? 18 : 14,
       fontWeight: '700',
       color: '#FFFFFF',
       letterSpacing: 1,
@@ -685,17 +685,16 @@ export default function MainScreen() {
       letterSpacing: 0.5,
     },
     doorControlsContainer: {
-      flexDirection: isSmallTablet ? 'column' : 'row',
-      gap: isSmallTablet ? 12 : isLargeTablet ? 32 : 24,
+      flexDirection: 'row',
+      gap: isSmallTablet ? 16 : isLargeTablet ? 32 : 24,
       marginBottom: isSmallTablet ? 16 : isLargeTablet ? 32 : 24,
       justifyContent: 'center',
-      alignItems: isSmallTablet ? 'stretch' : 'flex-start',
+      alignItems: 'flex-start',
     },
     doorControlSection: {
       flex: 1,
-      width: '100%',
-      maxWidth: isSmallTablet ? '100%' : isLargeTablet ? 450 : 400,
-      minWidth: isSmallTablet ? '100%' : isLargeTablet ? 350 : 320,
+      maxWidth: isSmallTablet ? 320 : isLargeTablet ? 450 : 400,
+      minWidth: isSmallTablet ? 280 : isLargeTablet ? 350 : 320,
     },
     doorControlTitle: {
       fontSize: isSmallTablet ? 16 : isLargeTablet ? 20 : 18,
@@ -719,8 +718,8 @@ export default function MainScreen() {
       borderColor: '#E9ECEF',
     },
     doorControlImagePlaceholder: {
-      width: isSmallTablet ? 160 : isLargeTablet ? 260 : 220,
-      height: isSmallTablet ? 120 : isLargeTablet ? 195 : 165,
+      width: isSmallTablet ? 200 : isLargeTablet ? 260 : 230,
+      height: isSmallTablet ? 150 : isLargeTablet ? 195 : 172,
       backgroundColor: '#E9ECEF',
       borderRadius: 12,
       marginBottom: isSmallTablet ? 12 : isLargeTablet ? 20 : 16,
@@ -744,19 +743,18 @@ export default function MainScreen() {
       borderRadius: 4,
     },
     doorControlButtons: {
-      gap: isSmallTablet ? 6 : isLargeTablet ? 12 : 8,
+      gap: isSmallTablet ? 8 : isLargeTablet ? 12 : 10,
       width: '100%',
-      paddingHorizontal: isSmallTablet ? 4 : 0,
     },
     doorControlButton: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',
       backgroundColor: '#E9ECEF',
-      paddingVertical: isSmallTablet ? 10 : isLargeTablet ? 16 : 13,
+      paddingVertical: isSmallTablet ? 12 : isLargeTablet ? 16 : 14,
       paddingHorizontal: isSmallTablet ? 12 : isLargeTablet ? 24 : 18,
       borderRadius: 8,
-      gap: isSmallTablet ? 4 : 6,
+      gap: isSmallTablet ? 6 : 8,
       borderWidth: 1,
       borderColor: '#CED4DA',
       shadowColor: '#000',
@@ -783,7 +781,7 @@ export default function MainScreen() {
       opacity: 0.6,
     },
     doorControlButtonText: {
-      fontSize: isSmallTablet ? 11 : isLargeTablet ? 16 : 13,
+      fontSize: isSmallTablet ? 12 : isLargeTablet ? 16 : 14,
       fontWeight: '600',
       color: '#495057',
       letterSpacing: 0.5,
@@ -791,8 +789,8 @@ export default function MainScreen() {
     // Estilos adicionales para modo manual responsivo
     manualModeContainer: {
       flex: 1,
-      paddingHorizontal: isSmallTablet ? 8 : isLargeTablet ? 32 : 24,
-      paddingVertical: isSmallTablet ? 8 : isLargeTablet ? 24 : 16,
+      paddingHorizontal: isSmallTablet ? 12 : isLargeTablet ? 32 : 24,
+      paddingVertical: isSmallTablet ? 12 : isLargeTablet ? 24 : 18,
     },
     manualModeContent: {
       flex: 1,
@@ -801,12 +799,12 @@ export default function MainScreen() {
     },
     manualModeLogoSection: {
       alignItems: 'center',
-      marginBottom: isSmallTablet ? 20 : isLargeTablet ? 32 : 24,
-      marginTop: 8,
+      marginBottom: isSmallTablet ? 16 : isLargeTablet ? 32 : 24,
+      marginTop: isSmallTablet ? 4 : isLargeTablet ? 12 : 8,
     },
     manualModeSantanderLogo: {
-      width: isSmallTablet ? 280 : isLargeTablet ? 400 : 340,
-      height: isSmallTablet ? 90 : isLargeTablet ? 130 : 110,
+      width: isSmallTablet ? 240 : isLargeTablet ? 400 : 340,
+      height: isSmallTablet ? 77 : isLargeTablet ? 130 : 110,
     },
   });
 
