@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { DoorControlService, ConfigurationData, SystemStatus, DoorStatus } from '../services/DoorControlService';
+import { DoorControlService, ConfigurationData, SystemStatus } from '../services/DoorControlService';
 
 export interface UseDoorControlReturn {
   systemStatus: SystemStatus | null;
@@ -14,6 +14,9 @@ export interface UseDoorControlReturn {
   determineScheduleMode: () => 'automatic' | 'manual';
   controlDoor: (doorId: string, action: 'open' | 'close') => Promise<void>;
 }
+
+// Create a singleton instance
+const doorControlService = new DoorControlService();
 
 const doorControlService = new DoorControlService();
 

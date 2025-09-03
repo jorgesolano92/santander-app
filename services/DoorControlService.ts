@@ -802,4 +802,5 @@ class DoorControlService {
   }
 }
 
-export const doorControlService = new DoorControlService();
+// Export the class for instantiation
+export { DoorControlService };
