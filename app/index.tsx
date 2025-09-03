@@ -787,25 +787,6 @@ export default function MainScreen() {
       letterSpacing: 0.5,
     },
     // Estilos adicionales para modo manual responsivo
-    manualModeContainer: {
-      flex: 1,
-      paddingHorizontal: isSmallTablet ? 12 : isLargeTablet ? 32 : 24,
-      paddingVertical: isSmallTablet ? 12 : isLargeTablet ? 24 : 18,
-    },
-    manualModeContent: {
-      flex: 1,
-      maxWidth: '100%',
-      alignSelf: 'center',
-    },
-    manualModeLogoSection: {
-      alignItems: 'center',
-      marginBottom: isSmallTablet ? 16 : isLargeTablet ? 32 : 24,
-      marginTop: isSmallTablet ? 4 : isLargeTablet ? 12 : 8,
-    },
-    manualModeSantanderLogo: {
-      width: isSmallTablet ? 240 : isLargeTablet ? 400 : 340,
-      height: isSmallTablet ? 77 : isLargeTablet ? 130 : 110,
-    },
   });
 
   return (
@@ -936,148 +917,44 @@ export default function MainScreen() {
           </View>
         </View>
       ) : isManualMode ? (
-        /* Manual Mode View - Inline */
-        <View style={styles.manualModeContainer}>
-          <View style={styles.manualModeContent}>
-            <View style={styles.manualModeLogoSection}>
-              <Image 
-                source={require('@/assets/images/banco-santander-seeklogo.png')}
-                style={styles.manualModeSantanderLogo}
-                resizeMode="contain"
-              />
-            </View>
+        /* Manual Mode View - Use Modal */
+        <View style={styles.mainContent}>
+          <View style={styles.logoSection}>
+            <Image 
+              source={require('@/assets/images/banco-santander-seeklogo.png')}
+              style={styles.santanderLogo}
+              resizeMode="contain"
+            />
+          </View>
 
-            <View style={styles.manualModeHeader}>
-              <View style={styles.infoIcon}>
-                <Text style={styles.infoIconText}>i</Text>
-              </View>
-              <View style={styles.manualModeHeaderContent}>
-                <Text style={styles.manualModeTitle}>MODO MANUAL</Text>
-                <Text style={styles.manualModeDescription}>
-                  La puerta P1 y la puerta P2 actúan de forma manual, es decir, tanto si se va en dirección entrada como de salida, será necesario pulsar el botón de llamada de los video porteros ubicados en la parte exterior de las puertas o los pulsadores retro iluminados ubicados en el interior de las puertas. Los detectores de movimiento interiores y exteriores actuarán sólo en modo seguridad, es decir, cuando la puerta esté abierta, protegerán a los usuarios frente al atrapamiento cuando ésta se cierre. Las puertas trabajan en modo esclusa; es decir una puerta no abre hasta que la otra esté cerrada.
-                </Text>
-              </View>
-              <TouchableOpacity 
-                style={styles.changeModeButtonManual}
-                onPress={() => setShowModeModal(true)}
-              >
-                <Text style={styles.changeModeButtonTextManual}>CAMBIAR MODO</Text>
-              </TouchableOpacity>
+          <View style={styles.modeCard}>
+            <View style={styles.modeContent}>
+              <Text style={styles.modeTitle}>Modo de Operación Actual: {currentMode}</Text>
+              <Text style={styles.modeDescription}>
+                Modo manual activado. Use los controles para gestionar las puertas individualmente.
+              </Text>
             </View>
+            <TouchableOpacity 
+              style={styles.changeModeButton}
+              onPress={() => setShowModeModal(true)}
+            >
+              <Text style={styles.changeModeButtonText}>CAMBIAR MODO</Text>
+            </TouchableOpacity>
+          </View>
 
-            <View style={styles.doorControlsContainer}>
-              <View style={styles.doorControlSection}>
-                <Text style={styles.doorControlTitle}>PUERTA OFICINA</Text>
-                <View style={styles.doorControlCard}>
-                  <View style={styles.doorControlImagePlaceholder}>
-                    <View style={styles.cameraIcon}>
-                      <View style={styles.cameraIconInner} />
-                    </View>
-                  </View>
-                  
-                  <View style={styles.doorControlButtons}>
-                    <TouchableOpacity 
-                      style={[
-                        styles.doorControlButton,
-                        communicatingDoors.has('P2') && styles.doorControlButtonCommunicating
-                      ]}
-                      onPress={() => handleCommunicate('P2', 'Puerta Oficina')}
-                      disabled={communicatingDoors.has('P2')}
-                    >
-                      <MessageCircle size={16} color={communicatingDoors.has('P2') ? "#FFFFFF" : "#495057"} />
-                      <Text style={[
-                        styles.doorControlButtonText,
-                        communicatingDoors.has('P2') && styles.doorControlButtonCommunicatingText
-                      ]}>
-                        {communicatingDoors.has('P2') ? 'COMUNICANDO...' : 'COMUNICAR'}
-                      </Text>
-                    </TouchableOpacity>
-                    
-                    <TouchableOpacity 
-                      style={[
-                        styles.doorControlButton,
-                        isDoorButtonDisabled('P2') && styles.doorControlButtonDisabled,
-                        getDoorStatus('P2').isOpen && styles.doorControlButtonClose
-                      ]}
-                      onPress={() => handleOpenDoor('P2', 'Puerta Oficina')}
-                      disabled={isDoorButtonDisabled('P2')}
-                    >
-                      <DoorOpen size={16} color={getDoorStatus('P2').isOpen ? "#FFFFFF" : "#495057"} />
-                      <Text style={[
-                        styles.doorControlButtonText,
-                        getDoorStatus('P2').isOpen && styles.doorControlButtonCloseText
-                      ]}>
-                        {getDoorButtonText('P2')}
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              </View>
-
-              <View style={styles.doorControlSection}>
-                <Text style={styles.doorControlTitle}>PUERTA CALLE</Text>
-                <View style={styles.doorControlCard}>
-                  <View style={styles.doorControlImagePlaceholder}>
-                    <View style={styles.cameraIcon}>
-                      <View style={styles.cameraIconInner} />
-                    </View>
-                  </View>
-                  
-                  <View style={styles.doorControlButtons}>
-                    <TouchableOpacity 
-                      style={[
-                        styles.doorControlButton,
-                        communicatingDoors.has('P1') && styles.doorControlButtonCommunicating
-                      ]}
-                      onPress={() => handleCommunicate('P1', 'Puerta Calle')}
-                      disabled={communicatingDoors.has('P1')}
-                    >
-                      <MessageCircle size={16} color={communicatingDoors.has('P1') ? "#FFFFFF" : "#495057"} />
-                      <Text style={[
-                        styles.doorControlButtonText,
-                        communicatingDoors.has('P1') && styles.doorControlButtonCommunicatingText
-                      ]}>
-                        {communicatingDoors.has('P1') ? 'COMUNICANDO...' : 'COMUNICAR'}
-                      </Text>
-                    </TouchableOpacity>
-                    
-                    <TouchableOpacity 
-                      style={[
-                        styles.doorControlButton,
-                        isDoorButtonDisabled('P1') && styles.doorControlButtonDisabled,
-                        getDoorStatus('P1').isOpen && styles.doorControlButtonClose
-                      ]}
-                      onPress={() => handleOpenDoor('P1', 'Puerta Calle')}
-                      disabled={isDoorButtonDisabled('P1')}
-                    >
-                      <DoorOpen size={16} color={getDoorStatus('P1').isOpen ? "#FFFFFF" : "#495057"} />
-                      <Text style={[
-                        styles.doorControlButtonText,
-                        getDoorStatus('P1').isOpen && styles.doorControlButtonCloseText
-                      ]}>
-                        {getDoorButtonText('P1')}
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              </View>
-            </View>
-
-            <View style={styles.bottomButtons}>
-              <TouchableOpacity 
-                style={styles.emergencyButton}
-                onPress={handleEmergencyToggle}
-              >
-                <Text style={styles.emergencyButtonText}>EMERGENCIA</Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity 
-                style={styles.visualizationButton}
-                onPress={() => setShowVisualizationModal(true)}
-              >
-                <Text style={styles.visualizationButtonText}>VISUALIZACIÓN</Text>
-              </TouchableOpacity>
-            </View>
+          <View style={styles.bottomButtons}>
+            <TouchableOpacity 
+              style={styles.emergencyButton}
+              onPress={handleEmergencyToggle}
+            >
+              <Text style={styles.emergencyButtonText}>EMERGENCIA</Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={styles.visualizationButton}
+              onPress={() => setShowManualModeModal(true)}
+            >
+              <Text style={styles.visualizationButtonText}>CONTROL MANUAL</Text>
+            </TouchableOpacity>
           </View>
         </View>
       ) : (

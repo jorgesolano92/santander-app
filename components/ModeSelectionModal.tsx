@@ -200,19 +200,7 @@ export default function ModeSelectionModal({ visible, onClose, onModeSelect }: M
     }
     setIsCountdownActive(false);
     
-    // Mapear el ID del modo a un texto descriptivo
-    const modeMap: { [key: string]: string } = {
-      'comercial_automatico': 'COMERCIAL AUTOMÁTICO',
-      'comercial_esclusa': 'COMERCIAL ESCLUSA',
-      'horario_extendido': 'HORARIO EXTENDIDO',
-      'horario_autoservicio': 'AUTOSERVICIO',
-      'oficina_cerrada': 'OFICINA CERRADA',
-      'carga_cajero': 'CARGA DE CAJERO',
-      'manual': 'MANUAL'
-    };
-    
-    const targetMode = modeMap[selectedMode] || selectedMode;
-    onModeSelect(targetMode);
+    onModeSelect(selectedMode);
   };
 
   const handleClose = () => {
