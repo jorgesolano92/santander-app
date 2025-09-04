@@ -92,73 +92,64 @@ export default function ModeSelectionModal({ visible, onClose, onModeSelect }: M
   const [countdown, setCountdown] = useState<number>(30);
   const [isCountdownActive, setIsCountdownActive] = useState<boolean>(false);
   const [showCargaCajero, setShowCargaCajero] = useState<boolean>(false);
-  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const countdownRef = useRef<NodeJS.Timeout | null>(null);
   const isMountedRef = useRef(false);
+  const selectedModeRef = useRef<string>('comercial_automatico');
 
-  // Función para limpiar el contador
-  const clearCountdown = useCallback(() => {
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current);
-      intervalRef.current = null;
+  // Actualizar la referencia cuando cambie el modo seleccionado
+  useEffect(() => {
+    selectedModeRef.current = selectedMode;
+  }, [selectedMode]);
+
+  // Función para limpiar el temporizador
+  const clearTimer = () => {
+    if (countdownRef.current) {
+      clearInterval(countdownRef.current);
+      countdownRef.current = null;
     }
     setIsCountdownActive(false);
-  }, []);
+  };
 
-  // Función para iniciar/reiniciar el contador
-  const startCountdown = useCallback(() => {
-    console.log('🕐 Iniciando contador desde 30 segundos');
-    
-    // Limpiar cualquier temporizador existente
-    clearCountdown();
-    
-    // Reiniciar el contador
+  // Función para iniciar el contador
+  const startTimer = () => {
+    console.log('🕐 Iniciando contador de 30 segundos');
+    clearTimer();
     setCountdown(30);
     setIsCountdownActive(true);
-    
-    // Iniciar nuevo temporizador
-    intervalRef.current = setInterval(() => {
-      if (!isMountedRef.current) return;
-      
+
+    countdownRef.current = setInterval(() => {
       setCountdown(prev => {
-        const newCount = prev - 1;
-        console.log(`⏰ Contador: ${newCount} segundos restantes`);
-        
-        if (newCount <= 0) {
-          console.log('🚀 Auto-activando modo por timeout');
+        const newValue = prev - 1;
+        console.log(`⏰ Contador: ${newValue} segundos restantes`);
+
+        if (newValue <= 0) {
+          console.log('🚀 Tiempo agotado - Auto-activando modo:', selectedModeRef.current);
+          clearTimer();
           
-          // Limpiar interval
-          if (intervalRef.current) {
-            clearInterval(intervalRef.current);
-            intervalRef.current = null;
-          }
-          setIsCountdownActive(false);
-          
-          // Auto-activar el modo seleccionado
+          // Auto-activar después de un pequeño delay
           setTimeout(() => {
             if (isMountedRef.current) {
-              onModeSelect(selectedMode);
+              onModeSelect(selectedModeRef.current);
             }
           }, 100);
           
           return 0;
         }
-        return newCount;
+        return newValue;
       });
     }, 1000);
-  }, [clearCountdown, onModeSelect, selectedMode]);
-  // Cargar configuración para determinar si mostrar Carga de Cajero
-  const loadConfiguration = useCallback(async () => {
+  };
+
+  // Cargar configuración
+  const loadConfiguration = async () => {
     try {
       const savedConfig = await AsyncStorage.getItem('new_door_config');
       if (savedConfig) {
         const config = JSON.parse(savedConfig);
         setShowCargaCajero(config.officeWithATM === true);
       } else {
-        // Si no hay configuración, revisar la configuración antigua
         const oldConfig = await AsyncStorage.getItem('detailed_door_config');
         if (oldConfig) {
-          const config = JSON.parse(oldConfig);
-          // En la configuración antigua no hay este campo, así que por defecto false
           setShowCargaCajero(false);
         } else {
           setShowCargaCajero(false);
@@ -168,56 +159,51 @@ export default function ModeSelectionModal({ visible, onClose, onModeSelect }: M
       console.error('Error loading configuration:', error);
       setShowCargaCajero(false);
     }
-  }, []);
+  };
 
-  // Iniciar cuenta atrás cuando se abre el modal o cambia selectedMode
+  // Efecto principal para manejar la apertura/cierre del modal
   useEffect(() => {
     isMountedRef.current = true;
-    
+
     if (visible) {
-      console.log('📱 Modal abierto - iniciando configuración');
+      console.log('📱 Modal abierto');
       loadConfiguration();
+      // Iniciar contador después de un pequeño delay para asegurar que todo esté listo
+      setTimeout(() => {
+        if (isMountedRef.current && visible) {
+          startTimer();
+        }
+      }, 100);
     } else {
-      console.log('❌ Modal cerrado - limpiando contador');
-      clearCountdown();
+      console.log('❌ Modal cerrado');
+      clearTimer();
       setCountdown(30);
     }
 
     return () => {
       isMountedRef.current = false;
-      clearCountdown();
+      clearTimer();
     };
-  }, [visible, loadConfiguration, clearCountdown]);
-
-  // Efecto separado para iniciar el contador cuando el modal está visible
-  useEffect(() => {
-    if (visible && isMountedRef.current) {
-      startCountdown();
-    }
-  }, [visible, startCountdown]);
+  }, [visible]);
 
   const handleModeSelect = (modeId: string) => {
     console.log(`🎯 Modo seleccionado: ${modeId}`);
     setSelectedMode(modeId);
-    // No reiniciar contador aquí para evitar bucle infinito
+    // NO reiniciar el contador aquí
   };
 
   const handleActivate = () => {
-    console.log('✅ Activación manual del modo');
-    
-    clearCountdown();
-    
-    // Activar el modo seleccionado
+    console.log('✅ Activación manual del modo:', selectedMode);
+    clearTimer();
     onModeSelect(selectedMode);
   };
 
   const handleClose = () => {
-    console.log('🚪 Cerrando modal manualmente');
-    
-    clearCountdown();
-    setCountdown(30);
+    console.log('🚪 Cerrando modal');
+    clearTimer();
     onClose();
   };
+          }
   const toggleCategory = (category: string) => {
     const newExpanded = new Set(expandedCategories);
     if (newExpanded.has(category)) {
