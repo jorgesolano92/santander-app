@@ -96,7 +96,6 @@ export default function MainScreen() {
   const currentMode = systemStatus?.mode || 'COMERCIAL AUTOMATICO';
   const isEmergencyActive = systemStatus?.emergencyActive || false;
   const isCargaCajeroMode = currentMode === 'CARGA DE CAJERO';
-  const isManualMode = currentMode.includes('MANUAL');
 
   // Mostrar información del modo automático por horario
   useEffect(() => {
@@ -875,7 +874,7 @@ export default function MainScreen() {
           </View>
         </View>
       ) : (
-        /* Mostrar vista normal para todos los modos */
+        /* Vista normal para todos los modos excepto emergencia y carga cajero */
         <View style={styles.mainContent}>
           <View style={styles.logoSection}>
             <Image 
