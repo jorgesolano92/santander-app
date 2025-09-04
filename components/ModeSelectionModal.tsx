@@ -1,6 +1,6 @@
 import { View, Text, StyleSheet, TouchableOpacity, Modal, ScrollView } from 'react-native';
 import React from 'react';
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { X, ChevronDown, ChevronRight } from 'lucide-react-native';
 import { Image } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -92,7 +92,8 @@ export default function ModeSelectionModal({ visible, onClose, onModeSelect }: M
   const [countdown, setCountdown] = useState<number>(30);
   const [isCountdownActive, setIsCountdownActive] = useState<boolean>(false);
   const [showCargaCajero, setShowCargaCajero] = useState<boolean>(false);
-  const countdownRef = useRef<NodeJS.Timeout | null>(null);
+  
+  const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const isMountedRef = useRef(false);
   const selectedModeRef = useRef<string>('comercial_automatico');
 
@@ -100,45 +101,6 @@ export default function ModeSelectionModal({ visible, onClose, onModeSelect }: M
   useEffect(() => {
     selectedModeRef.current = selectedMode;
   }, [selectedMode]);
-
-  // Función para limpiar el temporizador
-  const clearTimer = () => {
-    if (countdownRef.current) {
-      clearInterval(countdownRef.current);
-      countdownRef.current = null;
-    }
-    setIsCountdownActive(false);
-  };
-
-  // Función para iniciar el contador
-  const startTimer = () => {
-    console.log('🕐 Iniciando contador de 30 segundos');
-    clearTimer();
-    setCountdown(30);
-    setIsCountdownActive(true);
-
-    countdownRef.current = setInterval(() => {
-      setCountdown(prev => {
-        const newValue = prev - 1;
-        console.log(`⏰ Contador: ${newValue} segundos restantes`);
-
-        if (newValue <= 0) {
-          console.log('🚀 Tiempo agotado - Auto-activando modo:', selectedModeRef.current);
-          clearTimer();
-          
-          // Auto-activar después de un pequeño delay
-          setTimeout(() => {
-            if (isMountedRef.current) {
-              onModeSelect(selectedModeRef.current);
-            }
-          }, 100);
-          
-          return 0;
-        }
-        return newValue;
-      });
-    }, 1000);
-  };
 
   // Cargar configuración
   const loadConfiguration = async () => {
@@ -161,46 +123,77 @@ export default function ModeSelectionModal({ visible, onClose, onModeSelect }: M
     }
   };
 
+  // Función para limpiar el temporizador
+  const clearCountdown = () => {
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+    setIsCountdownActive(false);
+  };
+
   // Efecto principal para manejar la apertura/cierre del modal
   useEffect(() => {
     isMountedRef.current = true;
 
     if (visible) {
-      console.log('📱 Modal abierto');
+      console.log('📱 Modal abierto - iniciando configuración');
       loadConfiguration();
-      // Iniciar contador después de un pequeño delay para asegurar que todo esté listo
-      setTimeout(() => {
-        if (isMountedRef.current && visible) {
-          startTimer();
-        }
-      }, 100);
+      
+      // Iniciar contador
+      console.log('⏰ Iniciando contador desde 30 segundos');
+      setCountdown(30);
+      setIsCountdownActive(true);
+      
+      intervalRef.current = setInterval(() => {
+        setCountdown(prevCount => {
+          const newCount = prevCount - 1;
+          console.log(`⏰ Contador: ${newCount} segundos restantes`);
+          
+          if (newCount <= 0) {
+            console.log('🚀 Auto-activando modo por timeout:', selectedModeRef.current);
+            clearInterval(intervalRef.current!);
+            intervalRef.current = null;
+            setIsCountdownActive(false);
+            
+            // Auto-activar después de un pequeño delay
+            setTimeout(() => {
+              if (isMountedRef.current) {
+                onModeSelect(selectedModeRef.current);
+              }
+            }, 100);
+            
+            return 0;
+          }
+          return newCount;
+        });
+      }, 1000);
     } else {
-      console.log('❌ Modal cerrado');
-      clearTimer();
+      console.log('❌ Modal cerrado - limpiando contador');
+      clearCountdown();
       setCountdown(30);
     }
 
     return () => {
       isMountedRef.current = false;
-      clearTimer();
+      clearCountdown();
     };
-  }, [visible]);
+  }, [visible, onModeSelect]);
 
   const handleModeSelect = (modeId: string) => {
     console.log(`🎯 Modo seleccionado: ${modeId}`);
     setSelectedMode(modeId);
-    // NO reiniciar el contador aquí
   };
 
   const handleActivate = () => {
     console.log('✅ Activación manual del modo:', selectedMode);
-    clearTimer();
+    clearCountdown();
     onModeSelect(selectedMode);
   };
 
   const handleClose = () => {
     console.log('🚪 Cerrando modal');
-    clearTimer();
+    clearCountdown();
     onClose();
   };
 
@@ -373,7 +366,6 @@ export default function ModeSelectionModal({ visible, onClose, onModeSelect }: M
       shadowOpacity: 0.08,
       shadowRadius: 12,
       elevation: 4,
-      marginBottom: 20,
     },
     detailsImagePlaceholder: {
       width: 120,
