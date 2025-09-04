@@ -183,6 +183,11 @@ export default function ModeSelectionModal({ visible, onClose, onModeSelect }: M
   const handleModeSelect = (modeId: string) => {
     console.log(`🎯 Modo seleccionado: ${modeId}`);
     setSelectedMode(modeId);
+    
+    // Reiniciar contador cuando cambia el modo
+    console.log('🔄 Reiniciando contador por cambio de modo');
+    setCountdown(30);
+    setIsCountdownActive(true);
   };
 
   const handleActivate = () => {
