@@ -419,6 +419,17 @@ export default function ModeSelectionModal({ visible, onClose, onModeSelect }: M
       elevation: 4,
       alignItems: 'center',
       justifyContent: 'center',
+      position: 'relative',
+      overflow: 'hidden',
+    },
+    progressBar: {
+      position: 'absolute',
+      left: 0,
+      top: 0,
+      bottom: 0,
+      backgroundColor: '#28A745',
+      borderRadius: 8,
+      opacity: 0.3,
     },
     activateButtonText: {
       fontSize: 16,
@@ -426,6 +437,8 @@ export default function ModeSelectionModal({ visible, onClose, onModeSelect }: M
       color: '#FFFFFF',
       letterSpacing: 1,
       textAlign: 'center',
+      position: 'relative',
+      zIndex: 1,
     },
     footerText: {
       fontSize: 12,
@@ -528,6 +541,14 @@ export default function ModeSelectionModal({ visible, onClose, onModeSelect }: M
 
             {/* Activate Button */}
             <TouchableOpacity style={styles.activateButton} onPress={handleActivate}>
+              {isCountdownActive && (
+                <View 
+                  style={[
+                    styles.progressBar, 
+                    { width: `${((30 - countdown) / 30) * 100}%` }
+                  ]} 
+                />
+              )}
               <Text style={styles.activateButtonText}>
                 {isCountdownActive ? `ACTIVAR (${countdown}s)` : 'ACTIVAR'}
               </Text>
