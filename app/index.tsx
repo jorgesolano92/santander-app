@@ -875,6 +875,7 @@ export default function MainScreen() {
           </View>
         </View>
       ) : (
+        /* Mostrar vista normal para todos los modos */
         <View style={styles.mainContent}>
           <View style={styles.logoSection}>
             <Image 
