@@ -452,7 +452,10 @@ export default function ModeSelectionModal({ visible, onClose, onModeSelect }: M
         {/* Header */}
         <View style={styles.header}>
           <Text style={styles.headerTitle}>SAIMA SEGURIDAD – Panel de control puertas SECURA</Text>
-          {/* Left Panel - Mode Selection (más estrecho) */}
+        </View>
+
+        <View style={styles.content}>
+          {/* Left Panel - Mode Selection */}
           <ScrollView style={styles.leftPanel} contentContainerStyle={styles.leftPanelContent}>
             {categoryOrder.map(category => {
               const categoryModes = filteredModes.filter(mode => mode.category === category);
