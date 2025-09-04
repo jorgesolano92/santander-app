@@ -92,14 +92,17 @@ export default function ModeSelectionModal({ visible, onClose, onModeSelect }: M
   const [countdown, setCountdown] = useState<number>(30);
   const [isCountdownActive, setIsCountdownActive] = useState<boolean>(false);
   const [showCargaCajero, setShowCargaCajero] = useState<boolean>(false);
-  const countdownIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const isMountedRef = useRef(false);
 
   // Función para iniciar/reiniciar el contador
   const startCountdown = useCallback(() => {
+    console.log('🕐 Iniciando contador desde 30 segundos');
+    
     // Limpiar cualquier temporizador existente
-    if (countdownIntervalRef.current) {
-      clearInterval(countdownIntervalRef.current);
-      countdownIntervalRef.current = null;
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
     }
     
     // Reiniciar el contador
@@ -107,24 +110,35 @@ export default function ModeSelectionModal({ visible, onClose, onModeSelect }: M
     setIsCountdownActive(true);
     
     // Iniciar nuevo temporizador
-    countdownIntervalRef.current = setInterval(() => {
+    intervalRef.current = setInterval(() => {
+      if (!isMountedRef.current) return;
+      
       setCountdown(prev => {
+        console.log(`⏰ Contador: ${prev - 1} segundos restantes`);
+        
         if (prev <= 1) {
-          // Auto-activar cuando llegue a 0 - llamar directamente a onModeSelect
-          if (countdownIntervalRef.current) {
-            clearInterval(countdownIntervalRef.current);
-            countdownIntervalRef.current = null;
+          console.log('🚀 Auto-activando modo por timeout');
+          
+          // Limpiar interval
+          if (intervalRef.current) {
+            clearInterval(intervalRef.current);
+            intervalRef.current = null;
           }
           setIsCountdownActive(false);
           
-          // Activar el modo seleccionado
-          onModeSelect(selectedMode);
+          // Auto-activar el modo seleccionado después de un pequeño delay
+          setTimeout(() => {
+            if (isMountedRef.current) {
+              onModeSelect(selectedMode);
+            }
+          }, 100);
+          
           return 0;
         }
         return prev - 1;
       });
     }, 1000);
-  }, [selectedMode, onModeSelect]);
+  }, [onModeSelect]);
 
   // Cargar configuración para determinar si mostrar Carga de Cajero
   const loadConfiguration = useCallback(async () => {
@@ -152,39 +166,48 @@ export default function ModeSelectionModal({ visible, onClose, onModeSelect }: M
 
   // Iniciar cuenta atrás cuando se abre el modal
   useEffect(() => {
+    isMountedRef.current = true;
+    
     if (visible) {
+      console.log('📱 Modal abierto - iniciando configuración');
       // Cargar configuración al abrir el modal
       loadConfiguration();
       // Iniciar contador
       startCountdown();
     } else {
       // Limpiar interval cuando se cierra el modal
-      if (countdownIntervalRef.current) {
-        clearInterval(countdownIntervalRef.current);
-        countdownIntervalRef.current = null;
+      console.log('❌ Modal cerrado - limpiando contador');
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
       }
       setIsCountdownActive(false);
       setCountdown(30);
     }
 
     return () => {
-      if (countdownIntervalRef.current) {
-        clearInterval(countdownIntervalRef.current);
+      isMountedRef.current = false;
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
       }
     };
   }, [visible, loadConfiguration, startCountdown]);
 
   const handleModeSelect = (modeId: string) => {
+    console.log(`🎯 Modo seleccionado: ${modeId}`);
     setSelectedMode(modeId);
     // Reiniciar contador cuando se selecciona un nuevo modo
     startCountdown();
   };
 
   const handleActivate = () => {
+    console.log('✅ Activación manual del modo');
+    
     // Detener cuenta atrás
-    if (countdownIntervalRef.current) {
-      clearInterval(countdownIntervalRef.current);
-      countdownIntervalRef.current = null;
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
     }
     setIsCountdownActive(false);
     
@@ -193,10 +216,12 @@ export default function ModeSelectionModal({ visible, onClose, onModeSelect }: M
   };
 
   const handleClose = () => {
+    console.log('🚪 Cerrando modal manualmente');
+    
     // Detener cuenta atrás al cerrar
-    if (countdownIntervalRef.current) {
-      clearInterval(countdownIntervalRef.current);
-      countdownIntervalRef.current = null;
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
     }
     setIsCountdownActive(false);
     setCountdown(30);
