@@ -790,46 +790,6 @@ export default function MainScreen() {
   return (
     <View style={styles.container}>
       {/* Header */}
-      <View style={styles.header}>
-        <View style={styles.leftHeaderSection}>
-          <TouchableOpacity 
-            style={styles.notificationsButton}
-            onPress={() => console.log('Notificaciones presionado')}
-          >
-            <MessageCircle size={20} color="#FFFFFF" />
-            <Text style={styles.notificationsButtonText}>NOTIFICACIONES</Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity 
-            style={styles.notificationsButton}
-            onPress={() => setShowTechnicianModal(true)}
-          >
-            <HardHat size={20} color="#FFFFFF" />
-            <Text style={styles.notificationsButtonText}>TÉCNICO</Text>
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.dateTimeContainer}>
-          <Text style={styles.dateTimeText}>{formatDateTime(currentDateTime)}</Text>
-        </View>
-
-        <View style={styles.rightHeaderSection}>
-          <View style={styles.connectionIndicatorContainer}>
-            <Wifi 
-              size={20} 
-              color={connectionStatus === 'online' ? '#28A745' : '#DC3545'} 
-            />
-          </View>
-
-          <TouchableOpacity 
-            style={styles.configButton}
-            onPress={() => setShowLoginModal(true)}
-          >
-            <Settings size={20} color="#666666" />
-            <Text style={styles.configButtonText}>CONFIGURACIÓN</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
 
       {error && (
         <View style={styles.errorBanner}>
