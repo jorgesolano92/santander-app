@@ -368,21 +368,20 @@ export default function ModeSelectionModal({ visible, onClose, onModeSelect }: M
     },
     rightPanel: {
       flex: 2,
+      justifyContent: 'center',
       alignItems: 'center',
     },
     logoSection: {
       alignItems: 'center',
       marginBottom: isSmallTablet ? 20 : isLargeTablet ? 32 : 24,
-      marginTop: isSmallTablet ? 16 : isLargeTablet ? 24 : 20,
     },
     santanderLogo: {
       width: isSmallTablet ? 280 : isLargeTablet ? 400 : 340,
       height: isSmallTablet ? 80 : isLargeTablet ? 115 : 97,
     },
     detailsScrollView: {
-      flex: 1,
       width: '100%',
-      marginBottom: 20,
+      maxHeight: '60%',
     },
     detailsCard: {
       backgroundColor: '#FFFFFF',
@@ -397,6 +396,7 @@ export default function ModeSelectionModal({ visible, onClose, onModeSelect }: M
       shadowOpacity: 0.08,
       shadowRadius: 12,
       elevation: 4,
+      marginBottom: 20,
     },
     detailsImagePlaceholder: {
       width: 120,
