@@ -190,6 +190,9 @@ export default function ModeSelectionModal({ visible, onClose, onModeSelect }: M
     
     // Activar el modo seleccionado
     onModeSelect(selectedMode);
+    
+    // Cerrar el modal después de activar
+    onClose();
   };
 
   const handleClose = () => {
