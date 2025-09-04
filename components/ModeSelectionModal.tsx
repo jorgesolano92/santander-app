@@ -535,7 +535,7 @@ export default function ModeSelectionModal({ visible, onClose, onModeSelect }: M
             {/* Activate Button */}
             <TouchableOpacity style={styles.activateButton} onPress={handleActivate}>
               <Text style={styles.activateButtonText}>
-                ACTIVAR {isCountdownActive ? `(${countdown}s)` : ''}
+                {isCountdownActive ? `ACTIVAR (${countdown}s)` : 'ACTIVAR'}
               </Text>
             </TouchableOpacity>
           </View>
