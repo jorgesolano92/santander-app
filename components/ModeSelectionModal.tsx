@@ -148,14 +148,13 @@ export default function ModeSelectionModal({ visible, onClose, onModeSelect }: M
           console.log('🚀 Auto-activando modo por timeout:', selectedModeRef.current);
           clearInterval(intervalRef.current!);
           intervalRef.current = null;
-          setIsCountdownActive(false);
           
           // Auto-activar después de un pequeño delay
           setTimeout(() => {
             if (isMountedRef.current) {
               onModeSelect(selectedModeRef.current);
             }
-          }, 100);
+          }, 1500); // Dar tiempo para mostrar "ACTIVADO"
           
           return 0;
         }
@@ -550,7 +549,8 @@ export default function ModeSelectionModal({ visible, onClose, onModeSelect }: M
                 />
               )}
               <Text style={styles.activateButtonText}>
-                {isCountdownActive ? `ACTIVAR (${countdown}s)` : 'ACTIVAR'}
+                {isCountdownActive && countdown > 0 ? `ACTIVAR (${countdown}s)` : 
+                 countdown === 0 ? 'ACTIVADO' : 'ACTIVAR'}
               </Text>
             </TouchableOpacity>
           </View>
