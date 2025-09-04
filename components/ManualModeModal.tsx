@@ -43,12 +43,16 @@ export default function ManualModeModal({
   };
 
   const handleOpenDoor = async (doorId: 'P1' | 'P2', doorName: string) => {
-    console.log(`🚪 Abrir ${doorName}`);
-    const success = await controlDoor(doorId, 'open');
+    const door = getDoorStatus(doorId);
+    const action = door.isOpen ? 'close' : 'open';
+    const actionText = action === 'open' ? 'Abrir' : 'Cerrar';
+    
+    console.log(`🚪 ${actionText} ${doorName}`);
+    const success = await controlDoor(doorId, action);
     if (success) {
-      console.log(`✅ ${doorName} - Comando abrir ejecutado correctamente`);
+      console.log(`✅ ${doorName} - Comando ${actionText.toLowerCase()} ejecutado correctamente`);
     } else {
-      console.error(`❌ Error abriendo ${doorName}`);
+      console.error(`❌ Error ${actionText.toLowerCase()} ${doorName}`);
     }
   };
 

@@ -132,6 +132,15 @@ export function useDoorControl(): UseDoorControlReturn {
       setIsLoading(true);
       setError(null);
       
+      // Actualizar estado inmediatamente para mostrar el estado de transición
+      if (systemStatus?.doors[doorId as keyof typeof systemStatus.doors]) {
+        const door = systemStatus.doors[doorId as keyof typeof systemStatus.doors];
+        if (door) {
+          door.status = action === 'open' ? 'opening' : 'closing';
+          door.lastUpdate = new Date().toISOString();
+        }
+      }
+      
       await doorControlService.controlDoor(doorId, action);
       
       // Refresh system status after door control
