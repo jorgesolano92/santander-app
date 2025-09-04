@@ -92,7 +92,6 @@ export default function ModeSelectionModal({ visible, onClose, onModeSelect }: M
   const [countdown, setCountdown] = useState<number>(30);
   const [isCountdownActive, setIsCountdownActive] = useState<boolean>(false);
   const [showCargaCajero, setShowCargaCajero] = useState<boolean>(false);
-  const [timerKey, setTimerKey] = useState<number>(0);
   
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const isMountedRef = useRef(false);
@@ -133,6 +132,37 @@ export default function ModeSelectionModal({ visible, onClose, onModeSelect }: M
     setIsCountdownActive(false);
   };
 
+  // Función para iniciar el contador
+  const startCountdown = () => {
+    clearCountdown(); // Limpiar cualquier contador existente
+    setCountdown(30);
+    setIsCountdownActive(true);
+    
+    intervalRef.current = setInterval(() => {
+      setCountdown(prevCount => {
+        const newCount = prevCount - 1;
+        console.log(`⏰ Contador: ${newCount} segundos restantes`);
+        
+        if (newCount <= 0) {
+          console.log('🚀 Auto-activando modo por timeout:', selectedModeRef.current);
+          clearInterval(intervalRef.current!);
+          intervalRef.current = null;
+          setIsCountdownActive(false);
+          
+          // Auto-activar después de un pequeño delay
+          setTimeout(() => {
+            if (isMountedRef.current) {
+              onModeSelect(selectedModeRef.current);
+            }
+          }, 100);
+          
+          return 0;
+        }
+        return newCount;
+      });
+    }, 1000);
+  };
+
   // Efecto principal para manejar la apertura/cierre del modal
   useEffect(() => {
     isMountedRef.current = true;
@@ -140,59 +170,28 @@ export default function ModeSelectionModal({ visible, onClose, onModeSelect }: M
     if (visible && isMountedRef.current) {
       console.log('📱 Modal abierto - iniciando configuración');
       loadConfiguration();
-      
-      // Iniciar contador
-      console.log('⏰ Iniciando contador desde 30 segundos');
-      setCountdown(30);
-      setIsCountdownActive(true);
-      
-      intervalRef.current = setInterval(() => {
-        setCountdown(prevCount => {
-          const newCount = prevCount - 1;
-          console.log(`⏰ Contador: ${newCount} segundos restantes`);
-          
-          if (newCount <= 0) {
-            console.log('🚀 Auto-activando modo por timeout:', selectedModeRef.current);
-            clearInterval(intervalRef.current!);
-            intervalRef.current = null;
-            setIsCountdownActive(false);
-            
-            // Auto-activar después de un pequeño delay
-            setTimeout(() => {
-              if (isMountedRef.current) {
-                onModeSelect(selectedModeRef.current);
-              }
-            }, 100);
-            
-            return 0;
-          }
-          return newCount;
-        });
-      }, 1000);
+      startCountdown();
     } else {
       console.log('❌ Modal cerrado - limpiando contador');
       clearCountdown();
-      setCountdown(30);
     }
 
     return () => {
       isMountedRef.current = false;
       clearCountdown();
     };
-  }, [visible, timerKey, onModeSelect]);
+  }, [visible, onModeSelect]);
 
   const handleModeSelect = (modeId: string) => {
     console.log(`🎯 Modo seleccionado: ${modeId}`);
     setSelectedMode(modeId);
+    selectedModeRef.current = modeId;
     
-    
-    // Reiniciar el contador incrementando timerKey
-    console.log('🔄 Reiniciando contador por cambio de modo');
-    setTimerKey(prev => prev + 1);
     // Reiniciar contador cuando cambia el modo
-    console.log('🔄 Reiniciando contador por cambio de modo');
-    setCountdown(30);
-    setIsCountdownActive(true);
+    if (visible) {
+      console.log('🔄 Reiniciando contador por cambio de modo');
+      startCountdown();
+    }
   };
 
   const handleActivate = () => {
