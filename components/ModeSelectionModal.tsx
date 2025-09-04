@@ -190,9 +190,6 @@ export default function ModeSelectionModal({ visible, onClose, onModeSelect }: M
     
     // Activar el modo seleccionado
     onModeSelect(selectedMode);
-    
-    // Cerrar el modal después de activar
-    onClose();
   };
 
   const handleClose = () => {
@@ -519,7 +516,7 @@ export default function ModeSelectionModal({ visible, onClose, onModeSelect }: M
             {/* Activate Button */}
             <TouchableOpacity style={styles.activateButton} onPress={handleActivate}>
               <Text style={styles.activateButtonText}>
-                {isCountdownActive ? `ACTIVAR (${countdown}s)` : 'ACTIVAR'}
+                ACTIVAR {isCountdownActive ? `(${countdown}s)` : ''}
               </Text>
             </TouchableOpacity>
           </View>

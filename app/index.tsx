@@ -164,6 +164,9 @@ export default function MainScreen() {
     if (success) {
       console.log('✅ Modo cambiado exitosamente a:', targetMode);
       
+      // Cerrar el modal de selección de modo
+      setShowModeModal(false);
+      
       // Si el modo es MANUAL, abrir directamente el modal de control manual
       if (targetMode === 'MANUAL') {
         setShowManualModeModal(true);
@@ -171,7 +174,6 @@ export default function MainScreen() {
     } else {
       console.error('❌ Error cambiando modo a:', targetMode);
     }
-    setShowModeModal(false);
   };
 
   const handleEmergencyToggle = () => {
