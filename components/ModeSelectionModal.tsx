@@ -95,6 +95,7 @@ export default function ModeSelectionModal({ visible, onClose, onModeSelect }: M
   const [isModalReady, setIsModalReady] = useState<boolean>(false);
   
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const isMountedRef = useRef<boolean>(false);
   const selectedModeRef = useRef<string>('comercial_automatico');
 
   // Actualizar la referencia cuando cambie el modo seleccionado
@@ -167,11 +168,13 @@ export default function ModeSelectionModal({ visible, onClose, onModeSelect }: M
   useEffect(() => {
     if (visible && !isModalReady) {
       console.log('📱 Modal abierto - iniciando configuración');
+      isMountedRef.current = true;
       loadConfiguration();
       setIsModalReady(true);
     } else if (!visible && isModalReady) {
       console.log('❌ Modal cerrado - limpiando contador');
       clearCountdown();
+      isMountedRef.current = false;
       setIsModalReady(false);
     }
   }, [visible, isModalReady]);
