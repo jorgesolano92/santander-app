@@ -255,6 +255,23 @@ export default function ManualModeModal({
       color: '#495057',
       letterSpacing: 0.5,
     },
+    doorControlButtonCommunicating: {
+      backgroundColor: '#28A745',
+      borderColor: '#1E7E34',
+    },
+    doorControlButtonCommunicatingText: {
+      color: '#FFFFFF',
+    },
+    doorControlButtonClose: {
+      backgroundColor: '#DC3545',
+      borderColor: '#C82333',
+    },
+    doorControlButtonCloseText: {
+      color: '#FFFFFF',
+    },
+    doorControlButtonDisabled: {
+      opacity: 0.6,
+    },
     bottomButtons: {
       flexDirection: 'row',
       gap: isSmallTablet ? 16 : isLargeTablet ? 24 : 20,
