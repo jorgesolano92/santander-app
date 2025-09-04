@@ -92,6 +92,7 @@ export default function ModeSelectionModal({ visible, onClose, onModeSelect }: M
   const [countdown, setCountdown] = useState<number>(30);
   const [isCountdownActive, setIsCountdownActive] = useState<boolean>(false);
   const [showCargaCajero, setShowCargaCajero] = useState<boolean>(false);
+  const [timerKey, setTimerKey] = useState<number>(0);
   
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const isMountedRef = useRef(false);
@@ -136,7 +137,7 @@ export default function ModeSelectionModal({ visible, onClose, onModeSelect }: M
   useEffect(() => {
     isMountedRef.current = true;
 
-    if (visible) {
+    if (visible && isMountedRef.current) {
       console.log('📱 Modal abierto - iniciando configuración');
       loadConfiguration();
       
@@ -178,12 +179,16 @@ export default function ModeSelectionModal({ visible, onClose, onModeSelect }: M
       isMountedRef.current = false;
       clearCountdown();
     };
-  }, [visible, onModeSelect]);
+  }, [visible, timerKey, onModeSelect]);
 
   const handleModeSelect = (modeId: string) => {
     console.log(`🎯 Modo seleccionado: ${modeId}`);
     setSelectedMode(modeId);
     
+    
+    // Reiniciar el contador incrementando timerKey
+    console.log('🔄 Reiniciando contador por cambio de modo');
+    setTimerKey(prev => prev + 1);
     // Reiniciar contador cuando cambia el modo
     console.log('🔄 Reiniciando contador por cambio de modo');
     setCountdown(30);
