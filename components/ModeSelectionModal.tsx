@@ -96,7 +96,6 @@ export default function ModeSelectionModal({ visible, onClose, onModeSelect }: M
   
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const isMountedRef = useRef<boolean>(false);
-  const isMountedRef = useRef<boolean>(false);
   const selectedModeRef = useRef<string>('comercial_automatico');
 
   // Actualizar la referencia cuando cambie el modo seleccionado
