@@ -203,7 +203,7 @@ export default function ModeSelectionModal({ visible, onClose, onModeSelect }: M
     clearTimer();
     onClose();
   };
-          }
+
   const toggleCategory = (category: string) => {
     const newExpanded = new Set(expandedCategories);
     if (newExpanded.has(category)) {
