@@ -92,9 +92,9 @@ export default function ModeSelectionModal({ visible, onClose, onModeSelect }: M
   const [countdown, setCountdown] = useState<number>(30);
   const [isCountdownActive, setIsCountdownActive] = useState<boolean>(false);
   const [showCargaCajero, setShowCargaCajero] = useState<boolean>(false);
+  const [isModalReady, setIsModalReady] = useState<boolean>(false);
   
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
-  const isMountedRef = useRef(false);
   const selectedModeRef = useRef<string>('comercial_automatico');
 
   // Actualizar la referencia cuando cambie el modo seleccionado
@@ -165,22 +165,26 @@ export default function ModeSelectionModal({ visible, onClose, onModeSelect }: M
 
   // Efecto principal para manejar la apertura/cierre del modal
   useEffect(() => {
-    isMountedRef.current = true;
-
-    if (visible && isMountedRef.current) {
+    if (visible && !isModalReady) {
       console.log('📱 Modal abierto - iniciando configuración');
       loadConfiguration();
-      startCountdown();
-    } else {
+      setIsModalReady(true);
+    } else if (!visible && isModalReady) {
       console.log('❌ Modal cerrado - limpiando contador');
       clearCountdown();
+      setIsModalReady(false);
     }
+  }, [visible, isModalReady]);
 
+  // Efecto separado para el contador
+  useEffect(() => {
+    if (isModalReady) {
+      startCountdown();
+    }
     return () => {
-      isMountedRef.current = false;
       clearCountdown();
     };
-  }, [visible, onModeSelect]);
+  }, [isModalReady]);
 
   const handleModeSelect = (modeId: string) => {
     console.log(`🎯 Modo seleccionado: ${modeId}`);
@@ -188,7 +192,7 @@ export default function ModeSelectionModal({ visible, onClose, onModeSelect }: M
     selectedModeRef.current = modeId;
     
     // Reiniciar contador cuando cambia el modo
-    if (visible) {
+    if (isModalReady) {
       console.log('🔄 Reiniciando contador por cambio de modo');
       startCountdown();
     }
