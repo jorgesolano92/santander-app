@@ -344,9 +344,6 @@ export default function LoginModal({ visible, onClose, onSuccess }: LoginModalPr
           {/* Header */}
           <View style={styles.header}>
             <Text style={styles.headerTitle}>ACCESO AL SISTEMA</Text>
-            <TouchableOpacity style={styles.closeButton} onPress={handleClose}>
-              <X size={24} color="#FFFFFF" />
-            </TouchableOpacity>
           </View>
 
           <View style={styles.content}>

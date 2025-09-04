@@ -156,9 +156,6 @@ export default function EmergencyConfirmationModal({
             <Text style={styles.headerTitle}>
               {isDeactivating ? 'DESACTIVAR EMERGENCIA' : 'ACTIVAR EMERGENCIA'}
             </Text>
-            <TouchableOpacity style={styles.closeButton} onPress={onClose}>
-              <X size={24} color="#FFFFFF" />
-            </TouchableOpacity>
           </View>
 
           {/* Content */}

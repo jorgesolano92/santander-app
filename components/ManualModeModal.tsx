@@ -317,9 +317,6 @@ export default function ManualModeModal({
         {/* Header */}
         <View style={styles.header}>
           <Text style={styles.headerTitle}>SAIMA SEGURIDAD – Panel de control puertas SECURA</Text>
-          <TouchableOpacity style={styles.closeButton} onPress={onClose}>
-            <X size={24} color="#FFFFFF" />
-          </TouchableOpacity>
         </View>
 
         <View style={styles.content}>
