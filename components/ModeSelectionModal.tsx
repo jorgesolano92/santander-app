@@ -38,7 +38,7 @@ const modeOptions: ModeOption[] = [
   // HORARIO
   {
     id: 'horario_extendido',
-    category: 'HORARIO',
+    category: 'EXTENDIDO',
     name: 'EXTENDIDO',
     description: 'Modo de funcionamiento para horarios extendidos de atención al público. Las puertas funcionan de forma automática con detectores de movimiento activos. Ideal para horarios de mayor afluencia de clientes.'
   },
@@ -75,11 +75,11 @@ const modeOptions: ModeOption[] = [
 ];
 
 // Orden específico de categorías según la imagen
-const categoryOrder = ['COMERCIAL', 'HORARIO', 'INDIVIDUAL'];
+const categoryOrder = ['COMERCIAL', 'EXTENDIDO', 'INDIVIDUAL'];
 
 const categoryDisplayNames = {
   'COMERCIAL': 'COMERCIAL',
-  'HORARIO': 'HORARIO',
+  'EXTENDIDO': 'HORARIO',
   'INDIVIDUAL': '', // Sin título para los modos individuales
 };
 
