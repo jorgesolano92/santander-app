@@ -229,9 +229,16 @@ export default function ModeSelectionModal({ visible, onClose, onModeSelect }: M
   const selectedModeDetails = getSelectedModeDetails();
 
   const styles = StyleSheet.create({
+    overlay: {
+      flex: 1,
+      backgroundColor: 'rgba(0, 0, 0, 0.5)',
+      paddingTop: 100, // Espacio para el header principal
+    },
     container: {
       flex: 1,
       backgroundColor: '#F8F9FA',
+      borderTopLeftRadius: 16,
+      borderTopRightRadius: 16,
     },
     header: {
       backgroundColor: '#495057',
@@ -467,10 +474,11 @@ export default function ModeSelectionModal({ visible, onClose, onModeSelect }: M
     <Modal
       visible={visible}
       animationType="slide"
-      transparent={false}
+      transparent={true}
       onRequestClose={onClose}
     >
-      <View style={styles.container}>
+      <View style={styles.overlay}>
+        <View style={styles.container}>
         {/* Header */}
         <View style={styles.header}>
           <Text style={styles.headerTitle}>SAIMA SEGURIDAD – Panel de control puertas SECURA</Text>
@@ -562,6 +570,7 @@ export default function ModeSelectionModal({ visible, onClose, onModeSelect }: M
               </Text>
             </TouchableOpacity>
           </View>
+        </View>
         </View>
       </View>
     </Modal>
