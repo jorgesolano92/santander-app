@@ -476,6 +476,11 @@ export default function ModeSelectionModal({ visible, onClose, onModeSelect }: M
           <Text style={styles.headerTitle}>SAIMA SEGURIDAD – Panel de control puertas SECURA</Text>
         </View>
 
+        {/* Header */}
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>SAIMA SEGURIDAD – Panel de control puertas SECURA</Text>
+        </View>
+
         <View style={styles.content}>
           {/* Left Panel - Mode Selection */}
           <ScrollView style={styles.leftPanel} contentContainerStyle={styles.leftPanelContent}>
