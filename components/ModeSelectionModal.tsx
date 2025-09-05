@@ -87,7 +87,6 @@ export default function ModeSelectionModal({ visible, onClose, onModeSelect }: M
   const { width = 0 } = useWindowDimensions();
   const isSmallTablet = width < 900;
   const isLargeTablet = width >= 1200;
-  const [currentDateTime, setCurrentDateTime] = useState(new Date());
 
   const [selectedMode, setSelectedMode] = useState<string>('comercial_automatico');
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
@@ -99,27 +98,6 @@ export default function ModeSelectionModal({ visible, onClose, onModeSelect }: M
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const isMountedRef = useRef<boolean>(false);
   const selectedModeRef = useRef<string>('comercial_automatico');
-
-  // Actualizar fecha y hora cada segundo
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrentDateTime(new Date());
-    }, 1000);
-
-    return () => clearInterval(timer);
-  }, []);
-
-  // Formatear fecha y hora
-  const formatDateTime = useCallback((date: Date) => {
-    const day = date.getDate().toString().padStart(2, '0');
-    const month = (date.getMonth() + 1).toString().padStart(2, '0');
-    const year = date.getFullYear();
-    const hours = date.getHours().toString().padStart(2, '0');
-    const minutes = date.getMinutes().toString().padStart(2, '0');
-    const seconds = date.getSeconds().toString().padStart(2, '0');
-    
-    return `${day}/${month}/${year} ${hours}:${minutes}:${seconds}`;
-  }, []);
 
   // Actualizar la referencia cuando cambie el modo seleccionado
   useEffect(() => {
@@ -252,11 +230,28 @@ export default function ModeSelectionModal({ visible, onClose, onModeSelect }: M
   const selectedModeDetails = getSelectedModeDetails();
 
   const styles = StyleSheet.create({
-    container: {
+    overlay: {
       flex: 1,
-      backgroundColor: '#F8F9FA',
+      backgroundColor: 'rgba(0, 0, 0, 0.5)',
+      justifyContent: 'center',
+      alignItems: 'center',
+      paddingTop: 120, // Espacio para el header principal
+      paddingHorizontal: 20,
+      paddingBottom: 20,
     },
-    header: {
+    modalContainer: {
+      backgroundColor: '#F8F9FA',
+      borderRadius: 16,
+      width: '100%',
+      height: '100%',
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 8 },
+      shadowOpacity: 0.3,
+      shadowRadius: 16,
+      elevation: 8,
+      overflow: 'hidden',
+    },
+    modalHeader: {
       backgroundColor: '#495057',
       flexDirection: 'row',
       justifyContent: 'space-between',
@@ -269,68 +264,7 @@ export default function ModeSelectionModal({ visible, onClose, onModeSelect }: M
       shadowRadius: 4,
       elevation: 3,
     },
-    dateTimeContainer: {
-      backgroundColor: 'rgba(255, 255, 255, 0.1)',
-      paddingHorizontal: isSmallTablet ? 12 : isLargeTablet ? 20 : 16,
-      paddingVertical: isSmallTablet ? 6 : isLargeTablet ? 10 : 8,
-      borderRadius: 8,
-      borderWidth: 1,
-      borderColor: 'rgba(255, 255, 255, 0.2)',
-    },
-    dateTimeText: {
-      fontSize: isSmallTablet ? 12 : isLargeTablet ? 16 : 14,
-      fontWeight: '600',
-      color: '#FFFFFF',
-      fontFamily: 'monospace',
-      letterSpacing: 0.5,
-    },
-    notificationsButton: {
-      backgroundColor: 'rgba(255, 255, 255, 0.1)',
-      paddingHorizontal: isSmallTablet ? 16 : isLargeTablet ? 24 : 20,
-      paddingVertical: isSmallTablet ? 10 : isLargeTablet ? 14 : 12,
-      borderRadius: 8,
-      borderWidth: 1,
-      borderColor: 'rgba(255, 255, 255, 0.2)',
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 6,
-    },
-    notificationsButtonText: {
-      fontSize: isSmallTablet ? 14 : isLargeTablet ? 18 : 16,
-      fontWeight: '600',
-      color: '#FFFFFF',
-      letterSpacing: 0.5,
-    },
-    leftHeaderSection: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 16,
-    },
-    rightHeaderSection: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 16,
-    },
-    configButton: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      backgroundColor: '#FFFFFF',
-      paddingHorizontal: isSmallTablet ? 16 : isLargeTablet ? 24 : 20,
-      paddingVertical: isSmallTablet ? 10 : isLargeTablet ? 14 : 12,
-      borderRadius: 8,
-      gap: 6,
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 1 },
-      shadowOpacity: 0.1,
-      shadowRadius: 2,
-      elevation: 2,
-    },
-    configButtonText: {
-      fontSize: isSmallTablet ? 12 : isLargeTablet ? 16 : 14,
-      fontWeight: '600',
-      color: '#333333',
-    },
-    headerTitle: {
+    modalHeaderTitle: {
       fontSize: isSmallTablet ? 16 : isLargeTablet ? 20 : 18,
       fontWeight: '600',
       color: '#FFFFFF',
@@ -536,117 +470,98 @@ export default function ModeSelectionModal({ visible, onClose, onModeSelect }: M
   return (
     <Modal
       visible={visible}
-      animationType="fade"
-      transparent={false}
+      animationType="slide"
+      transparent={true}
       onRequestClose={onClose}
     >
-      <View style={styles.container}>
-        {/* Header */}
-        <View style={styles.header}>
-          <View style={styles.leftHeaderSection}>
-            <View style={styles.dateTimeContainer}>
-              <Text style={styles.dateTimeText}>
-                {formatDateTime(currentDateTime)}
-              </Text>
-            </View>
-          </View>
-          
-          <View style={styles.rightHeaderSection}>
-            <TouchableOpacity style={styles.notificationsButton}>
-              <Text style={styles.notificationsButtonText}>NOTIFICACIONES</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity style={styles.configButton}>
-              <Text style={styles.configButtonText}>CONFIGURACIÓN</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity style={styles.configButton}>
-              <Text style={styles.configButtonText}>TÉCNICO</Text>
-            </TouchableOpacity>
-            
+      <View style={styles.overlay}>
+        <View style={styles.modalContainer}>
+          {/* Modal Header */}
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalHeaderTitle}>SELECCIONAR MODO DE OPERACIÓN</Text>
             <TouchableOpacity style={styles.closeButton} onPress={handleClose}>
               <X size={24} color="#FFFFFF" />
             </TouchableOpacity>
           </View>
-        </View>
 
-        <View style={styles.content}>
-          {/* Left Panel - Mode Selection */}
-          <ScrollView style={styles.leftPanel} contentContainerStyle={styles.leftPanelContent}>
-            {categoryOrder.map(category => {
-              const categoryModes = filteredModes.filter(mode => mode.category === category);
-              if (categoryModes.length === 0) return null;
-              
-              return (
-                <View key={category} style={styles.section}>
-                  {categoryDisplayNames[category] ? (
-                    <Text style={styles.sectionTitleStatic}>
-                      {categoryDisplayNames[category]}
-                    </Text>
-                  ) : null}
-                  
-                  {categoryModes.map(mode => (
-                    <TouchableOpacity
-                      key={mode.id}
-                      style={[
-                        styles.modeButton,
-                        selectedMode === mode.id && styles.selectedModeButton
-                      ]}
-                      onPress={() => handleModeSelect(mode.id)}
-                    >
-                      <Text style={[
-                        styles.modeButtonText,
-                        selectedMode === mode.id && styles.selectedModeButtonText
-                      ]}>
-                        {mode.name}
+          <View style={styles.content}>
+            {/* Left Panel - Mode Selection */}
+            <ScrollView style={styles.leftPanel} contentContainerStyle={styles.leftPanelContent}>
+              {categoryOrder.map(category => {
+                const categoryModes = filteredModes.filter(mode => mode.category === category);
+                if (categoryModes.length === 0) return null;
+                
+                return (
+                  <View key={category} style={styles.section}>
+                    {categoryDisplayNames[category] ? (
+                      <Text style={styles.sectionTitleStatic}>
+                        {categoryDisplayNames[category]}
                       </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              );
-            })}
-          </ScrollView>
-
-          {/* Right Panel - Details */}
-          <View style={styles.rightPanel}>
-            {/* Santander Logo */}
-            <View style={styles.logoSection}>
-              <Image 
-                source={require('@/assets/images/banco-santander-seeklogo.png')}
-                style={styles.santanderLogo}
-                resizeMode="contain"
-              />
-            </View>
-
-            {/* Mode Details Card */}
-            <ScrollView style={styles.detailsScrollView}>
-              <View style={styles.detailsCard}>
-                <View style={styles.detailsContent}>
-                  <Text style={styles.detailsTitle}>
-                    {selectedModeDetails?.name}
-                  </Text>
-                  <Text style={styles.detailsDescription}>
-                    {selectedModeDetails?.description}
-                  </Text>
-                </View>
-              </View>
+                    ) : null}
+                    
+                    {categoryModes.map(mode => (
+                      <TouchableOpacity
+                        key={mode.id}
+                        style={[
+                          styles.modeButton,
+                          selectedMode === mode.id && styles.selectedModeButton
+                        ]}
+                        onPress={() => handleModeSelect(mode.id)}
+                      >
+                        <Text style={[
+                          styles.modeButtonText,
+                          selectedMode === mode.id && styles.selectedModeButtonText
+                        ]}>
+                          {mode.name}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                );
+              })}
             </ScrollView>
 
-            {/* Activate Button */}
-            <TouchableOpacity style={styles.activateButton} onPress={handleActivate}>
-              {isCountdownActive && (
-                <View 
-                  style={[
-                    styles.progressBar, 
-                    { width: `${((30 - countdown) / 30) * 100}%` }
-                  ]} 
+            {/* Right Panel - Details */}
+            <View style={styles.rightPanel}>
+              {/* Santander Logo */}
+              <View style={styles.logoSection}>
+                <Image 
+                  source={require('@/assets/images/banco-santander-seeklogo.png')}
+                  style={styles.santanderLogo}
+                  resizeMode="contain"
                 />
-              )}
-              <Text style={styles.activateButtonText}>
-                {isCountdownActive && countdown > 0 ? `ACTIVAR (${countdown}s)` : 
-                 countdown === 0 ? 'ACTIVADO' : 'ACTIVAR'}
-              </Text>
-            </TouchableOpacity>
+              </View>
+
+              {/* Mode Details Card */}
+              <ScrollView style={styles.detailsScrollView}>
+                <View style={styles.detailsCard}>
+                  <View style={styles.detailsContent}>
+                    <Text style={styles.detailsTitle}>
+                      {selectedModeDetails?.name}
+                    </Text>
+                    <Text style={styles.detailsDescription}>
+                      {selectedModeDetails?.description}
+                    </Text>
+                  </View>
+                </View>
+              </ScrollView>
+
+              {/* Activate Button */}
+              <TouchableOpacity style={styles.activateButton} onPress={handleActivate}>
+                {isCountdownActive && (
+                  <View 
+                    style={[
+                      styles.progressBar, 
+                      { width: `${((30 - countdown) / 30) * 100}%` }
+                    ]} 
+                  />
+                )}
+                <Text style={styles.activateButtonText}>
+                  {isCountdownActive && countdown > 0 ? `ACTIVAR (${countdown}s)` : 
+                   countdown === 0 ? 'ACTIVADO' : 'ACTIVAR'}
+                </Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </View>
