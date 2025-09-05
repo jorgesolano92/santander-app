@@ -92,6 +92,14 @@ export default function TechnicianModal({ visible, onClose }: TechnicianModalPro
     handleClose();
   };
 
+  const handleOverlayPress = () => {
+    handleClose();
+  };
+
+  const handleModalPress = (e: any) => {
+    e.stopPropagation();
+  };
+
   const styles = StyleSheet.create({
     overlay: {
       flex: 1,
@@ -338,8 +346,16 @@ export default function TechnicianModal({ visible, onClose }: TechnicianModalPro
       transparent={true}
       onRequestClose={handleClose}
     >
-      <View style={styles.overlay}>
-        <View style={styles.modalContainer}>
+      <TouchableOpacity 
+        style={styles.overlay} 
+        activeOpacity={1} 
+        onPress={handleOverlayPress}
+      >
+        <TouchableOpacity 
+          style={styles.modalContainer}
+          activeOpacity={1}
+          onPress={handleModalPress}
+        >
           {/* Header */}
           <View style={styles.header}>
             <Text style={styles.headerTitle}>
@@ -478,8 +494,8 @@ export default function TechnicianModal({ visible, onClose }: TechnicianModalPro
               </>
             )}
           </View>
-        </View>
-      </View>
+        </TouchableOpacity>
+      </TouchableOpacity>
     </Modal>
   );
 }
