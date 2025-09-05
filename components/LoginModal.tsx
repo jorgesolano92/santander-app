@@ -339,8 +339,16 @@ export default function LoginModal({ visible, onClose, onSuccess }: LoginModalPr
       transparent={true}
       onRequestClose={handleClose}
     >
-      <View style={styles.overlay}>
-        <View style={styles.modalContainer}>
+      <TouchableOpacity 
+        style={styles.overlay} 
+        activeOpacity={1} 
+        onPress={handleClose}
+      >
+        <TouchableOpacity 
+          style={styles.modalContainer}
+          activeOpacity={1}
+          onPress={(e) => e.stopPropagation()}
+        >
           {/* Header */}
           <View style={styles.header}>
             <Text style={styles.headerTitle}>ACCESO AL SISTEMA</Text>
@@ -430,8 +438,8 @@ export default function LoginModal({ visible, onClose, onSuccess }: LoginModalPr
               </TouchableOpacity>
             </View>
           </View>
-        </View>
-      </View>
+        </TouchableOpacity>
+      </TouchableOpacity>
     </Modal>
   );
 }
