@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { doorControlService, ConfigurationData, SystemStatus } from '../services/DoorControlService';
 
 export interface UseDoorControlReturn {
