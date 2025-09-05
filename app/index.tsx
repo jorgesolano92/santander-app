@@ -12,6 +12,32 @@ import ManualModeModal from '@/components/ManualModeModal';
 import EmergencyConfirmationModal from '@/components/EmergencyConfirmationModal';
 import { useDoorControl } from '@/hooks/useDoorControl';
 
+// Function to format mode names for display
+const formatModeForDisplay = (mode: string): string => {
+  const modeMap: { [key: string]: string } = {
+    'comercial_automatico': 'COMERCIAL AUTOMÁTICO',
+    'comercial_esclusa': 'COMERCIAL ESCLUSA',
+    'horario_extendido': 'HORARIO EXTENDIDO',
+    'horario_manual': 'HORARIO MANUAL',
+    'horario_autoservicio': 'HORARIO AUTOSERVICIO',
+    'oficina_cerrada': 'OFICINA CERRADA',
+    'carga_cajero': 'CARGA DE CAJERO',
+    'emergencia': 'EMERGENCIA',
+    'manual': 'MANUAL',
+    'COMERCIAL AUTOMATICO': 'COMERCIAL AUTOMÁTICO',
+    'COMERCIAL ESCLUSA': 'COMERCIAL ESCLUSA',
+    'HORARIO EXTENDIDO': 'HORARIO EXTENDIDO',
+    'HORARIO MANUAL': 'HORARIO MANUAL',
+    'HORARIO AUTOSERVICIO': 'HORARIO AUTOSERVICIO',
+    'OFICINA CERRADA': 'OFICINA CERRADA',
+    'CARGA DE CAJERO': 'CARGA DE CAJERO',
+    'EMERGENCIA': 'EMERGENCIA',
+    'MANUAL': 'MANUAL'
+  };
+  
+  return modeMap[mode] || mode;
+};
+
 export default function MainScreen() {
   // Get window dimensions reactively
   const { width = 0, height = 0 } = useWindowDimensions();
