@@ -229,22 +229,15 @@ export default function ModeSelectionModal({ visible, onClose, onModeSelect }: M
   const selectedModeDetails = getSelectedModeDetails();
 
   const styles = StyleSheet.create({
-    overlay: {
-      flex: 1,
-      backgroundColor: 'rgba(0, 0, 0, 0.5)',
-      paddingTop: 100, // Espacio para el header principal
-    },
     container: {
       flex: 1,
       backgroundColor: '#F8F9FA',
-      borderTopLeftRadius: 16,
-      borderTopRightRadius: 16,
     },
     header: {
       backgroundColor: '#495057',
       flexDirection: 'row',
-      justifyContent: 'space-between',
       alignItems: 'center',
+      justifyContent: 'space-between',
       paddingHorizontal: isSmallTablet ? 20 : isLargeTablet ? 32 : 24,
       paddingVertical: isSmallTablet ? 16 : isLargeTablet ? 24 : 20,
       shadowColor: '#000',
@@ -252,6 +245,50 @@ export default function ModeSelectionModal({ visible, onClose, onModeSelect }: M
       shadowOpacity: 0.1,
       shadowRadius: 4,
       elevation: 3,
+    },
+    leftHeaderSection: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 16,
+    },
+    rightHeaderSection: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 16,
+    },
+    dateTimeContainer: {
+      backgroundColor: 'rgba(255, 255, 255, 0.1)',
+      paddingHorizontal: isSmallTablet ? 12 : isLargeTablet ? 20 : 16,
+      paddingVertical: isSmallTablet ? 6 : isLargeTablet ? 10 : 8,
+      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: 'rgba(255, 255, 255, 0.2)',
+    },
+    dateTimeText: {
+      fontSize: isSmallTablet ? 12 : isLargeTablet ? 16 : 14,
+      fontWeight: '600',
+      color: '#FFFFFF',
+      fontFamily: 'monospace',
+      letterSpacing: 0.5,
+    },
+    configButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: '#FFFFFF',
+      paddingHorizontal: isSmallTablet ? 16 : isLargeTablet ? 24 : 20,
+      paddingVertical: isSmallTablet ? 10 : isLargeTablet ? 14 : 12,
+      borderRadius: 8,
+      gap: 6,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 0.1,
+      shadowRadius: 2,
+      elevation: 2,
+    },
+    configButtonText: {
+      fontSize: isSmallTablet ? 12 : isLargeTablet ? 16 : 14,
+      fontWeight: '600',
+      color: '#333333',
     },
     headerTitle: {
       fontSize: isSmallTablet ? 16 : isLargeTablet ? 20 : 18,
@@ -261,14 +298,17 @@ export default function ModeSelectionModal({ visible, onClose, onModeSelect }: M
     },
     notificationsButton: {
       backgroundColor: 'rgba(255, 255, 255, 0.1)',
-      paddingHorizontal: 20,
-      paddingVertical: 12,
+      paddingHorizontal: isSmallTablet ? 16 : isLargeTablet ? 24 : 20,
+      paddingVertical: isSmallTablet ? 10 : isLargeTablet ? 14 : 12,
       borderRadius: 8,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
       borderWidth: 1,
       borderColor: 'rgba(255, 255, 255, 0.2)',
     },
     notificationsButtonText: {
-      fontSize: 16,
+      fontSize: isSmallTablet ? 12 : isLargeTablet ? 16 : 14,
       fontWeight: '600',
       color: '#FFFFFF',
       letterSpacing: 0.5,
@@ -473,18 +513,40 @@ export default function ModeSelectionModal({ visible, onClose, onModeSelect }: M
   return (
     <Modal
       visible={visible}
-      animationType="slide"
-      transparent={true}
+      animationType="fade"
+      transparent={false}
       onRequestClose={onClose}
     >
-      <View style={styles.overlay}>
-        <View style={styles.container}>
-        {/* Header */}
+      <View style={styles.container}>
+        {/* Header con todos los elementos */}
         <View style={styles.header}>
+          <View style={styles.leftHeaderSection}>
+            <View style={styles.dateTimeContainer}>
+              <Text style={styles.dateTimeText}>
+                {new Date().toLocaleDateString('es-ES')} {new Date().toLocaleTimeString('es-ES')}
+              </Text>
+            </View>
+          </View>
+          
           <Text style={styles.headerTitle}>SAIMA SEGURIDAD – Panel de control puertas SECURA</Text>
-          <TouchableOpacity style={styles.closeButton} onPress={handleClose}>
-            <X size={24} color="#FFFFFF" />
-          </TouchableOpacity>
+          
+          <View style={styles.rightHeaderSection}>
+            <TouchableOpacity style={styles.configButton}>
+              <Text style={styles.configButtonText}>CONFIGURACIÓN</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity style={styles.notificationsButton}>
+              <Text style={styles.notificationsButtonText}>NOTIFICACIONES</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity style={styles.configButton}>
+              <Text style={styles.configButtonText}>TÉCNICO</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity style={styles.closeButton} onPress={handleClose}>
+              <X size={24} color="#FFFFFF" />
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Header */}
@@ -570,7 +632,6 @@ export default function ModeSelectionModal({ visible, onClose, onModeSelect }: M
               </Text>
             </TouchableOpacity>
           </View>
-        </View>
         </View>
       </View>
     </Modal>
