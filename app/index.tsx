@@ -467,15 +467,8 @@ export default function MainScreen() {
       letterSpacing: 0.5,
     },
     connectionIndicator: {
-      backgroundColor: '#DC3545',
-      paddingHorizontal: isSmallTablet ? 12 : isLargeTablet ? 16 : 14,
+      paddingHorizontal: isSmallTablet ? 8 : isLargeTablet ? 12 : 10,
       paddingVertical: isSmallTablet ? 8 : isLargeTablet ? 12 : 10,
-      borderRadius: 12,
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.1,
-      shadowRadius: 4,
-      elevation: 2,
     },
     connectionText: {
       fontSize: isSmallTablet ? 12 : isLargeTablet ? 16 : 14,
@@ -985,7 +978,10 @@ export default function MainScreen() {
         {/* Right Section */}
         <View style={styles.rightHeaderSection}>
           <View style={styles.connectionIndicator}>
-            <Wifi size={isSmallTablet ? 16 : isLargeTablet ? 20 : 18} color="#FFFFFF" />
+            <Wifi 
+              size={isSmallTablet ? 20 : isLargeTablet ? 24 : 22} 
+              color={connectionStatus === 'connected' ? '#28A745' : '#DC3545'} 
+            />
           </View>
           
           <TouchableOpacity 
