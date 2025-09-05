@@ -284,6 +284,122 @@ export default function MainScreen() {
     rightHeaderSection: {
       flexDirection: 'row',
       alignItems: 'center',
+      gap: 12,
+    },
+    connectionIndicatorContainer: {
+      backgroundColor: 'rgba(255, 255, 255, 0.1)',
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: 'rgba(255, 255, 255, 0.2)',
+      marginRight: 16,
+    },
+    connectionIndicator: {
+      paddingHorizontal: isSmallTablet ? 10 : isLargeTablet ? 16 : 12,
+      paddingVertical: isSmallTablet ? 5 : isLargeTablet ? 8 : 6,
+      borderRadius: 12,
+    },
+    connectionText: {
+      fontSize: isSmallTablet ? 10 : isLargeTablet ? 14 : 12,
+      fontWeight: '600',
+      color: '#FFFFFF',
+    },
+    scheduleIndicator: {
+      backgroundColor: '#17A2B8',
+      paddingHorizontal: isSmallTablet ? 10 : isLargeTablet ? 16 : 12,
+      paddingVertical: isSmallTablet ? 5 : isLargeTablet ? 8 : 6,
+      borderRadius: 12,
+    },
+    scheduleText: {
+      fontSize: isSmallTablet ? 10 : isLargeTablet ? 14 : 12,
+      fontWeight: '600',
+      color: '#FFFFFF',
+    },
+    manualModeIndicator: {
+      backgroundColor: '#FFC107',
+      paddingHorizontal: isSmallTablet ? 10 : isLargeTablet ? 16 : 12,
+      paddingVertical: isSmallTablet ? 5 : isLargeTablet ? 8 : 6,
+      borderRadius: 12,
+    },
+    manualModeText: {
+      fontSize: isSmallTablet ? 10 : isLargeTablet ? 14 : 12,
+      fontWeight: '600',
+      color: '#212529',
+    },
+    configButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: '#FFFFFF',
+      paddingHorizontal: isSmallTablet ? 16 : isLargeTablet ? 24 : 20,
+      paddingVertical: isSmallTablet ? 10 : isLargeTablet ? 14 : 12,
+      borderRadius: 8,
+      gap: 6,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 0.1,
+      shadowRadius: 2,
+      elevation: 2,
+    },
+    configButtonText: {
+      fontSize: isSmallTablet ? 12 : isLargeTablet ? 16 : 14,
+      fontWeight: '600',
+      color: '#333333',
+    },
+    header: {
+      backgroundColor: '#495057',
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: isSmallTablet ? 16 : isLargeTablet ? 32 : 24,
+      paddingTop: (isSmallTablet ? 12 : isLargeTablet ? 20 : 16) + insets.top,
+      paddingBottom: isSmallTablet ? 12 : isLargeTablet ? 20 : 16,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.1,
+      shadowRadius: 4,
+      elevation: 3,
+    },
+    dateTimeContainer: {
+      backgroundColor: 'rgba(255, 255, 255, 0.1)',
+      paddingHorizontal: isSmallTablet ? 12 : isLargeTablet ? 20 : 16,
+      paddingVertical: isSmallTablet ? 6 : isLargeTablet ? 10 : 8,
+      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: 'rgba(255, 255, 255, 0.2)',
+    },
+    dateTimeText: {
+      fontSize: isSmallTablet ? 12 : isLargeTablet ? 16 : 14,
+      fontWeight: '600',
+      color: '#FFFFFF',
+      fontFamily: 'monospace',
+      letterSpacing: 0.5,
+    },
+    notificationsButton: {
+      backgroundColor: 'rgba(255, 255, 255, 0.1)',
+      paddingHorizontal: isSmallTablet ? 16 : isLargeTablet ? 24 : 20,
+      paddingVertical: isSmallTablet ? 10 : isLargeTablet ? 14 : 12,
+      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: 'rgba(255, 255, 255, 0.2)',
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+    },
+    notificationsButtonText: {
+      fontSize: isSmallTablet ? 14 : isLargeTablet ? 18 : 16,
+      fontWeight: '600',
+      color: '#FFFFFF',
+      letterSpacing: 0.5,
+    },
+    leftHeaderSection: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 16,
+    },
+    rightHeaderSection: {
+      flexDirection: 'row',
+      alignItems: 'center',
     },
     connectionIndicatorContainer: {
       backgroundColor: 'rgba(255, 255, 255, 0.1)',
@@ -796,6 +912,41 @@ export default function MainScreen() {
   return (
     <View style={styles.container}>
       {/* Header */}
+      <View style={styles.header}>
+        <View style={styles.leftHeaderSection}>
+          <View style={styles.dateTimeContainer}>
+            <Text style={styles.dateTimeText}>
+              {formatDateTime(currentDateTime)}
+            </Text>
+          </View>
+        </View>
+
+        <View style={styles.rightHeaderSection}>
+          <TouchableOpacity 
+            style={styles.notificationsButton}
+            onPress={() => console.log('📢 Notificaciones presionado')}
+          >
+            <MessageCircle size={20} color="#FFFFFF" />
+            <Text style={styles.notificationsButtonText}>NOTIFICACIONES</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={styles.configButton}
+            onPress={() => setShowLoginModal(true)}
+          >
+            <Settings size={20} color="#333333" />
+            <Text style={styles.configButtonText}>CONFIGURACIÓN</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={styles.configButton}
+            onPress={() => setShowTechnicianModal(true)}
+          >
+            <HardHat size={20} color="#333333" />
+            <Text style={styles.configButtonText}>TÉCNICO</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
 
       {error && (
         <View style={styles.errorBanner}>

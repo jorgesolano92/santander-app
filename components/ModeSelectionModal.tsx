@@ -235,7 +235,7 @@ export default function ModeSelectionModal({ visible, onClose, onModeSelect }: M
       backgroundColor: 'rgba(0, 0, 0, 0.5)',
       justifyContent: 'center',
       alignItems: 'center',
-      paddingTop: 120, // Espacio para el header principal
+      paddingTop: 140, // Espacio para el header principal
       paddingHorizontal: 20,
       paddingBottom: 20,
     },
