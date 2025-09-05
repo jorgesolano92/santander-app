@@ -1069,7 +1069,7 @@ export default function MainScreen() {
           <View style={styles.operationSection}>
             <View style={styles.modeCard}>
               <View style={styles.modeContent}>
-                <Text style={styles.modeTitle}>Modo de Operación Actual: {currentMode}</Text>
+                <Text style={styles.modeTitle}>Modo de Operación Actual: {formatModeForDisplay(currentMode)}</Text>
                 <Text style={styles.modeDescription}>
                   Visualización del modo de operación activo en tiempo real. Esta información se obtiene automáticamente mediante una consulta GET al sistema de control de puertas.
                 </Text>
