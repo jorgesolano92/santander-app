@@ -351,115 +351,129 @@ export default function MainScreen() {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      paddingHorizontal: isSmallTablet ? 16 : isLargeTablet ? 32 : 24,
-      paddingTop: (isSmallTablet ? 12 : isLargeTablet ? 20 : 16) + insets.top,
-      paddingBottom: isSmallTablet ? 12 : isLargeTablet ? 20 : 16,
+      paddingHorizontal: isSmallTablet ? 20 : isLargeTablet ? 40 : 32,
+      paddingTop: (isSmallTablet ? 16 : isLargeTablet ? 24 : 20) + insets.top,
+      paddingBottom: isSmallTablet ? 16 : isLargeTablet ? 24 : 20,
       shadowColor: '#000',
       shadowOffset: { width: 0, height: 2 },
       shadowOpacity: 0.1,
       shadowRadius: 4,
       elevation: 3,
     },
+    leftHeaderSection: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: isSmallTablet ? 16 : isLargeTablet ? 24 : 20,
+    },
+    rightHeaderSection: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: isSmallTablet ? 16 : isLargeTablet ? 24 : 20,
+    },
+    centerHeaderSection: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
     dateTimeContainer: {
-      backgroundColor: 'rgba(255, 255, 255, 0.1)',
-      paddingHorizontal: isSmallTablet ? 12 : isLargeTablet ? 20 : 16,
-      paddingVertical: isSmallTablet ? 6 : isLargeTablet ? 10 : 8,
-      borderRadius: 8,
+      backgroundColor: 'rgba(255, 255, 255, 0.15)',
+      paddingHorizontal: isSmallTablet ? 16 : isLargeTablet ? 24 : 20,
+      paddingVertical: isSmallTablet ? 8 : isLargeTablet ? 12 : 10,
+      borderRadius: 12,
       borderWidth: 1,
-      borderColor: 'rgba(255, 255, 255, 0.2)',
+      borderColor: 'rgba(255, 255, 255, 0.25)',
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.1,
+      shadowRadius: 4,
+      elevation: 2,
     },
     dateTimeText: {
-      fontSize: isSmallTablet ? 12 : isLargeTablet ? 16 : 14,
+      fontSize: isSmallTablet ? 14 : isLargeTablet ? 18 : 16,
       fontWeight: '600',
       color: '#FFFFFF',
       fontFamily: 'monospace',
       letterSpacing: 0.5,
     },
     notificationsButton: {
-      backgroundColor: 'rgba(255, 255, 255, 0.1)',
-      paddingHorizontal: isSmallTablet ? 16 : isLargeTablet ? 24 : 20,
-      paddingVertical: isSmallTablet ? 10 : isLargeTablet ? 14 : 12,
-      borderRadius: 8,
+      backgroundColor: 'rgba(255, 255, 255, 0.15)',
+      paddingHorizontal: isSmallTablet ? 20 : isLargeTablet ? 28 : 24,
+      paddingVertical: isSmallTablet ? 12 : isLargeTablet ? 16 : 14,
+      borderRadius: 12,
       borderWidth: 1,
-      borderColor: 'rgba(255, 255, 255, 0.2)',
+      borderColor: 'rgba(255, 255, 255, 0.25)',
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 6,
+      gap: isSmallTablet ? 8 : isLargeTablet ? 12 : 10,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.1,
+      shadowRadius: 4,
+      elevation: 2,
     },
     notificationsButtonText: {
-      fontSize: isSmallTablet ? 14 : isLargeTablet ? 18 : 16,
+      fontSize: isSmallTablet ? 16 : isLargeTablet ? 20 : 18,
       fontWeight: '600',
       color: '#FFFFFF',
       letterSpacing: 0.5,
     },
-    leftHeaderSection: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 16,
-    },
-    rightHeaderSection: {
-      flexDirection: 'row',
-      alignItems: 'center',
-    },
-    connectionIndicatorContainer: {
-      backgroundColor: 'rgba(255, 255, 255, 0.1)',
-      paddingHorizontal: 12,
-      paddingVertical: 8,
-      borderRadius: 8,
+    technicianButton: {
+      backgroundColor: 'rgba(255, 255, 255, 0.15)',
+      paddingHorizontal: isSmallTablet ? 20 : isLargeTablet ? 28 : 24,
+      paddingVertical: isSmallTablet ? 12 : isLargeTablet ? 16 : 14,
+      borderRadius: 12,
       borderWidth: 1,
-      borderColor: 'rgba(255, 255, 255, 0.2)',
-      marginRight: 16,
-    },
-    connectionIndicator: {
-      paddingHorizontal: isSmallTablet ? 10 : isLargeTablet ? 16 : 12,
-      paddingVertical: isSmallTablet ? 5 : isLargeTablet ? 8 : 6,
-      borderRadius: 12,
-    },
-    connectionText: {
-      fontSize: isSmallTablet ? 10 : isLargeTablet ? 14 : 12,
-      fontWeight: '600',
-      color: '#FFFFFF',
-    },
-    scheduleIndicator: {
-      backgroundColor: '#17A2B8',
-      paddingHorizontal: isSmallTablet ? 10 : isLargeTablet ? 16 : 12,
-      paddingVertical: isSmallTablet ? 5 : isLargeTablet ? 8 : 6,
-      borderRadius: 12,
-    },
-    scheduleText: {
-      fontSize: isSmallTablet ? 10 : isLargeTablet ? 14 : 12,
-      fontWeight: '600',
-      color: '#FFFFFF',
-    },
-    manualModeIndicator: {
-      backgroundColor: '#FFC107',
-      paddingHorizontal: isSmallTablet ? 10 : isLargeTablet ? 16 : 12,
-      paddingVertical: isSmallTablet ? 5 : isLargeTablet ? 8 : 6,
-      borderRadius: 12,
-    },
-    manualModeText: {
-      fontSize: isSmallTablet ? 10 : isLargeTablet ? 14 : 12,
-      fontWeight: '600',
-      color: '#212529',
-    },
-    configButton: {
+      borderColor: 'rgba(255, 255, 255, 0.25)',
       flexDirection: 'row',
       alignItems: 'center',
-      backgroundColor: '#FFFFFF',
-      paddingHorizontal: isSmallTablet ? 16 : isLargeTablet ? 24 : 20,
-      paddingVertical: isSmallTablet ? 10 : isLargeTablet ? 14 : 12,
-      borderRadius: 8,
-      gap: 6,
+      gap: isSmallTablet ? 8 : isLargeTablet ? 12 : 10,
       shadowColor: '#000',
-      shadowOffset: { width: 0, height: 1 },
+      shadowOffset: { width: 0, height: 2 },
       shadowOpacity: 0.1,
-      shadowRadius: 2,
+      shadowRadius: 4,
       elevation: 2,
     },
-    configButtonText: {
+    technicianButtonText: {
+      fontSize: isSmallTablet ? 16 : isLargeTablet ? 20 : 18,
+      fontWeight: '600',
+      color: '#FFFFFF',
+      letterSpacing: 0.5,
+    },
+    connectionIndicator: {
+      backgroundColor: '#DC3545',
+      paddingHorizontal: isSmallTablet ? 12 : isLargeTablet ? 16 : 14,
+      paddingVertical: isSmallTablet ? 8 : isLargeTablet ? 12 : 10,
+      borderRadius: 12,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.1,
+      shadowRadius: 4,
+      elevation: 2,
+    },
+    connectionText: {
       fontSize: isSmallTablet ? 12 : isLargeTablet ? 16 : 14,
       fontWeight: '600',
-      color: '#333333',
+      color: '#FFFFFF',
+    },
+    configButton: {
+      backgroundColor: '#FFFFFF',
+      paddingHorizontal: isSmallTablet ? 20 : isLargeTablet ? 28 : 24,
+      paddingVertical: isSmallTablet ? 12 : isLargeTablet ? 16 : 14,
+      borderRadius: 12,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: isSmallTablet ? 8 : isLargeTablet ? 12 : 10,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.15,
+      shadowRadius: 4,
+      elevation: 3,
+    },
+    configButtonText: {
+      fontSize: isSmallTablet ? 16 : isLargeTablet ? 20 : 18,
+      fontWeight: '600',
+      color: '#495057',
+      letterSpacing: 0.5,
     },
     errorBanner: {
       backgroundColor: '#F8D7DA',
@@ -913,7 +927,27 @@ export default function MainScreen() {
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
+        {/* Left Section */}
         <View style={styles.leftHeaderSection}>
+          <TouchableOpacity 
+            style={styles.notificationsButton}
+            onPress={() => console.log('📢 Notificaciones presionado')}
+          >
+            <MessageCircle size={isSmallTablet ? 20 : isLargeTablet ? 24 : 22} color="#FFFFFF" />
+            <Text style={styles.notificationsButtonText}>NOTIFICACIONES</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={styles.technicianButton}
+            onPress={() => setShowTechnicianModal(true)}
+          >
+            <HardHat size={isSmallTablet ? 20 : isLargeTablet ? 24 : 22} color="#FFFFFF" />
+            <Text style={styles.technicianButtonText}>TÉCNICO</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Center Section */}
+        <View style={styles.centerHeaderSection}>
           <View style={styles.dateTimeContainer}>
             <Text style={styles.dateTimeText}>
               {formatDateTime(currentDateTime)}
@@ -921,29 +955,18 @@ export default function MainScreen() {
           </View>
         </View>
 
+        {/* Right Section */}
         <View style={styles.rightHeaderSection}>
-          <TouchableOpacity 
-            style={styles.notificationsButton}
-            onPress={() => console.log('📢 Notificaciones presionado')}
-          >
-            <MessageCircle size={20} color="#FFFFFF" />
-            <Text style={styles.notificationsButtonText}>NOTIFICACIONES</Text>
-          </TouchableOpacity>
-
+          <View style={styles.connectionIndicator}>
+            <Wifi size={isSmallTablet ? 16 : isLargeTablet ? 20 : 18} color="#FFFFFF" />
+          </View>
+          
           <TouchableOpacity 
             style={styles.configButton}
             onPress={() => setShowLoginModal(true)}
           >
-            <Settings size={20} color="#333333" />
+            <Settings size={isSmallTablet ? 20 : isLargeTablet ? 24 : 22} color="#495057" />
             <Text style={styles.configButtonText}>CONFIGURACIÓN</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity 
-            style={styles.configButton}
-            onPress={() => setShowTechnicianModal(true)}
-          >
-            <HardHat size={20} color="#333333" />
-            <Text style={styles.configButtonText}>TÉCNICO</Text>
           </TouchableOpacity>
         </View>
       </View>
