@@ -1,6 +1,7 @@
 import { View, Text, StyleSheet, TouchableOpacity, Modal, ScrollView } from 'react-native';
 import React from 'react';
 import { useState, useEffect, useRef } from 'react';
+import { useCallback } from 'react';
 import { X, ChevronDown, ChevronRight } from 'lucide-react-native';
 import { Image } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -86,6 +87,7 @@ export default function ModeSelectionModal({ visible, onClose, onModeSelect }: M
   const { width = 0 } = useWindowDimensions();
   const isSmallTablet = width < 900;
   const isLargeTablet = width >= 1200;
+  const [currentDateTime, setCurrentDateTime] = useState(new Date());
 
   const [selectedMode, setSelectedMode] = useState<string>('comercial_automatico');
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
@@ -97,6 +99,27 @@ export default function ModeSelectionModal({ visible, onClose, onModeSelect }: M
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const isMountedRef = useRef<boolean>(false);
   const selectedModeRef = useRef<string>('comercial_automatico');
+
+  // Actualizar fecha y hora cada segundo
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentDateTime(new Date());
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, []);
+
+  // Formatear fecha y hora
+  const formatDateTime = useCallback((date: Date) => {
+    const day = date.getDate().toString().padStart(2, '0');
+    const month = (date.getMonth() + 1).toString().padStart(2, '0');
+    const year = date.getFullYear();
+    const hours = date.getHours().toString().padStart(2, '0');
+    const minutes = date.getMinutes().toString().padStart(2, '0');
+    const seconds = date.getSeconds().toString().padStart(2, '0');
+    
+    return `${day}/${month}/${year} ${hours}:${minutes}:${seconds}`;
+  }, []);
 
   // Actualizar la referencia cuando cambie el modo seleccionado
   useEffect(() => {
@@ -236,25 +259,15 @@ export default function ModeSelectionModal({ visible, onClose, onModeSelect }: M
     header: {
       backgroundColor: '#495057',
       flexDirection: 'row',
-      alignItems: 'center',
       justifyContent: 'space-between',
+      alignItems: 'center',
       paddingHorizontal: isSmallTablet ? 20 : isLargeTablet ? 32 : 24,
-      paddingVertical: isSmallTablet ? 16 : isLargeTablet ? 24 : 20,
+      paddingVertical: isSmallTablet ? 12 : isLargeTablet ? 20 : 16,
       shadowColor: '#000',
       shadowOffset: { width: 0, height: 2 },
       shadowOpacity: 0.1,
       shadowRadius: 4,
       elevation: 3,
-    },
-    leftHeaderSection: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 16,
-    },
-    rightHeaderSection: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 16,
     },
     dateTimeContainer: {
       backgroundColor: 'rgba(255, 255, 255, 0.1)',
@@ -270,6 +283,33 @@ export default function ModeSelectionModal({ visible, onClose, onModeSelect }: M
       color: '#FFFFFF',
       fontFamily: 'monospace',
       letterSpacing: 0.5,
+    },
+    notificationsButton: {
+      backgroundColor: 'rgba(255, 255, 255, 0.1)',
+      paddingHorizontal: isSmallTablet ? 16 : isLargeTablet ? 24 : 20,
+      paddingVertical: isSmallTablet ? 10 : isLargeTablet ? 14 : 12,
+      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: 'rgba(255, 255, 255, 0.2)',
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+    },
+    notificationsButtonText: {
+      fontSize: isSmallTablet ? 14 : isLargeTablet ? 18 : 16,
+      fontWeight: '600',
+      color: '#FFFFFF',
+      letterSpacing: 0.5,
+    },
+    leftHeaderSection: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 16,
+    },
+    rightHeaderSection: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 16,
     },
     configButton: {
       flexDirection: 'row',
@@ -292,23 +332,6 @@ export default function ModeSelectionModal({ visible, onClose, onModeSelect }: M
     },
     headerTitle: {
       fontSize: isSmallTablet ? 16 : isLargeTablet ? 20 : 18,
-      fontWeight: '600',
-      color: '#FFFFFF',
-      letterSpacing: 0.5,
-    },
-    notificationsButton: {
-      backgroundColor: 'rgba(255, 255, 255, 0.1)',
-      paddingHorizontal: isSmallTablet ? 16 : isLargeTablet ? 24 : 20,
-      paddingVertical: isSmallTablet ? 10 : isLargeTablet ? 14 : 12,
-      borderRadius: 8,
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 6,
-      borderWidth: 1,
-      borderColor: 'rgba(255, 255, 255, 0.2)',
-    },
-    notificationsButtonText: {
-      fontSize: isSmallTablet ? 12 : isLargeTablet ? 16 : 14,
       fontWeight: '600',
       color: '#FFFFFF',
       letterSpacing: 0.5,
@@ -518,25 +541,23 @@ export default function ModeSelectionModal({ visible, onClose, onModeSelect }: M
       onRequestClose={onClose}
     >
       <View style={styles.container}>
-        {/* Header con todos los elementos */}
+        {/* Header */}
         <View style={styles.header}>
           <View style={styles.leftHeaderSection}>
             <View style={styles.dateTimeContainer}>
               <Text style={styles.dateTimeText}>
-                {new Date().toLocaleDateString('es-ES')} {new Date().toLocaleTimeString('es-ES')}
+                {formatDateTime(currentDateTime)}
               </Text>
             </View>
           </View>
           
-          <Text style={styles.headerTitle}>SAIMA SEGURIDAD – Panel de control puertas SECURA</Text>
-          
           <View style={styles.rightHeaderSection}>
-            <TouchableOpacity style={styles.configButton}>
-              <Text style={styles.configButtonText}>CONFIGURACIÓN</Text>
-            </TouchableOpacity>
-            
             <TouchableOpacity style={styles.notificationsButton}>
               <Text style={styles.notificationsButtonText}>NOTIFICACIONES</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity style={styles.configButton}>
+              <Text style={styles.configButtonText}>CONFIGURACIÓN</Text>
             </TouchableOpacity>
             
             <TouchableOpacity style={styles.configButton}>
@@ -547,11 +568,6 @@ export default function ModeSelectionModal({ visible, onClose, onModeSelect }: M
               <X size={24} color="#FFFFFF" />
             </TouchableOpacity>
           </View>
-        </View>
-
-        {/* Header */}
-        <View style={styles.header}>
-          <Text style={styles.headerTitle}>SAIMA SEGURIDAD – Panel de control puertas SECURA</Text>
         </View>
 
         <View style={styles.content}>
