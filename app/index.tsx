@@ -121,12 +121,13 @@ export default function MainScreen() {
   const handleConfigSave = async (config: any) => {
     console.log('💾 Configuración guardada (Sandbox):', config);
     
-    // Configurar el servicio con los datos reales
+    // Configurar el servicio con los datos de la nueva configuración
     const configData = {
-      serverIP: config.direccionIP1 || '192.168.1.100',
-      serverPort: 8080,
-      authToken: 'bearer_token_here',
-      username: config.username || 'admin',
+      serverIP: config.network?.consoleIP || '192.168.1.25',
+      apiPort: config.api?.port || 443,
+      apiUsername: config.api?.username || 'Scati2023',
+      apiPassword: config.api?.password || 'Scati2023',
+      username: 'admin', // Usuario de la app
       updateServerURL: 'http://192.168.1.200/updates',
       deviceId: 'device_id_placeholder',
     };

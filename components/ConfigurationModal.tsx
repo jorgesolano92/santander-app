@@ -2,30 +2,22 @@ import { View, Text, StyleSheet, TextInput, TouchableOpacity, Modal } from 'reac
 import { useState } from 'react';
 import { User, X, RefreshCw, ArrowLeft } from 'lucide-react-native';
 import { ScrollView } from 'react-native';
-import DetailedConfigurationModal from './DetailedConfigurationModal';
 
 interface ConfigurationModalProps {
   visible: boolean;
   onClose: () => void;
-  onSave: (config: ConfigData) => void;
+  onSuccess: () => void;
   officeNumber?: string;
 }
 
-interface ConfigData {
-  username: string;
-  password: string;
-  officeNumber: string;
-}
-
-export default function ConfigurationModal({ visible, onClose, onSave, officeNumber = "1234" }: ConfigurationModalProps) {
-  const [config, setConfig] = useState<ConfigData>({
+export default function ConfigurationModal({ visible, onClose, onSuccess, officeNumber = "1234" }: ConfigurationModalProps) {
+  const [config, setConfig] = useState({
     username: '',
     password: '',
     officeNumber: officeNumber
   });
   const [error, setError] = useState<string>('');
   const [isLoading, setIsLoading] = useState(false);
-  const [showDetailedConfig, setShowDetailedConfig] = useState(false);
 
   // Credenciales de prueba
   const TEST_CREDENTIALS = {
@@ -41,9 +33,10 @@ export default function ConfigurationModal({ visible, onClose, onSave, officeNum
     setTimeout(() => {
       if (config.username === TEST_CREDENTIALS.username && 
           config.password === TEST_CREDENTIALS.password) {
-        // En lugar de cerrar, abrir la vista detallada
-        setShowDetailedConfig(true);
+        // Login exitoso - llamar onSuccess para que el padre abra NewConfigurationModal
         setConfig({ username: '', password: '', officeNumber: config.officeNumber });
+        setError('');
+        onSuccess();
       } else {
         setError('Usuario o contraseña incorrectos');
       }
@@ -55,19 +48,13 @@ export default function ConfigurationModal({ visible, onClose, onSave, officeNum
     // Implementar lógica de actualización
   };
 
-  const handleDetailedConfigClose = () => {
-    setShowDetailedConfig(false);
-    onClose();
-  };
-
-  const handleDetailedConfigSave = (config: ConfigData) => {
-    onSave(config);
-    setShowDetailedConfig(false);
+  const handleClose = () => {
+    setConfig({ username: '', password: '', officeNumber: officeNumber });
+    setError('');
     onClose();
   };
 
   return (
-    <View style={{ flex: 1 }}>
       <Modal visible={visible} animationType="slide" presentationStyle="fullScreen">
         <View style={styles.container}>
           {/* Header */}
@@ -167,15 +154,6 @@ export default function ConfigurationModal({ visible, onClose, onSave, officeNum
           </ScrollView>
         </View>
       </Modal>
-
-      {/* Detailed Configuration Modal */}
-      <DetailedConfigurationModal
-        visible={showDetailedConfig}
-        onClose={handleDetailedConfigClose}
-        onSave={handleDetailedConfigSave}
-        officeNumber={config.officeNumber}
-      />
-    </View>
   );
 }
 
