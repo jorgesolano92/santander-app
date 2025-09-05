@@ -233,7 +233,6 @@ export default function ModeSelectionModal({ visible, onClose, onModeSelect }: M
     overlay: {
       flex: 1,
       backgroundColor: 'rgba(0, 0, 0, 0.5)',
-      paddingTop: 140, // Espacio para el header principal
     },
     modalContainer: {
       backgroundColor: '#F8F9FA',
