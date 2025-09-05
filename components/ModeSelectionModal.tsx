@@ -459,9 +459,6 @@ export default function ModeSelectionModal({ visible, onClose, onModeSelect }: M
           {/* Modal Header */}
           <View style={styles.modalHeader}>
             <Text style={styles.modalHeaderTitle}>SELECCIONAR MODO DE OPERACIÓN</Text>
-            <TouchableOpacity style={styles.closeButton} onPress={handleClose}>
-              <X size={24} color="#FFFFFF" />
-            </TouchableOpacity>
           </View>
 
           <View style={styles.content}>
