@@ -233,22 +233,13 @@ export default function ModeSelectionModal({ visible, onClose, onModeSelect }: M
     overlay: {
       flex: 1,
       backgroundColor: 'rgba(0, 0, 0, 0.5)',
-      justifyContent: 'center',
-      alignItems: 'center',
       paddingTop: 140, // Espacio para el header principal
-      paddingHorizontal: 20,
-      paddingBottom: 20,
     },
     modalContainer: {
       backgroundColor: '#F8F9FA',
-      borderRadius: 16,
-      width: '100%',
+      borderRadius: 0,
+      flex: 1,
       height: '100%',
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 8 },
-      shadowOpacity: 0.3,
-      shadowRadius: 16,
-      elevation: 8,
       overflow: 'hidden',
     },
     modalHeader: {
@@ -258,11 +249,6 @@ export default function ModeSelectionModal({ visible, onClose, onModeSelect }: M
       alignItems: 'center',
       paddingHorizontal: isSmallTablet ? 20 : isLargeTablet ? 32 : 24,
       paddingVertical: isSmallTablet ? 12 : isLargeTablet ? 20 : 16,
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.1,
-      shadowRadius: 4,
-      elevation: 3,
     },
     modalHeaderTitle: {
       fontSize: isSmallTablet ? 16 : isLargeTablet ? 20 : 18,
@@ -281,13 +267,8 @@ export default function ModeSelectionModal({ visible, onClose, onModeSelect }: M
     },
     leftPanel: {
       backgroundColor: '#FFFFFF',
-      borderRadius: 16,
+      borderRadius: 0,
       flex: 1,
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.08,
-      shadowRadius: 12,
-      elevation: 4,
     },
     leftPanelContent: {
       padding: isSmallTablet ? 12 : isLargeTablet ? 20 : 16,
