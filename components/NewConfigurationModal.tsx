@@ -3,6 +3,8 @@ import { useState, useEffect } from 'react';
 import { ArrowLeft, Save, X, Wifi, RefreshCw } from 'lucide-react-native';
 import { useWindowDimensions } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { doorControlService, ApiResponse } from '@/services/DoorControlService';
+import ApiResponseDisplayModal from './ApiResponseDisplayModal';
 
 interface NewConfigurationModalProps {
   visible: boolean;
@@ -76,6 +78,9 @@ export default function NewConfigurationModal({ visible, onClose, onSave }: NewC
   });
 
   const [connectionStatus, setConnectionStatus] = useState<{ [key: string]: 'testing' | 'success' | 'error' | null }>({});
+  const [showApiResponseModal, setShowApiResponseModal] = useState(false);
+  const [apiResponseData, setApiResponseData] = useState<ApiResponse | null>(null);
+  const [isTestingApi, setIsTestingApi] = useState(false);
 
   useEffect(() => {
     if (visible) {
@@ -124,6 +129,41 @@ export default function NewConfigurationModal({ visible, onClose, onSave }: NewC
     onSave(configForParent);
     onClose(); // Cerrar el modal después de guardar
     console.log('📋 Nueva configuración completa guardada:', config);
+  };
+
+  const handleTestApiConnection = async () => {
+    setIsTestingApi(true);
+    try {
+      // Configurar temporalmente el servicio con los datos actuales
+      const tempConfig = {
+        serverIP: config.network.consoleIP,
+        apiPort: config.api.port,
+        apiUsername: config.api.username,
+        apiPassword: config.api.password,
+        username: 'admin',
+        updateServerURL: 'http://192.168.1.200/updates',
+        deviceId: 'device_id_placeholder',
+      };
+      
+      await doorControlService.setConfiguration(tempConfig);
+      
+      // Realizar la prueba GET
+      const response = await doorControlService.getTags(0, 0);
+      
+      if (response) {
+        setApiResponseData(response);
+        setShowApiResponseModal(true);
+        console.log('✅ Prueba API exitosa:', response);
+      } else {
+        console.error('❌ No se recibieron datos de la API');
+        // Aquí podrías mostrar un mensaje de error al usuario
+      }
+    } catch (error) {
+      console.error('❌ Error en prueba API:', error);
+      // Aquí podrías mostrar un mensaje de error al usuario
+    } finally {
+      setIsTestingApi(false);
+    }
   };
 
   const updateDoor = (index: number, field: keyof DoorConfig, value: any) => {
@@ -516,6 +556,31 @@ export default function NewConfigurationModal({ visible, onClose, onSave }: NewC
       color: '#FFFFFF',
       letterSpacing: 0.5,
     },
+    testApiButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: '#17A2B8',
+      paddingHorizontal: isSmallTablet ? 12 : isLargeTablet ? 16 : 14,
+      paddingVertical: isSmallTablet ? 8 : isLargeTablet ? 12 : 10,
+      borderRadius: 6,
+      gap: isSmallTablet ? 4 : isLargeTablet ? 8 : 6,
+      marginTop: isSmallTablet ? 8 : isLargeTablet ? 12 : 10,
+      shadowColor: '#17A2B8',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.2,
+      shadowRadius: 4,
+      elevation: 3,
+    },
+    testApiButtonDisabled: {
+      opacity: 0.6,
+    },
+    testApiButtonText: {
+      fontSize: isSmallTablet ? 10 : isLargeTablet ? 12 : 11,
+      fontWeight: '600',
+      color: '#FFFFFF',
+      letterSpacing: 0.5,
+    },
   });
   return (
     <Modal
@@ -676,6 +741,17 @@ export default function NewConfigurationModal({ visible, onClose, onSave }: NewC
                     secureTextEntry={true}
                   />
                 </View>
+                
+                <TouchableOpacity 
+                  style={[styles.testApiButton, isTestingApi && styles.testApiButtonDisabled]}
+                  onPress={handleTestApiConnection}
+                  disabled={isTestingApi}
+                >
+                  <RefreshCw size={16} color="#FFFFFF" />
+                  <Text style={styles.testApiButtonText}>
+                    {isTestingApi ? 'PROBANDO...' : 'PROBAR CONEXIÓN API'}
+                  </Text>
+                </TouchableOpacity>
               </View>
             </View>
 
@@ -742,6 +818,12 @@ export default function NewConfigurationModal({ visible, onClose, onSave }: NewC
             </TouchableOpacity>
           </View>
         </ScrollView>
+        
+        <ApiResponseDisplayModal
+          visible={showApiResponseModal}
+          onClose={() => setShowApiResponseModal(false)}
+          data={apiResponseData}
+        />
       </View>
     </Modal>
   );
