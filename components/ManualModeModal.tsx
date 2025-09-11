@@ -478,7 +478,7 @@ export default function ManualModeModal({
               style={styles.visualizationButton}
               onPress={onClose}
             >
-              <Text style={styles.visualizationButtonText}>VISUALIZACIÓN</Text>
+              <Text style={styles.visualizationButtonText}>VOLVER</Text>
             </TouchableOpacity>
           </View>
 
