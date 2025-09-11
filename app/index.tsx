@@ -1073,7 +1073,7 @@ export default function MainScreen() {
               style={styles.visualizationButton}
               onPress={() => setShowManualModeModal(true)}
             >
-              <Text style={styles.visualizationButtonText}>CONTROL MANUAL</Text>
+              <Text style={styles.visualizationButtonText}>VISUALIZACIÓN</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -1116,7 +1116,7 @@ export default function MainScreen() {
               style={styles.visualizationButton}
               onPress={() => setShowManualModeModal(true)}
             >
-              <Text style={styles.visualizationButtonText}>CONTROL MANUAL</Text>
+              <Text style={styles.visualizationButtonText}>VISUALIZACIÓN</Text>
             </TouchableOpacity>
           </View>
         </View>
