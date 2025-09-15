@@ -45,7 +45,7 @@ const modeOptions: ModeOption[] = [
   {
     id: 'horario_autoservicio',
     category: 'EXTENDIDO',
-    name: 'HORARIO AUTOSERVICIO',
+    name: 'AUTOSERVICIO',
     description: 'Modo de funcionamiento para horarios de autoservicio. Las puertas funcionan de forma automática permitiendo el acceso a los cajeros automáticos fuera del horario comercial normal.'
   },
   
