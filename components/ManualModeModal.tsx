@@ -348,9 +348,6 @@ export default function ManualModeModal({
             </View>
             <View style={styles.modeHeaderContent}>
               <Text style={styles.modeTitle}>MODO MANUAL</Text>
-              <Text style={styles.modeDescription}>
-                La puerta P1 y la puerta P2 actúan de forma manual, es decir, tanto si se va en dirección entrada como de salida, será necesario pulsar el botón de llamada de los video porteros ubicados en la parte exterior de las puertas o los pulsadores retro iluminados ubicados en el interior de las puertas. Los detectores de movimiento interiores y exteriores actuarán sólo en modo seguridad, es decir, cuando la puerta esté abierta, protegerán a los usuarios frente al atrapamiento cuando ésta se cierre. Las puertas trabajan en modo esclusa; es decir una puerta no abre hasta que la otra esté cerrada.
-              </Text>
             </View>
             <TouchableOpacity 
               style={styles.changeModeButton}
