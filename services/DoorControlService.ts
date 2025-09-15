@@ -64,7 +64,7 @@ export interface ApiResponse {
 }
 
 export interface ModeChangeRequest {
-  mode: string;
+  mode: number;
   timestamp: string;
   operator?: string;
 }
@@ -78,6 +78,32 @@ export interface ConfigurationData {
   updateServerURL: string;
   deviceId: string;
 }
+
+// Mapeo de nombres de modo a números INI según especificación del cliente
+const modeNameToIniMap: { [key: string]: number } = {
+  'COMERCIAL AUTOMATICO': 1,      // INI1 = Automático
+  'COMERCIAL AUTOMÁTICO': 1,      // Variante con acento
+  'COMERCIAL ESCLUSA': 2,         // INI2 = Exclusa
+  'HORARIO EXTENDIDO': 3,         // INI3 = Extendido
+  'HORARIO AUTOSERVICIO': 4,      // INI4 = Autoservicio
+  'OFICINA CERRADA': 5,           // INI5 = Oficina Cerrada
+  'CARGA DE CAJERO': 6,           // INI6 = Carga Cajero
+  'CARGA CAJERO': 6,              // Variante sin "DE"
+  'MANUAL': 7,                    // INI7 = Manual
+  'EMERGENCIA': 8,                // INI8 = Emergencia
+};
+
+// Mapeo inverso de números INI a nombres de modo
+const iniToModeNameMap: { [key: number]: string } = {
+  1: 'COMERCIAL AUTOMÁTICO',
+  2: 'COMERCIAL ESCLUSA',
+  3: 'HORARIO EXTENDIDO',
+  4: 'HORARIO AUTOSERVICIO',
+  5: 'OFICINA CERRADA',
+  6: 'CARGA DE CAJERO',
+  7: 'MANUAL',
+  8: 'EMERGENCIA',
+};
 
 class DoorControlService {
   private baseURL: string = '';
@@ -422,37 +448,48 @@ class DoorControlService {
   // Cambiar modo de operación
   async changeMode(mode: string): Promise<boolean> {
     try {
+      // Obtener el número INI correspondiente al modo
+      const iniNumber = modeNameToIniMap[mode.toUpperCase()];
+      
+      if (iniNumber === undefined) {
+        console.error(`❌ Modo no válido: ${mode}. Modos disponibles:`, Object.keys(modeNameToIniMap));
+        return false;
+      }
+      
       // Modo sandbox: simular cambio de modo
       if (this.sandboxMode) {
-        console.log(`🔧 SANDBOX MODE: Changing mode to ${mode}`);
+        console.log(`🔧 SANDBOX MODE: Changing mode to ${mode} (INI${iniNumber})`);
         
         // Simular delay de red
         await new Promise(resolve => setTimeout(resolve, 1000));
         
         // Actualizar estado simulado
-        this.mockSystemStatus.mode = mode;
+        this.mockSystemStatus.mode = iniToModeNameMap[iniNumber] || mode;
         this.mockSystemStatus.lastSync = new Date().toISOString();
         
         // Simular lógica específica por modo
-        if (mode.includes('EMERGENCIA')) {
+        if (iniNumber === 8) { // INI8 = EMERGENCIA
           this.mockSystemStatus.emergencyActive = true;
           this.mockSystemStatus.doors.P1.locked = false;
           this.mockSystemStatus.doors.P2.locked = false;
           this.mockSystemStatus.doors.P1.status = 'open';
           this.mockSystemStatus.doors.P2.status = 'open';
-        } else if (mode.includes('CERRADO')) {
+        } else if (iniNumber === 5) { // INI5 = OFICINA CERRADA
           this.mockSystemStatus.doors.P1.locked = true;
           this.mockSystemStatus.doors.P2.locked = true;
           this.mockSystemStatus.doors.P1.status = 'closed';
           this.mockSystemStatus.doors.P2.status = 'closed';
-        } else if (mode.includes('CARGA CAJERO')) {
+        } else if (iniNumber === 6) { // INI6 = CARGA CAJERO
           this.mockSystemStatus.doors.P1.locked = true;
           this.mockSystemStatus.doors.P1.status = 'closed';
           this.mockSystemStatus.doors.P2.locked = false;
           this.mockSystemStatus.doors.P2.status = 'open';
+        } else {
+          // Restablecer emergencia para otros modos
+          this.mockSystemStatus.emergencyActive = false;
         }
         
-        console.log(`✅ SANDBOX: Mode changed successfully to ${mode}`);
+        console.log(`✅ SANDBOX: Mode changed successfully to ${mode} (INI${iniNumber})`);
         return true;
       }
 
@@ -462,7 +499,7 @@ class DoorControlService {
       }
 
       const modeRequest: ModeChangeRequest = {
-        mode: mode,
+        mode: iniNumber,
         timestamp: new Date().toISOString(),
         operator: 'tablet-app',
       };
@@ -487,7 +524,7 @@ class DoorControlService {
       await new Promise(resolve => setTimeout(resolve, 1000));
       const status = await this.getSystemStatus();
       
-      return status?.mode === mode;
+      return status?.mode === iniToModeNameMap[iniNumber];
     } catch (error) {
       console.error('Error changing mode:', error);
       return false;
