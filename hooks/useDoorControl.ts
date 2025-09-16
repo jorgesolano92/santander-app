@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { doorControlService, ConfigurationData, SystemStatus } from '../services/DoorControlService';
+import { sipService, SipConfig, SipCallState, SipEventType } from '../services/SipService';
+import { IntercomConfig } from '../components/IntercomConfigurationModal';
 
 export interface UseDoorControlReturn {
   systemStatus: SystemStatus | null;
@@ -13,6 +15,13 @@ export interface UseDoorControlReturn {
   validateDevice: () => Promise<boolean>;
   determineScheduleMode: () => string;
   controlDoor: (doorId: string, action: 'open' | 'close') => Promise<boolean>;
+  // SIP functionality
+  sipCallState: SipCallState | null;
+  startIntercomCall: (intercomConfig: IntercomConfig) => Promise<boolean>;
+  endIntercomCall: () => Promise<void>;
+  muteMicrophone: (mute: boolean) => Promise<void>;
+  setSpeakerphone: (enabled: boolean) => Promise<void>;
+  activeSipCallDoorId: string | null;
 }
 
 export function useDoorControl(): UseDoorControlReturn {
@@ -22,13 +31,52 @@ export function useDoorControl(): UseDoorControlReturn {
   const [error, setError] = useState<string | null>(null);
   const [connectionStatus, setConnectionStatus] = useState<'connected' | 'disconnected' | 'connecting'>('disconnected');
   const [currentScheduleMode, setCurrentScheduleMode] = useState<string | null>(null);
+  const [sipCallState, setSipCallState] = useState<SipCallState | null>(null);
+  const [activeSipCallDoorId, setActiveSipCallDoorId] = useState<string | null>(null);
 
   // Initialize sandbox mode on mount
   useEffect(() => {
     isMountedRef.current = true;
     
+    // Set up SIP service event listeners
+    const handleSipEvent = (eventType: SipEventType, data?: any) => {
+      if (!isMountedRef.current) return;
+      
+      console.log(`🔊 SIP Event: ${eventType}`, data);
+      
+      switch (eventType) {
+        case 'callStarted':
+          setSipCallState(sipService.getCallState());
+          break;
+        case 'callConnected':
+          setSipCallState(sipService.getCallState());
+          break;
+        case 'callEnded':
+          setSipCallState(null);
+          setActiveSipCallDoorId(null);
+          break;
+        case 'callFailed':
+          setSipCallState(null);
+          setActiveSipCallDoorId(null);
+          setError('Error en la llamada SIP: ' + (data?.message || 'Error desconocido'));
+          break;
+        case 'error':
+          setError('Error SIP: ' + (data?.message || 'Error desconocido'));
+          break;
+      }
+    };
+
+    // Add SIP event listeners
+    sipService.on('callStarted', (data) => handleSipEvent('callStarted', data));
+    sipService.on('callConnected', (data) => handleSipEvent('callConnected', data));
+    sipService.on('callEnded', (data) => handleSipEvent('callEnded', data));
+    sipService.on('callFailed', (data) => handleSipEvent('callFailed', data));
+    sipService.on('error', (data) => handleSipEvent('error', data));
+    
     return () => {
       isMountedRef.current = false;
+      // Clean up SIP service listeners
+      sipService.removeAllListeners();
     };
   }, []);
 
@@ -205,6 +253,116 @@ export function useDoorControl(): UseDoorControlReturn {
     }
   }, [updateSystemStatus]);
 
+  const startIntercomCall = useCallback(async (intercomConfig: IntercomConfig): Promise<boolean> => {
+    try {
+      if (!isMountedRef.current) return false;
+      
+      setIsLoading(true);
+      setError(null);
+      
+      // Check if SIP is configured
+      if (!intercomConfig.sipUri || !intercomConfig.sipUsername || !intercomConfig.sipPassword) {
+        setError('Configuración SIP incompleta para este intercomunicador');
+        return false;
+      }
+      
+      // Prepare SIP configuration
+      const sipConfig: SipConfig = {
+        sipUri: intercomConfig.sipUri,
+        sipUsername: intercomConfig.sipUsername,
+        sipPassword: intercomConfig.sipPassword,
+        sipDomain: intercomConfig.sipDomain || 'localhost',
+        enableTLS: intercomConfig.enableTLS || false,
+      };
+      
+      // Initialize SIP service if not already initialized
+      if (!sipService.isServiceInitialized()) {
+        const initialized = await sipService.initialize(sipConfig);
+        if (!initialized) {
+          setError('Error inicializando servicio SIP');
+          return false;
+        }
+      }
+      
+      // Start the call
+      const callStarted = await sipService.startCall(intercomConfig.sipUri);
+      
+      if (callStarted && isMountedRef.current) {
+        // Determine door ID from intercom name
+        const doorId = intercomConfig.name.includes('P1') || intercomConfig.name.includes('Calle') ? 'P1' : 'P2';
+        setActiveSipCallDoorId(doorId);
+        setSipCallState(sipService.getCallState());
+      }
+      
+      return callStarted;
+    } catch (err) {
+      if (isMountedRef.current) {
+        setError(err instanceof Error ? err.message : 'Error iniciando llamada SIP');
+      }
+      return false;
+    } finally {
+      if (isMountedRef.current) {
+        setIsLoading(false);
+      }
+    }
+  }, []);
+
+  const endIntercomCall = useCallback(async (): Promise<void> => {
+    try {
+      if (!isMountedRef.current) return;
+      
+      setIsLoading(true);
+      setError(null);
+      
+      await sipService.endCall();
+      
+      if (isMountedRef.current) {
+        setSipCallState(null);
+        setActiveSipCallDoorId(null);
+      }
+    } catch (err) {
+      if (isMountedRef.current) {
+        setError(err instanceof Error ? err.message : 'Error finalizando llamada SIP');
+      }
+    } finally {
+      if (isMountedRef.current) {
+        setIsLoading(false);
+      }
+    }
+  }, []);
+
+  const muteMicrophone = useCallback(async (mute: boolean): Promise<void> => {
+    try {
+      if (!isMountedRef.current) return;
+      
+      await sipService.muteMicrophone(mute);
+      
+      if (isMountedRef.current) {
+        setSipCallState(sipService.getCallState());
+      }
+    } catch (err) {
+      if (isMountedRef.current) {
+        setError(err instanceof Error ? err.message : 'Error controlando micrófono');
+      }
+    }
+  }, []);
+
+  const setSpeakerphone = useCallback(async (enabled: boolean): Promise<void> => {
+    try {
+      if (!isMountedRef.current) return;
+      
+      await sipService.setSpeakerphone(enabled);
+      
+      if (isMountedRef.current) {
+        setSipCallState(sipService.getCallState());
+      }
+    } catch (err) {
+      if (isMountedRef.current) {
+        setError(err instanceof Error ? err.message : 'Error controlando altavoz');
+      }
+    }
+  }, []);
+
   // Auto-refresh system status periodically when connected
   useEffect(() => {
     let interval: NodeJS.Timeout;
@@ -234,5 +392,11 @@ export function useDoorControl(): UseDoorControlReturn {
     validateDevice,
     determineScheduleMode,
     controlDoor,
+    sipCallState,
+    startIntercomCall,
+    endIntercomCall,
+    muteMicrophone,
+    setSpeakerphone,
+    activeSipCallDoorId,
   };
 }

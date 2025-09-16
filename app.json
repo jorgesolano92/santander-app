@@ -22,7 +22,14 @@
     "plugins": [
       "expo-router",
       "expo-font", 
-      "expo-web-browser"
+      "expo-web-browser",
+      [
+        "@config-plugins/react-native-webrtc",
+        {
+          "cameraPermission": "This app needs access to camera for video calls with intercoms.",
+          "microphonePermission": "This app needs access to microphone for voice calls with intercoms."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true
