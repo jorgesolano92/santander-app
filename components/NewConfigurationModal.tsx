@@ -1,6 +1,6 @@
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, Modal, ScrollView, Switch } from 'react-native';
 import { useState, useEffect } from 'react';
-import { ArrowLeft, Save, X, Wifi, RefreshCw } from 'lucide-react-native';
+import { ArrowLeft, Save, X, Wifi, RefreshCw, Settings } from 'lucide-react-native';
 import { useWindowDimensions } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { doorControlService, ApiResponse } from '@/services/DoorControlService';
@@ -11,6 +11,8 @@ interface NewConfigurationModalProps {
   visible: boolean;
   onClose: () => void;
   onSave: (config: ConfigurationData) => void;
+  initialSandboxMode: boolean;
+  onToggleSandboxMode: (isSandbox: boolean) => void;
 }
 
 interface DoorConfig {
@@ -47,7 +49,13 @@ interface ConfigurationData {
   officeWithATM: boolean;
 }
 
-export default function NewConfigurationModal({ visible, onClose, onSave }: NewConfigurationModalProps) {
+export default function NewConfigurationModal({ 
+  visible, 
+  onClose, 
+  onSave, 
+  initialSandboxMode, 
+  onToggleSandboxMode 
+}: NewConfigurationModalProps) {
   const { width = 0 } = useWindowDimensions();
   const isSmallTablet = width < 900;
   const isLargeTablet = width >= 1200;
@@ -408,6 +416,23 @@ export default function NewConfigurationModal({ visible, onClose, onSave }: NewC
     closeButton: {
       padding: 8,
     },
+    sandboxModeContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: 'rgba(255, 255, 255, 0.1)',
+      paddingHorizontal: isSmallTablet ? 12 : isLargeTablet ? 16 : 14,
+      paddingVertical: isSmallTablet ? 8 : isLargeTablet ? 12 : 10,
+      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: 'rgba(255, 255, 255, 0.2)',
+      gap: isSmallTablet ? 6 : isLargeTablet ? 10 : 8,
+    },
+    sandboxModeText: {
+      fontSize: isSmallTablet ? 12 : isLargeTablet ? 14 : 13,
+      fontWeight: '600',
+      color: '#FFFFFF',
+      letterSpacing: 0.5,
+    },
     scrollView: {
       flex: 1,
     },
@@ -754,6 +779,21 @@ export default function NewConfigurationModal({ visible, onClose, onSave }: NewC
         {/* Header */}
         <View style={styles.header}>
           <Text style={styles.headerTitle}>CONFIGURACIÓN DEL SISTEMA</Text>
+          
+          <View style={styles.sandboxModeContainer}>
+            <Settings size={16} color="#FFFFFF" />
+            <Text style={styles.sandboxModeText}>MODO SANDBOX</Text>
+            <Switch
+              value={initialSandboxMode}
+              onValueChange={onToggleSandboxMode}
+              trackColor={{ false: '#CED4DA', true: '#28A745' }}
+              thumbColor={initialSandboxMode ? '#FFFFFF' : '#FFFFFF'}
+            />
+          </View>
+          
+          <TouchableOpacity style={styles.closeButton} onPress={onClose}>
+            <X size={24} color="#FFFFFF" />
+          </TouchableOpacity>
         </View>
 
         <ScrollView style={styles.scrollView} contentContainerStyle={styles.content}>

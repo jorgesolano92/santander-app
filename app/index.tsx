@@ -11,6 +11,7 @@ import TechnicianModal from '@/components/TechnicianModal';
 import ManualModeModal from '@/components/ManualModeModal';
 import EmergencyConfirmationModal from '@/components/EmergencyConfirmationModal';
 import { useDoorControl } from '@/hooks/useDoorControl';
+import { doorControlService } from '@/services/DoorControlService';
 
 // Function to format mode names for display
 const formatModeForDisplay = (mode: string): string => {
@@ -96,6 +97,7 @@ export default function MainScreen() {
   const [showEmergencyConfirmModal, setShowEmergencyConfirmModal] = useState(false);
   const [currentDateTime, setCurrentDateTime] = useState(new Date());
   const [communicatingDoors, setCommunicatingDoors] = useState<Set<string>>(new Set());
+  const [isSandboxMode, setIsSandboxMode] = useState(true);
 
   // Actualizar fecha y hora cada segundo
   useEffect(() => {
@@ -105,6 +107,12 @@ export default function MainScreen() {
 
     return () => clearInterval(timer);
   }, []);
+
+  // Actualizar el modo sandbox en el servicio cuando cambie el estado
+  useEffect(() => {
+    doorControlService.setSandboxMode(isSandboxMode);
+    console.log(`🔧 Modo ${isSandboxMode ? 'SANDBOX' : 'REAL'} activado`);
+  }, [isSandboxMode]);
 
   // Formatear fecha y hora
   const formatDateTime = useCallback((date: Date) => {
@@ -143,6 +151,10 @@ export default function MainScreen() {
     };
     checkDevice();
   }, [validateDevice]);
+
+  const handleToggleSandboxMode = (newMode: boolean) => {
+    setIsSandboxMode(newMode);
+  };
 
   const handleConfigSave = async (config: any) => {
     console.log('💾 Configuración guardada (Sandbox):', config);
@@ -1137,6 +1149,8 @@ export default function MainScreen() {
         visible={showNewConfigModal}
         onClose={() => setShowNewConfigModal(false)}
         onSave={handleConfigSave}
+        initialSandboxMode={isSandboxMode}
+        onToggleSandboxMode={handleToggleSandboxMode}
       />
 
       <ModeSelectionModal

@@ -26,7 +26,6 @@ export function useDoorControl(): UseDoorControlReturn {
   // Initialize sandbox mode on mount
   useEffect(() => {
     isMountedRef.current = true;
-    doorControlService.setSandboxMode(true);
     
     return () => {
       isMountedRef.current = false;
