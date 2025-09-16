@@ -325,6 +325,7 @@ export default function NewConfigurationModal({ visible, onClose, onSave }: NewC
       api: { ...prev.api, [field]: value }
     }));
   };
+  
   const updateSchedule = (type: keyof typeof config.schedules, field: keyof ScheduleConfig, value: string) => {
     setConfig(prev => ({
       ...prev,
@@ -741,6 +742,7 @@ export default function NewConfigurationModal({ visible, onClose, onSave }: NewC
       textAlign: 'center',
     },
   });
+  
   return (
     <Modal
       visible={visible}
@@ -781,48 +783,48 @@ export default function NewConfigurationModal({ visible, onClose, onSave }: NewC
                   {door.enabled && (
                     <>
                       <View style={styles.doorDetails}>
-                      <View style={styles.ipRow}>
-                        <Text style={styles.ipLabel}>IP Exterior:</Text>
-                        <TextInput
-                          style={styles.ipInput}
-                          value={door.ipExterior}
-                          onChangeText={(text) => updateDoor(index, 'ipExterior', text)}
-                          placeholder="192.168.1.x"
-                        />
-                        <TouchableOpacity
-                          style={getConnectionButtonStyle(connectionStatus[`exterior_${door.ipExterior}`])}
-                          onPress={() => testConnection('exterior', door.ipExterior)}
-                          disabled={connectionStatus[`exterior_${door.ipExterior}`] === 'testing'}
-                        >
-                          <Wifi size={12} color="#FFFFFF" />
-                        </TouchableOpacity>
-                      </View>
-                      
-                      <View style={styles.ipRow}>
-                        <Text style={styles.ipLabel}>IP Interior:</Text>
-                        <TextInput
-                          style={styles.ipInput}
-                          value={door.ipInterior}
-                          onChangeText={(text) => updateDoor(index, 'ipInterior', text)}
-                          placeholder="192.168.1.x"
-                        />
-                        <TouchableOpacity
-                          style={getConnectionButtonStyle(connectionStatus[`interior_${door.ipInterior}`])}
-                          onPress={() => testConnection('interior', door.ipInterior)}
-                          disabled={connectionStatus[`interior_${door.ipInterior}`] === 'testing'}
-                        >
-                          <Wifi size={12} color="#FFFFFF" />
-                        </TouchableOpacity>
+                        <View style={styles.ipRow}>
+                          <Text style={styles.ipLabel}>IP Exterior:</Text>
+                          <TextInput
+                            style={styles.ipInput}
+                            value={door.ipExterior}
+                            onChangeText={(text) => updateDoor(index, 'ipExterior', text)}
+                            placeholder="192.168.1.x"
+                          />
+                          <TouchableOpacity
+                            style={getConnectionButtonStyle(connectionStatus[`exterior_${door.ipExterior}`])}
+                            onPress={() => testConnection('exterior', door.ipExterior)}
+                            disabled={connectionStatus[`exterior_${door.ipExterior}`] === 'testing'}
+                          >
+                            <Wifi size={12} color="#FFFFFF" />
+                          </TouchableOpacity>
+                        </View>
+                        
+                        <View style={styles.ipRow}>
+                          <Text style={styles.ipLabel}>IP Interior:</Text>
+                          <TextInput
+                            style={styles.ipInput}
+                            value={door.ipInterior}
+                            onChangeText={(text) => updateDoor(index, 'ipInterior', text)}
+                            placeholder="192.168.1.x"
+                          />
+                          <TouchableOpacity
+                            style={getConnectionButtonStyle(connectionStatus[`interior_${door.ipInterior}`])}
+                            onPress={() => testConnection('interior', door.ipInterior)}
+                            disabled={connectionStatus[`interior_${door.ipInterior}`] === 'testing'}
+                          >
+                            <Wifi size={12} color="#FFFFFF" />
+                          </TouchableOpacity>
+                        </View>
                       </View>
                     
-                    <TouchableOpacity
-                      style={styles.intercomConfigButton}
-                      onPress={() => handleIntercomConfig(index)}
-                    >
-                      <Text style={styles.intercomConfigButtonText}>CONFIGURAR INTERCOMUNICADOR</Text>
-                    </TouchableOpacity>
+                      <TouchableOpacity
+                        style={styles.intercomConfigButton}
+                        onPress={() => handleIntercomConfig(index)}
+                      >
+                        <Text style={styles.intercomConfigButtonText}>CONFIGURAR INTERCOMUNICADOR</Text>
+                      </TouchableOpacity>
                     </>
-                  )}
                   )}
                 </View>
               ))}
