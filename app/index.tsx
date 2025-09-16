@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Settings, MessageCircle, DoorOpen, HardHat, Wifi } from 'lucide-react-native';
 import { Image } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import LoginModal from '@/components/LoginModal';
 import NewConfigurationModal from '@/components/NewConfigurationModal';
 import ModeSelectionModal from '@/components/ModeSelectionModal';
