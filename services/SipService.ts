@@ -1,6 +1,21 @@
 import { EventEmitter } from 'events';
 import { UA, Registerer, Inviter, Session, SessionState } from 'sip.js';
-import { mediaDevices, RTCPeerConnection } from 'react-native-webrtc';
+import { Platform } from 'react-native';
+
+// Platform-specific WebRTC imports
+let mediaDevices: any;
+let RTCPeerConnection: any;
+
+if (Platform.OS === 'web') {
+  // Use browser WebRTC APIs for web
+  mediaDevices = navigator.mediaDevices;
+  RTCPeerConnection = window.RTCPeerConnection;
+} else {
+  // Use react-native-webrtc for native platforms
+  const webrtc = require('react-native-webrtc');
+  mediaDevices = webrtc.mediaDevices;
+  RTCPeerConnection = webrtc.RTCPeerConnection;
+}
 
 export interface SipConfig {
   sipUri: string;
