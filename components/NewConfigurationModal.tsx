@@ -779,7 +779,8 @@ export default function NewConfigurationModal({ visible, onClose, onSave }: NewC
                   </View>
                   
                   {door.enabled && (
-                    <View style={styles.doorDetails}>
+                    <>
+                      <View style={styles.doorDetails}>
                       <View style={styles.ipRow}>
                         <Text style={styles.ipLabel}>IP Exterior:</Text>
                         <TextInput
@@ -813,7 +814,6 @@ export default function NewConfigurationModal({ visible, onClose, onSave }: NewC
                           <Wifi size={12} color="#FFFFFF" />
                         </TouchableOpacity>
                       </View>
-                    </View>
                     
                     <TouchableOpacity
                       style={styles.intercomConfigButton}
@@ -821,6 +821,8 @@ export default function NewConfigurationModal({ visible, onClose, onSave }: NewC
                     >
                       <Text style={styles.intercomConfigButtonText}>CONFIGURAR INTERCOMUNICADOR</Text>
                     </TouchableOpacity>
+                    </>
+                  )}
                   )}
                 </View>
               ))}
