@@ -3,6 +3,16 @@ import { X, MessageCircle, DoorOpen } from 'lucide-react-native';
 import { ScrollView } from 'react-native';
 import { useWindowDimensions } from 'react-native';
 import { useDoorControl } from '@/hooks/useDoorControl';
+import DoorVideoStream from './DoorVideoStream';
+import { IntercomConfig } from './IntercomConfigurationModal';
+
+interface DoorConfig {
+  enabled: boolean;
+  name: string;
+  ipExterior: string;
+  ipInterior: string;
+  intercom: IntercomConfig;
+}
 
 interface ManualModeModalProps {
   visible: boolean;
@@ -19,6 +29,7 @@ interface ManualModeModalProps {
   };
   isDoorButtonDisabled: (doorId: 'P1' | 'P2' | 'P3' | 'P4') => boolean;
   getDoorButtonText: (doorId: 'P1' | 'P2' | 'P3' | 'P4') => string;
+  intercomConfigs: DoorConfig[];
 }
 
 export default function ManualModeModal({ 
@@ -30,13 +41,22 @@ export default function ManualModeModal({
   onCommunicate,
   getDoorStatus,
   isDoorButtonDisabled,
-  getDoorButtonText
+  getDoorButtonText,
+  intercomConfigs
 }: ManualModeModalProps) {
   const { width = 0 } = useWindowDimensions();
   const isSmallTablet = width < 900;
   const isLargeTablet = width >= 1200;
 
   const { controlDoor } = useDoorControl();
+
+  // Obtener configuraciones de intercomunicador para cada puerta
+  const getIntercomConfig = (doorIndex: number): IntercomConfig | null => {
+    if (intercomConfigs && intercomConfigs[doorIndex] && intercomConfigs[doorIndex].enabled) {
+      return intercomConfigs[doorIndex].intercom;
+    }
+    return null;
+  };
 
   const handleCommunicate = (doorId: string, doorName: string) => {
     onCommunicate(doorId, doorName);
@@ -363,11 +383,18 @@ export default function ManualModeModal({
             <View style={styles.doorControlSection}>
               <Text style={styles.doorControlTitle}>PUERTA OFICINA</Text>
               <View style={styles.doorControlCard}>
-                <View style={styles.doorControlImagePlaceholder}>
-                  <View style={styles.cameraIcon}>
-                    <View style={styles.cameraIconInner} />
+                {getIntercomConfig(1) ? (
+                  <DoorVideoStream 
+                    intercomConfig={getIntercomConfig(1)!} 
+                    doorName="Puerta Oficina"
+                  />
+                ) : (
+                  <View style={styles.doorControlImagePlaceholder}>
+                    <View style={styles.cameraIcon}>
+                      <View style={styles.cameraIconInner} />
+                    </View>
                   </View>
-                </View>
+                )}
                 
                 <View style={styles.doorControlButtons}>
                   <TouchableOpacity 
@@ -414,11 +441,18 @@ export default function ManualModeModal({
             <View style={styles.doorControlSection}>
               <Text style={styles.doorControlTitle}>PUERTA CALLE</Text>
               <View style={styles.doorControlCard}>
-                <View style={styles.doorControlImagePlaceholder}>
-                  <View style={styles.cameraIcon}>
-                    <View style={styles.cameraIconInner} />
+                {getIntercomConfig(0) ? (
+                  <DoorVideoStream 
+                    intercomConfig={getIntercomConfig(0)!} 
+                    doorName="Puerta Calle"
+                  />
+                ) : (
+                  <View style={styles.doorControlImagePlaceholder}>
+                    <View style={styles.cameraIcon}>
+                      <View style={styles.cameraIconInner} />
+                    </View>
                   </View>
-                </View>
+                )}
                 
                 <View style={styles.doorControlButtons}>
                   <TouchableOpacity 

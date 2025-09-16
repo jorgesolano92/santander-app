@@ -98,6 +98,7 @@ export default function MainScreen() {
   const [currentDateTime, setCurrentDateTime] = useState(new Date());
   const [communicatingDoors, setCommunicatingDoors] = useState<Set<string>>(new Set());
   const [isSandboxMode, setIsSandboxMode] = useState(true);
+  const [systemConfig, setSystemConfig] = useState<SystemConfig | null>(null);
 
   // Actualizar fecha y hora cada segundo
   useEffect(() => {
@@ -113,6 +114,24 @@ export default function MainScreen() {
     doorControlService.setSandboxMode(isSandboxMode);
     console.log(`🔧 Modo ${isSandboxMode ? 'SANDBOX' : 'REAL'} activado`);
   }, [isSandboxMode]);
+
+  // Cargar configuración del sistema al iniciar
+  useEffect(() => {
+    const loadSystemConfig = async () => {
+      try {
+        const savedConfig = await AsyncStorage.getItem('new_door_config');
+        if (savedConfig) {
+          const parsedConfig = JSON.parse(savedConfig);
+          setSystemConfig(parsedConfig);
+          console.log('📋 Configuración del sistema cargada:', parsedConfig);
+        }
+      } catch (error) {
+        console.error('❌ Error cargando configuración del sistema:', error);
+      }
+    };
+    
+    loadSystemConfig();
+  }, []);
 
   // Formatear fecha y hora
   const formatDateTime = useCallback((date: Date) => {
@@ -1172,6 +1191,7 @@ export default function MainScreen() {
         getDoorStatus={getDoorStatus}
         isDoorButtonDisabled={isDoorButtonDisabled}
         getDoorButtonText={getDoorButtonText}
+        intercomConfigs={systemConfig?.doors || []}
       />
 
       <EmergencyConfirmationModal
