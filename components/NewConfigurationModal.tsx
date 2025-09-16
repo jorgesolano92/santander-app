@@ -5,6 +5,7 @@ import { useWindowDimensions } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { doorControlService, ApiResponse } from '@/services/DoorControlService';
 import ApiResponseDisplayModal from './ApiResponseDisplayModal';
+import IntercomConfigurationModal, { IntercomConfig } from './IntercomConfigurationModal';
 
 interface NewConfigurationModalProps {
   visible: boolean;
@@ -17,6 +18,7 @@ interface DoorConfig {
   name: string;
   ipExterior: string;
   ipInterior: string;
+  intercom: IntercomConfig;
 }
 
 interface ScheduleConfig {
@@ -52,11 +54,131 @@ export default function NewConfigurationModal({ visible, onClose, onSave }: NewC
 
   const [config, setConfig] = useState<ConfigurationData>({
     doors: [
-      { enabled: true, name: 'Calle (P1)', ipExterior: '192.168.1.26', ipInterior: '192.168.1.27' },
-      { enabled: true, name: 'Oficina (P2)', ipExterior: '192.168.1.28', ipInterior: '192.168.1.29' },
-      { enabled: false, name: 'Puerta 3', ipExterior: '', ipInterior: '' },
-      { enabled: false, name: 'Puerta 4', ipExterior: '', ipInterior: '' },
-      { enabled: false, name: 'Puerta 5', ipExterior: '', ipInterior: '' },
+      { 
+        enabled: true, 
+        name: 'Calle (P1)', 
+        ipExterior: '192.168.1.26', 
+        ipInterior: '192.168.1.27',
+        intercom: {
+          name: 'Intercomunicador Calle (P1)',
+          cameraIP: '',
+          httpPort: 80,
+          httpsPort: 443,
+          onvifUsername: 'admin',
+          onvifPassword: '',
+          rtspPort: 554,
+          videoProfile: 'MainStream',
+          sipUri: '',
+          sipUsername: '',
+          sipPassword: '',
+          sipDomain: '',
+          enableOnvifEvents: true,
+          enableTLS: false,
+          preferredResolution: '1920x1080',
+          preferredFPS: 25,
+          defaultOpenTime: 5,
+        }
+      },
+      { 
+        enabled: true, 
+        name: 'Oficina (P2)', 
+        ipExterior: '192.168.1.28', 
+        ipInterior: '192.168.1.29',
+        intercom: {
+          name: 'Intercomunicador Oficina (P2)',
+          cameraIP: '',
+          httpPort: 80,
+          httpsPort: 443,
+          onvifUsername: 'admin',
+          onvifPassword: '',
+          rtspPort: 554,
+          videoProfile: 'MainStream',
+          sipUri: '',
+          sipUsername: '',
+          sipPassword: '',
+          sipDomain: '',
+          enableOnvifEvents: true,
+          enableTLS: false,
+          preferredResolution: '1920x1080',
+          preferredFPS: 25,
+          defaultOpenTime: 5,
+        }
+      },
+      { 
+        enabled: false, 
+        name: 'Puerta 3', 
+        ipExterior: '', 
+        ipInterior: '',
+        intercom: {
+          name: 'Intercomunicador Puerta 3',
+          cameraIP: '',
+          httpPort: 80,
+          httpsPort: 443,
+          onvifUsername: 'admin',
+          onvifPassword: '',
+          rtspPort: 554,
+          videoProfile: 'MainStream',
+          sipUri: '',
+          sipUsername: '',
+          sipPassword: '',
+          sipDomain: '',
+          enableOnvifEvents: true,
+          enableTLS: false,
+          preferredResolution: '1920x1080',
+          preferredFPS: 25,
+          defaultOpenTime: 5,
+        }
+      },
+      { 
+        enabled: false, 
+        name: 'Puerta 4', 
+        ipExterior: '', 
+        ipInterior: '',
+        intercom: {
+          name: 'Intercomunicador Puerta 4',
+          cameraIP: '',
+          httpPort: 80,
+          httpsPort: 443,
+          onvifUsername: 'admin',
+          onvifPassword: '',
+          rtspPort: 554,
+          videoProfile: 'MainStream',
+          sipUri: '',
+          sipUsername: '',
+          sipPassword: '',
+          sipDomain: '',
+          enableOnvifEvents: true,
+          enableTLS: false,
+          preferredResolution: '1920x1080',
+          preferredFPS: 25,
+          defaultOpenTime: 5,
+        }
+      },
+      { 
+        enabled: false, 
+        name: 'Puerta 5', 
+        ipExterior: '', 
+        ipInterior: '',
+        intercom: {
+          name: 'Intercomunicador Puerta 5',
+          cameraIP: '',
+          httpPort: 80,
+          httpsPort: 443,
+          onvifUsername: 'admin',
+          onvifPassword: '',
+          rtspPort: 554,
+          videoProfile: 'MainStream',
+          sipUri: '',
+          sipUsername: '',
+          sipPassword: '',
+          sipDomain: '',
+          enableOnvifEvents: true,
+          enableTLS: false,
+          preferredResolution: '1920x1080',
+          preferredFPS: 25,
+          defaultOpenTime: 5,
+        }
+      },
     ],
     network: {
       consoleIP: '192.168.1.25',
@@ -81,6 +203,8 @@ export default function NewConfigurationModal({ visible, onClose, onSave }: NewC
   const [showApiResponseModal, setShowApiResponseModal] = useState(false);
   const [apiResponseData, setApiResponseData] = useState<ApiResponse | null>(null);
   const [isTestingApi, setIsTestingApi] = useState(false);
+  const [showIntercomModal, setShowIntercomModal] = useState(false);
+  const [selectedDoorIndex, setSelectedDoorIndex] = useState<number>(0);
 
   useEffect(() => {
     if (visible) {
@@ -170,6 +294,22 @@ export default function NewConfigurationModal({ visible, onClose, onSave }: NewC
     const newDoors = [...config.doors];
     newDoors[index] = { ...newDoors[index], [field]: value };
     setConfig(prev => ({ ...prev, doors: newDoors }));
+  };
+
+  const updateDoorIntercom = (index: number, intercomConfig: IntercomConfig) => {
+    const newDoors = [...config.doors];
+    newDoors[index] = { ...newDoors[index], intercom: intercomConfig };
+    setConfig(prev => ({ ...prev, doors: newDoors }));
+  };
+
+  const handleIntercomConfig = (index: number) => {
+    setSelectedDoorIndex(index);
+    setShowIntercomModal(true);
+  };
+
+  const handleIntercomSave = (intercomConfig: IntercomConfig) => {
+    updateDoorIntercom(selectedDoorIndex, intercomConfig);
+    setShowIntercomModal(false);
   };
 
   const updateNetwork = (field: keyof typeof config.network, value: string) => {
@@ -581,6 +721,25 @@ export default function NewConfigurationModal({ visible, onClose, onSave }: NewC
       color: '#FFFFFF',
       letterSpacing: 0.5,
     },
+    intercomConfigButton: {
+      backgroundColor: '#17A2B8',
+      paddingHorizontal: isSmallTablet ? 8 : isLargeTablet ? 12 : 10,
+      paddingVertical: isSmallTablet ? 6 : isLargeTablet ? 10 : 8,
+      borderRadius: 6,
+      marginTop: isSmallTablet ? 6 : isLargeTablet ? 10 : 8,
+      shadowColor: '#17A2B8',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.2,
+      shadowRadius: 4,
+      elevation: 3,
+    },
+    intercomConfigButtonText: {
+      fontSize: isSmallTablet ? 9 : isLargeTablet ? 11 : 10,
+      fontWeight: '600',
+      color: '#FFFFFF',
+      letterSpacing: 0.5,
+      textAlign: 'center',
+    },
   });
   return (
     <Modal
@@ -655,6 +814,13 @@ export default function NewConfigurationModal({ visible, onClose, onSave }: NewC
                         </TouchableOpacity>
                       </View>
                     </View>
+                    
+                    <TouchableOpacity
+                      style={styles.intercomConfigButton}
+                      onPress={() => handleIntercomConfig(index)}
+                    >
+                      <Text style={styles.intercomConfigButtonText}>CONFIGURAR INTERCOMUNICADOR</Text>
+                    </TouchableOpacity>
                   )}
                 </View>
               ))}
@@ -823,6 +989,14 @@ export default function NewConfigurationModal({ visible, onClose, onSave }: NewC
           visible={showApiResponseModal}
           onClose={() => setShowApiResponseModal(false)}
           data={apiResponseData}
+        />
+        
+        <IntercomConfigurationModal
+          visible={showIntercomModal}
+          onClose={() => setShowIntercomModal(false)}
+          onSave={handleIntercomSave}
+          doorName={config.doors[selectedDoorIndex]?.name || ''}
+          initialConfig={config.doors[selectedDoorIndex]?.intercom}
         />
       </View>
     </Modal>
