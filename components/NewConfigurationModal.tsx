@@ -824,8 +824,9 @@ export default function NewConfigurationModal({ visible, onClose, onSave }: NewC
                       >
                         <Text style={styles.intercomConfigButtonText}>CONFIGURAR INTERCOMUNICADOR</Text>
                       </TouchableOpacity>
-                    </View>
+                    </>
                   )}
+                </View>
               ))}
             </View>
           </View>
