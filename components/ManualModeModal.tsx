@@ -1,5 +1,5 @@
 import { View, Text, StyleSheet, TouchableOpacity, Modal } from 'react-native';
-import { X, MessageCircle, DoorOpen } from 'lucide-react-native';
+import { X, MessageCircle, DoorOpen, PhoneCall, PhoneOff, Mic, MicOff, Volume2 } from 'lucide-react-native';
 import { ScrollView } from 'react-native';
 import { useWindowDimensions } from 'react-native';
 import { useDoorControl } from '@/hooks/useDoorControl';
@@ -48,7 +48,15 @@ export default function ManualModeModal({
   const isSmallTablet = width < 900;
   const isLargeTablet = width >= 1200;
 
-  const { controlDoor } = useDoorControl();
+  const { 
+    controlDoor, 
+    sipCallState, 
+    startIntercomCall, 
+    endIntercomCall, 
+    muteMicrophone, 
+    setSpeakerphone, 
+    activeSipCallDoorId 
+  } = useDoorControl();
 
   // Obtener configuraciones de intercomunicador para cada puerta
   const getIntercomConfig = (doorIndex: number): IntercomConfig | null => {
@@ -58,8 +66,35 @@ export default function ManualModeModal({
     return null;
   };
 
-  const handleCommunicate = (doorId: string, doorName: string) => {
-    onCommunicate(doorId, doorName);
+  const handleCommunicate = async (doorId: string, doorName: string) => {
+    const doorIndex = doorId === 'P1' ? 0 : 1;
+    const intercomConfig = getIntercomConfig(doorIndex);
+    
+    if (!intercomConfig) {
+      console.error('❌ No hay configuración de intercomunicador para', doorName);
+      return;
+    }
+    
+    // Check if there's already an active call
+    if (sipCallState?.isActive) {
+      if (activeSipCallDoorId === doorId) {
+        // End the current call
+        console.log('📞 Finalizando llamada con', doorName);
+        await endIntercomCall();
+      } else {
+        console.log('❌ Ya hay una llamada activa con otra puerta');
+        return;
+      }
+    } else {
+      // Start a new call
+      console.log('📞 Iniciando llamada SIP con', doorName);
+      const success = await startIntercomCall(intercomConfig);
+      if (success) {
+        console.log('✅ Llamada SIP iniciada con', doorName);
+      } else {
+        console.error('❌ Error iniciando llamada SIP con', doorName);
+      }
+    }
   };
 
   const handleOpenDoor = async (doorId: 'P1' | 'P2', doorName: string) => {
@@ -74,6 +109,47 @@ export default function ManualModeModal({
     } else {
       console.error(`❌ Error ${actionText.toLowerCase()} ${doorName}`);
     }
+  };
+
+  const handleMuteMicrophone = async () => {
+    if (sipCallState) {
+      await muteMicrophone(!sipCallState.isMuted);
+    }
+  };
+
+  const handleToggleSpeaker = async () => {
+    if (sipCallState) {
+      await setSpeakerphone(!sipCallState.isSpeakerOn);
+    }
+  };
+
+  const getCallButtonText = (doorId: string) => {
+    if (activeSipCallDoorId === doorId && sipCallState?.isActive) {
+      if (sipCallState.isConnected) {
+        return `FINALIZAR (${Math.floor(sipCallState.duration / 60)}:${(sipCallState.duration % 60).toString().padStart(2, '0')})`;
+      } else {
+        return 'CONECTANDO...';
+      }
+    }
+    return 'COMUNICAR';
+  };
+
+  const getCallButtonStyle = (doorId: string) => {
+    if (activeSipCallDoorId === doorId && sipCallState?.isActive) {
+      if (sipCallState.isConnected) {
+        return [styles.doorControlButton, styles.doorControlButtonConnected];
+      } else {
+        return [styles.doorControlButton, styles.doorControlButtonConnecting];
+      }
+    }
+    return styles.doorControlButton;
+  };
+
+  const getCallButtonTextStyle = (doorId: string) => {
+    if (activeSipCallDoorId === doorId && sipCallState?.isActive) {
+      return [styles.doorControlButtonText, styles.doorControlButtonConnectedText];
+    }
+    return styles.doorControlButtonText;
   };
 
   const styles = StyleSheet.create({
@@ -296,6 +372,42 @@ export default function ManualModeModal({
     doorControlButtonDisabled: {
       opacity: 0.6,
     },
+    doorControlButtonConnecting: {
+      backgroundColor: '#FFC107',
+      borderColor: '#E0A800',
+    },
+    doorControlButtonConnected: {
+      backgroundColor: '#28A745',
+      borderColor: '#1E7E34',
+    },
+    doorControlButtonConnectedText: {
+      color: '#FFFFFF',
+    },
+    callControlsContainer: {
+      flexDirection: 'row',
+      gap: isSmallTablet ? 6 : 8,
+      marginTop: isSmallTablet ? 8 : 12,
+    },
+    callControlButton: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: '#6C757D',
+      paddingVertical: isSmallTablet ? 8 : 10,
+      paddingHorizontal: isSmallTablet ? 6 : 8,
+      borderRadius: 6,
+      gap: 4,
+    },
+    callControlButtonActive: {
+      backgroundColor: '#DC3545',
+    },
+    callControlButtonText: {
+      fontSize: isSmallTablet ? 10 : 12,
+      fontWeight: '600',
+      color: '#FFFFFF',
+      letterSpacing: 0.3,
+    },
     bottomButtons: {
       flexDirection: 'row',
       gap: isSmallTablet ? 16 : isLargeTablet ? 24 : 20,
@@ -398,20 +510,49 @@ export default function ManualModeModal({
                 
                 <View style={styles.doorControlButtons}>
                   <TouchableOpacity 
-                    style={[
-                      styles.doorControlButton,
-                      communicatingDoors.has('P2') && styles.doorControlButtonCommunicating
-                    ]}
+                    style={getCallButtonStyle('P2')}
                     onPress={() => handleCommunicate('P2', 'Puerta Oficina')}
                   >
-                    <MessageCircle size={16} color="#495057" />
-                    <Text style={[
-                      styles.doorControlButtonText,
-                      communicatingDoors.has('P2') && styles.doorControlButtonCommunicatingText
-                    ]}>
-                      {communicatingDoors.has('P2') ? 'COMUNICANDO...' : 'COMUNICAR'}
+                    <PhoneCall size={16} color={activeSipCallDoorId === 'P2' && sipCallState?.isActive ? "#FFFFFF" : "#495057"} />
+                    <Text style={getCallButtonTextStyle('P2')}>
+                      {getCallButtonText('P2')}
                     </Text>
                   </TouchableOpacity>
+                  
+                  {/* Call controls - only show when connected */}
+                  {activeSipCallDoorId === 'P2' && sipCallState?.isConnected && (
+                    <View style={styles.callControlsContainer}>
+                      <TouchableOpacity 
+                        style={[
+                          styles.callControlButton,
+                          sipCallState.isMuted && styles.callControlButtonActive
+                        ]}
+                        onPress={handleMuteMicrophone}
+                      >
+                        {sipCallState.isMuted ? (
+                          <MicOff size={12} color="#FFFFFF" />
+                        ) : (
+                          <Mic size={12} color="#FFFFFF" />
+                        )}
+                        <Text style={styles.callControlButtonText}>
+                          {sipCallState.isMuted ? 'MUTE' : 'MIC'}
+                        </Text>
+                      </TouchableOpacity>
+                      
+                      <TouchableOpacity 
+                        style={[
+                          styles.callControlButton,
+                          sipCallState.isSpeakerOn && styles.callControlButtonActive
+                        ]}
+                        onPress={handleToggleSpeaker}
+                      >
+                        <Volume2 size={12} color="#FFFFFF" />
+                        <Text style={styles.callControlButtonText}>
+                          {sipCallState.isSpeakerOn ? 'SPK' : 'EAR'}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
                   
                   <TouchableOpacity 
                     style={[
@@ -456,20 +597,49 @@ export default function ManualModeModal({
                 
                 <View style={styles.doorControlButtons}>
                   <TouchableOpacity 
-                    style={[
-                      styles.doorControlButton,
-                      communicatingDoors.has('P1') && styles.doorControlButtonCommunicating
-                    ]}
+                    style={getCallButtonStyle('P1')}
                     onPress={() => handleCommunicate('P1', 'Puerta Calle')}
                   >
-                    <MessageCircle size={16} color="#495057" />
-                    <Text style={[
-                      styles.doorControlButtonText,
-                      communicatingDoors.has('P1') && styles.doorControlButtonCommunicatingText
-                    ]}>
-                      {communicatingDoors.has('P1') ? 'COMUNICANDO...' : 'COMUNICAR'}
+                    <PhoneCall size={16} color={activeSipCallDoorId === 'P1' && sipCallState?.isActive ? "#FFFFFF" : "#495057"} />
+                    <Text style={getCallButtonTextStyle('P1')}>
+                      {getCallButtonText('P1')}
                     </Text>
                   </TouchableOpacity>
+                  
+                  {/* Call controls - only show when connected */}
+                  {activeSipCallDoorId === 'P1' && sipCallState?.isConnected && (
+                    <View style={styles.callControlsContainer}>
+                      <TouchableOpacity 
+                        style={[
+                          styles.callControlButton,
+                          sipCallState.isMuted && styles.callControlButtonActive
+                        ]}
+                        onPress={handleMuteMicrophone}
+                      >
+                        {sipCallState.isMuted ? (
+                          <MicOff size={12} color="#FFFFFF" />
+                        ) : (
+                          <Mic size={12} color="#FFFFFF" />
+                        )}
+                        <Text style={styles.callControlButtonText}>
+                          {sipCallState.isMuted ? 'MUTE' : 'MIC'}
+                        </Text>
+                      </TouchableOpacity>
+                      
+                      <TouchableOpacity 
+                        style={[
+                          styles.callControlButton,
+                          sipCallState.isSpeakerOn && styles.callControlButtonActive
+                        ]}
+                        onPress={handleToggleSpeaker}
+                      >
+                        <Volume2 size={12} color="#FFFFFF" />
+                        <Text style={styles.callControlButtonText}>
+                          {sipCallState.isSpeakerOn ? 'SPK' : 'EAR'}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
                   
                   <TouchableOpacity 
                     style={[
