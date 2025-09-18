@@ -48,6 +48,9 @@ export default function ManualModeModal({
   const isSmallTablet = width < 900;
   const isLargeTablet = width >= 1200;
 
+  // Filter enabled doors for styling calculations
+  const enabledDoors = intercomConfigs.filter(door => door.enabled);
+
   const { 
     controlDoor, 
     sipCallState, 
