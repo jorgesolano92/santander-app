@@ -70,8 +70,10 @@ export default function ManualModeModal({
   };
 
   const handleCommunicate = async (doorId: string, doorName: string) => {
-    const doorIndex = doorId === 'P1' ? 0 : 1;
-    const intercomConfig = getIntercomConfig(doorIndex);
+    // Find the door configuration by doorId
+    const doorIndex = parseInt(doorId.replace('P', '')) - 1;
+    const door = enabledDoors[doorIndex];
+    const intercomConfig = door?.intercom;
     
     if (!intercomConfig) {
       console.error('❌ No hay configuración de intercomunicador para', doorName);
@@ -496,179 +498,96 @@ export default function ManualModeModal({
 
           {/* Door Controls */}
           <View style={styles.doorControlsContainer}>
-            {/* Puerta Oficina */}
-            <View style={styles.doorControlSection}>
-              <Text style={styles.doorControlTitle}>PUERTA OFICINA</Text>
-              <View style={styles.doorControlCard}>
-                {getIntercomConfig(1) ? (
-                  <DoorVideoStream 
-                    intercomConfig={getIntercomConfig(1)!} 
-                    doorName="Puerta Oficina"
-                  />
-                ) : (
-                  <View style={styles.doorControlImagePlaceholder}>
-                    <View style={styles.cameraIcon}>
-                      <View style={styles.cameraIconInner} />
-                    </View>
-                  </View>
-                )}
-                
-                <View style={styles.doorControlButtons}>
-                  <TouchableOpacity 
-                    style={getCallButtonStyle('P2')}
-                    onPress={() => handleCommunicate('P2', 'Puerta Oficina')}
-                  >
-                    <PhoneCall size={16} color={activeSipCallDoorId === 'P2' && sipCallState?.isActive ? "#FFFFFF" : "#495057"} />
-                    <Text style={getCallButtonTextStyle('P2')}>
-                      {getCallButtonText('P2')}
-                    </Text>
-                  </TouchableOpacity>
-                  
-                  {/* Call controls - only show when connected */}
-                  {activeSipCallDoorId === 'P2' && sipCallState?.isConnected && (
-                    <View style={styles.callControlsContainer}>
+            {enabledDoors.map((door, index) => {
+              const doorId = `P${index + 1}`;
+              return (
+                <View key={doorId} style={styles.doorControlSection}>
+                  <Text style={styles.doorControlTitle}>{door.name.toUpperCase()}</Text>
+                  <View style={styles.doorControlCard}>
+                    {door.intercom ? (
+                      <DoorVideoStream 
+                        intercomConfig={door.intercom} 
+                        doorName={door.name}
+                      />
+                    ) : (
+                      <View style={styles.doorControlImagePlaceholder}>
+                        <View style={styles.cameraIcon}>
+                          <View style={styles.cameraIconInner} />
+                        </View>
+                      </View>
+                    )}
+                    
+                    <View style={styles.doorControlButtons}>
                       <TouchableOpacity 
-                        style={[
-                          styles.callControlButton,
-                          sipCallState.isMuted && styles.callControlButtonActive
-                        ]}
-                        onPress={handleMuteMicrophone}
+                        style={getCallButtonStyle(doorId)}
+                        onPress={() => handleCommunicate(doorId, door.name)}
                       >
-                        {sipCallState.isMuted ? (
-                          <MicOff size={12} color="#FFFFFF" />
-                        ) : (
-                          <Mic size={12} color="#FFFFFF" />
-                        )}
-                        <Text style={styles.callControlButtonText}>
-                          {sipCallState.isMuted ? 'MUTE' : 'MIC'}
+                        <PhoneCall size={16} color={activeSipCallDoorId === doorId && sipCallState?.isActive ? "#FFFFFF" : "#495057"} />
+                        <Text style={getCallButtonTextStyle(doorId)}>
+                          {getCallButtonText(doorId)}
                         </Text>
                       </TouchableOpacity>
                       
-                      <TouchableOpacity 
-                        style={[
-                          styles.callControlButton,
-                          sipCallState.isSpeakerOn && styles.callControlButtonActive
-                        ]}
-                        onPress={handleToggleSpeaker}
-                      >
-                        <Volume2 size={12} color="#FFFFFF" />
-                        <Text style={styles.callControlButtonText}>
-                          {sipCallState.isSpeakerOn ? 'SPK' : 'EAR'}
-                        </Text>
-                      </TouchableOpacity>
-                    </View>
-                  )}
-                  
-                  <TouchableOpacity 
-                    style={[
-                      styles.doorControlButton,
-                      getDoorStatus('P2').isOpen && styles.doorControlButtonClose,
-                      isDoorButtonDisabled('P2') && styles.doorControlButtonDisabled
-                    ]}
-                    onPress={() => handleOpenDoor('P2', 'Puerta Oficina')}
-                    disabled={isDoorButtonDisabled('P2')}
-                  >
-                    <DoorOpen 
-                      size={16} 
-                      color={getDoorStatus('P2').isOpen ? "#FFFFFF" : "#495057"} 
-                    />
-                    <Text style={[
-                      styles.doorControlButtonText,
-                      getDoorStatus('P2').isOpen && styles.doorControlButtonCloseText
-                    ]}>
-                      {getDoorButtonText('P2')}
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            </View>
-
-            {/* Puerta Calle */}
-            <View style={styles.doorControlSection}>
-              <Text style={styles.doorControlTitle}>PUERTA CALLE</Text>
-              <View style={styles.doorControlCard}>
-                {getIntercomConfig(0) ? (
-                  <DoorVideoStream 
-                    intercomConfig={getIntercomConfig(0)!} 
-                    doorName="Puerta Calle"
-                  />
-                ) : (
-                  <View style={styles.doorControlImagePlaceholder}>
-                    <View style={styles.cameraIcon}>
-                      <View style={styles.cameraIconInner} />
-                    </View>
-                  </View>
-                )}
-                
-                <View style={styles.doorControlButtons}>
-                  <TouchableOpacity 
-                    style={getCallButtonStyle('P1')}
-                    onPress={() => handleCommunicate('P1', 'Puerta Calle')}
-                  >
-                    <PhoneCall size={16} color={activeSipCallDoorId === 'P1' && sipCallState?.isActive ? "#FFFFFF" : "#495057"} />
-                    <Text style={getCallButtonTextStyle('P1')}>
-                      {getCallButtonText('P1')}
-                    </Text>
-                  </TouchableOpacity>
-                  
-                  {/* Call controls - only show when connected */}
-                  {activeSipCallDoorId === 'P1' && sipCallState?.isConnected && (
-                    <View style={styles.callControlsContainer}>
-                      <TouchableOpacity 
-                        style={[
-                          styles.callControlButton,
-                          sipCallState.isMuted && styles.callControlButtonActive
-                        ]}
-                        onPress={handleMuteMicrophone}
-                      >
-                        {sipCallState.isMuted ? (
-                          <MicOff size={12} color="#FFFFFF" />
-                        ) : (
-                          <Mic size={12} color="#FFFFFF" />
-                        )}
-                        <Text style={styles.callControlButtonText}>
-                          {sipCallState.isMuted ? 'MUTE' : 'MIC'}
-                        </Text>
-                      </TouchableOpacity>
+                      {/* Call controls - only show when connected */}
+                      {activeSipCallDoorId === doorId && sipCallState?.isConnected && (
+                        <View style={styles.callControlsContainer}>
+                          <TouchableOpacity 
+                            style={[
+                              styles.callControlButton,
+                              sipCallState.isMuted && styles.callControlButtonActive
+                            ]}
+                            onPress={handleMuteMicrophone}
+                          >
+                            {sipCallState.isMuted ? (
+                              <MicOff size={12} color="#FFFFFF" />
+                            ) : (
+                              <Mic size={12} color="#FFFFFF" />
+                            )}
+                            <Text style={styles.callControlButtonText}>
+                              {sipCallState.isMuted ? 'MUTE' : 'MIC'}
+                            </Text>
+                          </TouchableOpacity>
+                          
+                          <TouchableOpacity 
+                            style={[
+                              styles.callControlButton,
+                              sipCallState.isSpeakerOn && styles.callControlButtonActive
+                            ]}
+                            onPress={handleToggleSpeaker}
+                          >
+                            <Volume2 size={12} color="#FFFFFF" />
+                            <Text style={styles.callControlButtonText}>
+                              {sipCallState.isSpeakerOn ? 'SPK' : 'EAR'}
+                            </Text>
+                          </TouchableOpacity>
+                        </View>
+                      )}
                       
                       <TouchableOpacity 
                         style={[
-                          styles.callControlButton,
-                          sipCallState.isSpeakerOn && styles.callControlButtonActive
+                          styles.doorControlButton,
+                          getDoorStatus(doorId).isOpen && styles.doorControlButtonClose,
+                          isDoorButtonDisabled(doorId) && styles.doorControlButtonDisabled
                         ]}
-                        onPress={handleToggleSpeaker}
+                        onPress={() => handleOpenDoor(doorId as 'P1' | 'P2', door.name)}
+                        disabled={isDoorButtonDisabled(doorId)}
                       >
-                        <Volume2 size={12} color="#FFFFFF" />
-                        <Text style={styles.callControlButtonText}>
-                          {sipCallState.isSpeakerOn ? 'SPK' : 'EAR'}
+                        <DoorOpen 
+                          size={16} 
+                          color={getDoorStatus(doorId).isOpen ? "#FFFFFF" : "#495057"} 
+                        />
+                        <Text style={[
+                          styles.doorControlButtonText,
+                          getDoorStatus(doorId).isOpen && styles.doorControlButtonCloseText
+                        ]}>
+                          {getDoorButtonText(doorId)}
                         </Text>
                       </TouchableOpacity>
                     </View>
-                  )}
-                  
-                  <TouchableOpacity 
-                    style={[
-                      styles.doorControlButton,
-                      getDoorStatus('P1').isOpen && styles.doorControlButtonClose,
-                      isDoorButtonDisabled('P1') && styles.doorControlButtonDisabled
-                    ]}
-                    onPress={() => handleOpenDoor('P1', 'Puerta Calle')}
-                    disabled={isDoorButtonDisabled('P1')}
-                  >
-                    <DoorOpen 
-                      size={16} 
-                      color={getDoorStatus('P1').isOpen ? "#FFFFFF" : "#495057"} 
-                    />
-                    <Text style={[
-                      styles.doorControlButtonText,
-                      getDoorStatus('P1').isOpen && styles.doorControlButtonCloseText
-                    ]}>
-                      {getDoorButtonText('P1')}
-                    </Text>
-                  </TouchableOpacity>
+                  </View>
                 </View>
-              </View>
-            </View>
+              );
+            })}
           </View>
 
           {/* Bottom Buttons */}
