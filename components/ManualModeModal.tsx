@@ -350,7 +350,7 @@ export default function ManualModeModal({
       height: isSmallTablet ? 150 : isLargeTablet ? 195 : 172,
       backgroundColor: '#E9ECEF',
       borderRadius: 12,
-      marginBottom: isSmallTablet ? 10 : isLargeTablet ? 20 : 16,
+      marginBottom: isSmallTablet ? 16 : isLargeTablet ? 24 : 20,
       justifyContent: 'center',
       alignItems: 'center',
     },
