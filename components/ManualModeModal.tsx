@@ -1,6 +1,8 @@
 import { View, Text, StyleSheet, TouchableOpacity, Modal } from 'react-native';
 import { X, MessageCircle, DoorOpen, PhoneCall, PhoneOff, Mic, MicOff, Volume2 } from 'lucide-react-native';
 import { ScrollView } from 'react-native';
+import { useState, useEffect } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useWindowDimensions } from 'react-native';
 import { useDoorControl } from '@/hooks/useDoorControl';
 import DoorVideoStream from './DoorVideoStream';
@@ -60,6 +62,34 @@ export default function ManualModeModal({
     setSpeakerphone, 
     activeSipCallDoorId 
   } = useDoorControl();
+
+  // Load configuration when modal becomes visible
+  useEffect(() => {
+    const loadConfiguration = async () => {
+      if (visible) {
+        try {
+          const savedConfig = await AsyncStorage.getItem('new_door_config');
+          if (savedConfig) {
+            const config = JSON.parse(savedConfig);
+            if (config.doors) {
+              setIntercomConfigs(config.doors);
+            }
+          }
+        } catch (error) {
+          console.error('Error loading door configuration:', error);
+        }
+      }
+    };
+    
+    loadConfiguration();
+  }, [visible]);
+
+  // Update local state when prop changes
+  useEffect(() => {
+    if (initialIntercomConfigs) {
+      setIntercomConfigs(initialIntercomConfigs);
+    }
+  }, [initialIntercomConfigs]);
 
   // Obtener configuraciones de intercomunicador para cada puerta
   const getIntercomConfig = (doorIndex: number): IntercomConfig | null => {
