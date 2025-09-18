@@ -11,7 +11,7 @@ export interface UseDoorControlReturn {
   currentScheduleMode: string | null;
   changeMode: (mode: string) => Promise<boolean>;
   toggleEmergency: (newState: boolean) => Promise<boolean>;
-  configure: (config: ConfigurationData) => void;
+  configure: (config: ConfigurationData) => Promise<boolean>;
   validateDevice: () => Promise<boolean>;
   determineScheduleMode: () => string;
   controlDoor: (doorId: string, action: 'open' | 'close') => Promise<boolean>;
@@ -166,14 +166,32 @@ export function useDoorControl(): UseDoorControlReturn {
     }
   }, [updateSystemStatus]);
 
-  const configure = useCallback((config: ConfigurationData) => {
-    if (!isMountedRef.current) return;
+  const configure = useCallback(async (config: ConfigurationData): Promise<boolean> => {
+    try {
+      if (!isMountedRef.current) return false;
     
-    doorControlService.setConfiguration(config);
-    setError(null);
-    setConnectionStatus('disconnected');
-    setSystemStatus(null);
-    setCurrentScheduleMode(null);
+      setIsLoading(true);
+      setError(null);
+      
+      await doorControlService.setConfiguration(config);
+      
+      if (!isMountedRef.current) return false;
+      
+      setConnectionStatus('disconnected');
+      setSystemStatus(null);
+      setCurrentScheduleMode(null);
+      
+      return true;
+    } catch (err) {
+      if (isMountedRef.current) {
+        setError(err instanceof Error ? err.message : 'Error aplicando configuración');
+      }
+      return false;
+    } finally {
+      if (isMountedRef.current) {
+        setIsLoading(false);
+      }
+    }
   }, []);
 
   const validateDevice = useCallback(async (): Promise<boolean> => {
