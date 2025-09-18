@@ -134,6 +134,20 @@ export default function MainScreen() {
     loadSystemConfig();
   }, []);
 
+  // Recargar configuración cuando se cierra el modal de configuración
+  const reloadSystemConfig = async () => {
+    try {
+      const savedConfig = await AsyncStorage.getItem('new_door_config');
+      if (savedConfig) {
+        const parsedConfig = JSON.parse(savedConfig);
+        setSystemConfig(parsedConfig);
+        console.log('🔄 Configuración del sistema recargada:', parsedConfig);
+      }
+    } catch (error) {
+      console.error('❌ Error recargando configuración del sistema:', error);
+    }
+  };
+
   // Formatear fecha y hora
   const formatDateTime = useCallback((date: Date) => {
     const day = date.getDate().toString().padStart(2, '0');
@@ -196,6 +210,9 @@ export default function MainScreen() {
     } else {
       console.error('❌ Error aplicando configuración');
     }
+    
+    // Recargar la configuración del sistema después de guardar
+    await reloadSystemConfig();
   };
 
   const handleLoginSuccess = () => {

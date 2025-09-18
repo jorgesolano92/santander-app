@@ -2,6 +2,8 @@ import { View, Text, StyleSheet, TouchableOpacity, Modal } from 'react-native';
 import { X, MessageCircle, DoorOpen, PhoneCall, PhoneOff, Mic, MicOff, Volume2 } from 'lucide-react-native';
 import { ScrollView } from 'react-native';
 import { useWindowDimensions } from 'react-native';
+import { useState, useEffect } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useDoorControl } from '@/hooks/useDoorControl';
 import DoorVideoStream from './DoorVideoStream';
 import { IntercomConfig } from './IntercomConfigurationModal';
@@ -48,8 +50,40 @@ export default function ManualModeModal({
   const isSmallTablet = width < 900;
   const isLargeTablet = width >= 1200;
 
+  // Estado local para la configuración de puertas
+  const [currentIntercomConfigs, setCurrentIntercomConfigs] = useState<DoorConfig[]>(intercomConfigs || []);
+  
   // Filter enabled doors for styling calculations
-  const enabledDoors = intercomConfigs.filter(door => door.enabled);
+  const enabledDoors = currentIntercomConfigs.filter(door => door.enabled);
+  
+  // Cargar configuración cuando el modal se abre
+  useEffect(() => {
+    if (visible) {
+      loadCurrentConfig();
+    }
+  }, [visible]);
+  
+  // Actualizar cuando cambie la prop
+  useEffect(() => {
+    if (intercomConfigs) {
+      setCurrentIntercomConfigs(intercomConfigs);
+    }
+  }, [intercomConfigs]);
+  
+  const loadCurrentConfig = async () => {
+    try {
+      const savedConfig = await AsyncStorage.getItem('new_door_config');
+      if (savedConfig) {
+        const parsedConfig = JSON.parse(savedConfig);
+        if (parsedConfig.doors) {
+          setCurrentIntercomConfigs(parsedConfig.doors);
+          console.log('🔄 Configuración de puertas cargada en ManualModeModal:', parsedConfig.doors);
+        }
+      }
+    } catch (error) {
+      console.error('❌ Error cargando configuración en ManualModeModal:', error);
+    }
+  };
 
   const { 
     controlDoor, 
