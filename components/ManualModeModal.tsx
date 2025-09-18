@@ -273,15 +273,17 @@ export default function ManualModeModal({
     },
     doorControlsContainer: {
       flexDirection: 'row',
+      flexWrap: 'wrap',
       gap: isSmallTablet ? 16 : isLargeTablet ? 32 : 24,
       marginBottom: isSmallTablet ? 16 : isLargeTablet ? 32 : 24,
       justifyContent: 'center',
       alignItems: 'flex-start',
     },
     doorControlSection: {
-      flex: 1,
-      maxWidth: isSmallTablet ? 320 : isLargeTablet ? 400 : 350,
       minWidth: isSmallTablet ? 280 : isLargeTablet ? 320 : 300,
+      maxWidth: isSmallTablet ? 320 : isLargeTablet ? 400 : 350,
+      flex: enabledDoors.length <= 2 ? 1 : 0,
+      marginBottom: isSmallTablet ? 16 : isLargeTablet ? 24 : 20,
     },
     doorControlTitle: {
       fontSize: isSmallTablet ? 16 : isLargeTablet ? 20 : 18,

@@ -65,7 +65,7 @@ export default function MainScreen() {
   } = useDoorControl();
 
   // Función para obtener el estado de la puerta
-  const getDoorStatus = (doorId: 'P1' | 'P2' | 'P3' | 'P4') => {
+  const getDoorStatus = (doorId: string) => {
     const door = systemStatus?.doors[doorId];
     return {
       status: door?.status || 'closed',
@@ -76,7 +76,7 @@ export default function MainScreen() {
   };
 
   // Función para obtener el texto del botón de abrir/cerrar
-  const getDoorButtonText = (doorId: 'P1' | 'P2' | 'P3' | 'P4') => {
+  const getDoorButtonText = (doorId: string) => {
     const { isOpen, isOpening, isClosing } = getDoorStatus(doorId);
     
     if (isOpening) return 'ABRIENDO...';
@@ -85,7 +85,7 @@ export default function MainScreen() {
   };
 
   // Función para determinar si el botón está deshabilitado
-  const isDoorButtonDisabled = (doorId: 'P1' | 'P2' | 'P3' | 'P4') => {
+  const isDoorButtonDisabled = (doorId: string) => {
     const { isOpening, isClosing } = getDoorStatus(doorId);
     return isOpening || isClosing;
   };
