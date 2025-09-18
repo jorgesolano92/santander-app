@@ -21,14 +21,14 @@ interface ManualModeModalProps {
   onEmergency: () => void;
   communicatingDoors: Set<string>;
   onCommunicate: (doorId: string, doorName: string) => void;
-  getDoorStatus: (doorId: 'P1' | 'P2' | 'P3' | 'P4') => {
+  getDoorStatus: (doorId: string) => {
     status: string;
     isOpen: boolean;
     isOpening: boolean;
     isClosing: boolean;
   };
-  isDoorButtonDisabled: (doorId: 'P1' | 'P2' | 'P3' | 'P4') => boolean;
-  getDoorButtonText: (doorId: 'P1' | 'P2' | 'P3' | 'P4') => string;
+  isDoorButtonDisabled: (doorId: string) => boolean;
+  getDoorButtonText: (doorId: string) => string;
   intercomConfigs: DoorConfig[];
 }
 
