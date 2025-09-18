@@ -33,6 +33,15 @@
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "fba05647-50d4-4815-afdd-0f8d93bf7a94"
+      }
+    },
+    "android": {
+      "package": "com.cess07.puertassantander"
     }
   }
 }
