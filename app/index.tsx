@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, TouchableOpacity, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Dimensions, Platform } from 'react-native';
 import { useWindowDimensions } from 'react-native';
 import { useState, useEffect, useCallback } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -13,6 +13,41 @@ import ManualModeModal from '@/components/ManualModeModal';
 import EmergencyConfirmationModal from '@/components/EmergencyConfirmationModal';
 import { useDoorControl } from '@/hooks/useDoorControl';
 import { doorControlService } from '@/services/DoorControlService';
+// (Eliminar) import * as FileSystem from 'expo-file-system';
+
+interface SystemConfig {
+  doors: Array<{
+    id: string;
+    name: string;
+    status: string;
+    enabled: boolean;
+    ipExterior: string;
+    ipInterior: string;
+    intercom: {
+      name: string;
+      cameraIP: string;
+      httpPort: number;
+      httpsPort: number;
+      onvifUsername: string;
+      onvifPassword: string;
+      rtspPort: number;
+      videoProfile: 'MainStream' | 'SubStream' | 'Auto';
+      sipUri: string;
+      sipUsername: string;
+      sipPassword: string;
+      sipDomain: string;
+      enableOnvifEvents: boolean;
+      enableTLS: boolean;
+      preferredResolution: string;
+      preferredFPS: number;
+      defaultOpenTime: number;
+      doorControlUsername: string;
+      doorControlPassword: string;
+      doorControlPCB: number;
+      doorControlSwitch: number;
+    };
+  }>;
+}
 
 // Function to format mode names for display
 const formatModeForDisplay = (mode: string): string => {
@@ -62,10 +97,12 @@ export default function MainScreen() {
     validateDevice,
     determineScheduleMode,
     controlDoor,
+    isDoorVerifying,
+    refreshAllDoorsStatus,
   } = useDoorControl();
 
   // Función para obtener el estado de la puerta
-  const getDoorStatus = (doorId: string) => {
+  const getDoorStatus = (doorId: 'P1' | 'P2' | 'P3' | 'P4') => {
     const door = systemStatus?.doors[doorId];
     return {
       status: door?.status || 'closed',
@@ -76,7 +113,7 @@ export default function MainScreen() {
   };
 
   // Función para obtener el texto del botón de abrir/cerrar
-  const getDoorButtonText = (doorId: string) => {
+  const getDoorButtonText = (doorId: 'P1' | 'P2' | 'P3' | 'P4') => {
     const { isOpen, isOpening, isClosing } = getDoorStatus(doorId);
     
     if (isOpening) return 'ABRIENDO...';
@@ -85,7 +122,7 @@ export default function MainScreen() {
   };
 
   // Función para determinar si el botón está deshabilitado
-  const isDoorButtonDisabled = (doorId: string) => {
+  const isDoorButtonDisabled = (doorId: 'P1' | 'P2' | 'P3' | 'P4') => {
     const { isOpening, isClosing } = getDoorStatus(doorId);
     return isOpening || isClosing;
   };
@@ -98,7 +135,7 @@ export default function MainScreen() {
   const [showEmergencyConfirmModal, setShowEmergencyConfirmModal] = useState(false);
   const [currentDateTime, setCurrentDateTime] = useState(new Date());
   const [communicatingDoors, setCommunicatingDoors] = useState<Set<string>>(new Set());
-  const [isSandboxMode, setIsSandboxMode] = useState(true);
+  // const [isSandboxMode, setIsSandboxMode] = useState(false); // Modo sandbox deshabilitado permanentemente
   const [systemConfig, setSystemConfig] = useState<SystemConfig | null>(null);
 
   // Actualizar fecha y hora cada segundo
@@ -110,11 +147,11 @@ export default function MainScreen() {
     return () => clearInterval(timer);
   }, []);
 
-  // Actualizar el modo sandbox en el servicio cuando cambie el estado
-  useEffect(() => {
-    doorControlService.setSandboxMode(isSandboxMode);
-    console.log(`🔧 Modo ${isSandboxMode ? 'SANDBOX' : 'REAL'} activado`);
-  }, [isSandboxMode]);
+  // Actualizar el modo sandbox en el servicio cuando cambie el estado - DESHABILITADO
+  // useEffect(() => {
+  //   doorControlService.setSandboxMode(isSandboxMode);
+  //   console.log(`🔧 Modo ${isSandboxMode ? 'SANDBOX' : 'REAL'} activado`);
+  // }, [isSandboxMode]);
 
   // Cargar configuración del sistema al iniciar
   useEffect(() => {
@@ -186,9 +223,10 @@ export default function MainScreen() {
     checkDevice();
   }, [validateDevice]);
 
-  const handleToggleSandboxMode = (newMode: boolean) => {
-    setIsSandboxMode(newMode);
-  };
+  // Función para alternar modo sandbox - DESHABILITADA
+  // const handleToggleSandboxMode = (newMode: boolean) => {
+  //   setIsSandboxMode(newMode);
+  // };
 
   const handleConfigSave = async (config: any) => {
     console.log('💾 Configuración guardada (Sandbox):', config);
@@ -422,77 +460,6 @@ export default function MainScreen() {
       fontWeight: '600',
       color: '#333333',
     },
-    header: {
-      backgroundColor: '#495057',
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      paddingHorizontal: isSmallTablet ? 20 : isLargeTablet ? 40 : 32,
-      paddingTop: (isSmallTablet ? 16 : isLargeTablet ? 24 : 20) + insets.top,
-      paddingBottom: isSmallTablet ? 16 : isLargeTablet ? 24 : 20,
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.1,
-      shadowRadius: 4,
-      elevation: 3,
-    },
-    leftHeaderSection: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: isSmallTablet ? 16 : isLargeTablet ? 24 : 20,
-    },
-    rightHeaderSection: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: isSmallTablet ? 16 : isLargeTablet ? 24 : 20,
-    },
-    centerHeaderSection: {
-      flex: 1,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    dateTimeContainer: {
-      backgroundColor: 'rgba(255, 255, 255, 0.15)',
-      paddingHorizontal: isSmallTablet ? 16 : isLargeTablet ? 24 : 20,
-      paddingVertical: isSmallTablet ? 8 : isLargeTablet ? 12 : 10,
-      borderRadius: 12,
-      borderWidth: 1,
-      borderColor: 'rgba(255, 255, 255, 0.25)',
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.1,
-      shadowRadius: 4,
-      elevation: 2,
-    },
-    dateTimeText: {
-      fontSize: isSmallTablet ? 14 : isLargeTablet ? 18 : 16,
-      fontWeight: '600',
-      color: '#FFFFFF',
-      fontFamily: 'monospace',
-      letterSpacing: 0.5,
-    },
-    notificationsButton: {
-      backgroundColor: 'rgba(255, 255, 255, 0.15)',
-      paddingHorizontal: isSmallTablet ? 20 : isLargeTablet ? 28 : 24,
-      paddingVertical: isSmallTablet ? 12 : isLargeTablet ? 16 : 14,
-      borderRadius: 12,
-      borderWidth: 1,
-      borderColor: 'rgba(255, 255, 255, 0.25)',
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: isSmallTablet ? 8 : isLargeTablet ? 12 : 10,
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.1,
-      shadowRadius: 4,
-      elevation: 2,
-    },
-    notificationsButtonText: {
-      fontSize: isSmallTablet ? 16 : isLargeTablet ? 20 : 18,
-      fontWeight: '600',
-      color: '#FFFFFF',
-      letterSpacing: 0.5,
-    },
     technicianButton: {
       backgroundColor: 'rgba(255, 255, 255, 0.15)',
       paddingHorizontal: isSmallTablet ? 20 : isLargeTablet ? 28 : 24,
@@ -515,34 +482,10 @@ export default function MainScreen() {
       color: '#FFFFFF',
       letterSpacing: 0.5,
     },
-    connectionIndicator: {
-      paddingHorizontal: isSmallTablet ? 8 : isLargeTablet ? 12 : 10,
-      paddingVertical: isSmallTablet ? 8 : isLargeTablet ? 12 : 10,
-    },
-    connectionText: {
-      fontSize: isSmallTablet ? 12 : isLargeTablet ? 16 : 14,
-      fontWeight: '600',
-      color: '#FFFFFF',
-    },
-    configButton: {
-      backgroundColor: '#FFFFFF',
-      paddingHorizontal: isSmallTablet ? 20 : isLargeTablet ? 28 : 24,
-      paddingVertical: isSmallTablet ? 12 : isLargeTablet ? 16 : 14,
-      borderRadius: 12,
-      flexDirection: 'row',
+    centerHeaderSection: {
+      flex: 1,
       alignItems: 'center',
-      gap: isSmallTablet ? 8 : isLargeTablet ? 12 : 10,
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.15,
-      shadowRadius: 4,
-      elevation: 3,
-    },
-    configButtonText: {
-      fontSize: isSmallTablet ? 16 : isLargeTablet ? 20 : 18,
-      fontWeight: '600',
-      color: '#495057',
-      letterSpacing: 0.5,
+      justifyContent: 'center',
     },
     errorBanner: {
       backgroundColor: '#F8D7DA',
@@ -992,6 +935,7 @@ export default function MainScreen() {
     // Estilos adicionales para modo manual responsivo
   });
 
+
   return (
     <View style={styles.container}>
       {/* Header */}
@@ -1186,8 +1130,8 @@ export default function MainScreen() {
         visible={showNewConfigModal}
         onClose={() => setShowNewConfigModal(false)}
         onSave={handleConfigSave}
-        initialSandboxMode={isSandboxMode}
-        onToggleSandboxMode={handleToggleSandboxMode}
+        initialSandboxMode={false}
+        onToggleSandboxMode={() => {}} // Función deshabilitada
       />
 
       <ModeSelectionModal
@@ -1206,9 +1150,11 @@ export default function MainScreen() {
         onEmergency={handleEmergencyToggle}
         communicatingDoors={communicatingDoors}
         onCommunicate={handleCommunicate}
-        getDoorStatus={getDoorStatus}
-        isDoorButtonDisabled={isDoorButtonDisabled}
-        getDoorButtonText={getDoorButtonText}
+        getDoorStatus={(doorId: string) => getDoorStatus(doorId as 'P1' | 'P2' | 'P3' | 'P4')}
+        isDoorButtonDisabled={(doorId: string) => isDoorButtonDisabled(doorId as 'P1' | 'P2' | 'P3' | 'P4')}
+        getDoorButtonText={(doorId: string) => getDoorButtonText(doorId as 'P1' | 'P2' | 'P3' | 'P4')}
+        isDoorVerifying={(doorId: string) => isDoorVerifying(doorId)}
+        refreshAllDoorsStatus={refreshAllDoorsStatus}
         intercomConfigs={systemConfig?.doors || []}
       />
 

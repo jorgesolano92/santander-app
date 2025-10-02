@@ -15,7 +15,7 @@ interface ModeSelectionModalProps {
 
 interface ModeOption {
   id: string;
-  category: 'COMERCIAL' | 'EXTENDIDO' | 'ATM' | 'CERRADO' | 'CARGA_CAJERO' | 'EMERGENCIA';
+  category: 'COMERCIAL' | 'EXTENDIDO' | 'ATM' | 'CERRADO' | 'CARGA_CAJERO' | 'EMERGENCIA' | 'INDIVIDUAL';
   name: string;
   description: string;
 }
@@ -95,7 +95,7 @@ export default function ModeSelectionModal({ visible, onClose, onModeSelect }: M
   const [showCargaCajero, setShowCargaCajero] = useState<boolean>(false);
   const [isModalReady, setIsModalReady] = useState<boolean>(false);
   
-  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const isMountedRef = useRef<boolean>(false);
   const selectedModeRef = useRef<string>('comercial_automatico');
 
@@ -470,9 +470,9 @@ export default function ModeSelectionModal({ visible, onClose, onModeSelect }: M
                 
                 return (
                   <View key={category} style={styles.section}>
-                    {categoryDisplayNames[category] ? (
+                    {categoryDisplayNames[category as keyof typeof categoryDisplayNames] ? (
                       <Text style={styles.sectionTitleStatic}>
-                        {categoryDisplayNames[category]}
+                        {categoryDisplayNames[category as keyof typeof categoryDisplayNames]}
                       </Text>
                     ) : null}
                     

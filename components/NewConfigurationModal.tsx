@@ -65,15 +65,15 @@ export default function NewConfigurationModal({
       { 
         enabled: true, 
         name: 'Calle (P1)', 
-        ipExterior: '192.168.1.26', 
-        ipInterior: '192.168.1.27',
+        ipExterior: '192.168.1.155', 
+        ipInterior: '', // '192.168.1.27',
         intercom: {
           name: 'Intercomunicador Calle (P1)',
           cameraIP: '',
           httpPort: 80,
           httpsPort: 443,
           onvifUsername: 'admin',
-          onvifPassword: '',
+          onvifPassword: 'Santander@Notoca',
           rtspPort: 554,
           videoProfile: 'MainStream',
           sipUri: '',
@@ -85,6 +85,10 @@ export default function NewConfigurationModal({
           preferredResolution: '1920x1080',
           preferredFPS: 25,
           defaultOpenTime: 5,
+          doorControlUsername: 'Scati2023',
+          doorControlPassword: 'Scati2023',
+          doorControlPCB: 1,
+          doorControlSwitch: 1,
         }
       },
       { 
@@ -110,6 +114,10 @@ export default function NewConfigurationModal({
           preferredResolution: '1920x1080',
           preferredFPS: 25,
           defaultOpenTime: 5,
+          doorControlUsername: 'Scati2023',
+          doorControlPassword: 'Scati2023',
+          doorControlPCB: 1,
+          doorControlSwitch: 2,
         }
       },
       { 
@@ -135,6 +143,10 @@ export default function NewConfigurationModal({
           preferredResolution: '1920x1080',
           preferredFPS: 25,
           defaultOpenTime: 5,
+          doorControlUsername: 'Scati2023',
+          doorControlPassword: 'Scati2023',
+          doorControlPCB: 1,
+          doorControlSwitch: 3,
         }
       },
       { 
@@ -160,6 +172,10 @@ export default function NewConfigurationModal({
           preferredResolution: '1920x1080',
           preferredFPS: 25,
           defaultOpenTime: 5,
+          doorControlUsername: 'Scati2023',
+          doorControlPassword: 'Scati2023',
+          doorControlPCB: 1,
+          doorControlSwitch: 4,
         }
       },
       { 
@@ -185,6 +201,10 @@ export default function NewConfigurationModal({
           preferredResolution: '1920x1080',
           preferredFPS: 25,
           defaultOpenTime: 5,
+          doorControlUsername: 'Scati2023',
+          doorControlPassword: 'Scati2023',
+          doorControlPCB: 1,
+          doorControlSwitch: 5,
         }
       },
     ],
@@ -225,7 +245,36 @@ export default function NewConfigurationModal({
       const savedConfig = await AsyncStorage.getItem('new_door_config');
       if (savedConfig) {
         const parsedConfig = JSON.parse(savedConfig);
-        setConfig(prev => ({ ...prev, ...parsedConfig }));
+        
+        // Migrar configuraciones antiguas que no tienen campos SDIO12
+        if (parsedConfig.doors) {
+          parsedConfig.doors = parsedConfig.doors.map((door: any, index: number) => {
+            if (door.intercom) {
+              // Remover doorControlIP si existe (campo obsoleto)
+              const { doorControlIP, ...intercomRest } = door.intercom;
+              return {
+                ...door,
+                intercom: {
+                  ...intercomRest,
+                  doorControlUsername: door.intercom.doorControlUsername || 'Scati2023',
+                  doorControlPassword: door.intercom.doorControlPassword || 'Scati2023',
+                  doorControlPCB: door.intercom.doorControlPCB ?? 1,
+                  doorControlSwitch: door.intercom.doorControlSwitch ?? (index + 1),
+                }
+              };
+            }
+            return door;
+          });
+        }
+        
+        // Solo cargar configuración si no tiene IPs antiguas
+        if (!parsedConfig.doors?.[0]?.ipExterior?.includes('192.168.1.26')) {
+          setConfig(prev => ({ ...prev, ...parsedConfig }));
+          
+          // Guardar la configuración migrada
+          await AsyncStorage.setItem('new_door_config', JSON.stringify(parsedConfig));
+          console.log('✅ Configuración migrada exitosamente');
+        }
       }
     } catch (error) {
       console.error('Error loading configuration:', error);
@@ -263,40 +312,41 @@ export default function NewConfigurationModal({
     console.log('📋 Nueva configuración completa guardada:', config);
   };
 
-  const handleTestApiConnection = async () => {
-    setIsTestingApi(true);
-    try {
-      // Configurar temporalmente el servicio con los datos actuales
-      const tempConfig = {
-        serverIP: config.network.consoleIP,
-        apiPort: config.api.port,
-        apiUsername: config.api.username,
-        apiPassword: config.api.password,
-        username: 'admin',
-        updateServerURL: 'http://192.168.1.200/updates',
-        deviceId: 'device_id_placeholder',
-      };
+  // Función de prueba de API deshabilitada (no usa gettags)
+  // const handleTestApiConnection = async () => {
+  //   setIsTestingApi(true);
+  //   try {
+  //     // Configurar temporalmente el servicio con los datos actuales
+  //     const tempConfig = {
+  //       serverIP: config.network.consoleIP,
+  //       apiPort: config.api.port,
+  //       apiUsername: config.api.username,
+  //       apiPassword: config.api.password,
+  //       username: 'admin',
+  //       updateServerURL: 'http://192.168.1.200/updates',
+  //       deviceId: 'device_id_placeholder',
+  //     };
       
-      await doorControlService.setConfiguration(tempConfig);
+  //     await doorControlService.setConfiguration(tempConfig);
       
-      // Realizar la prueba GET
-      const response = await doorControlService.getTags(0, 0);
+  //     // Realizar la prueba GET
+  //     const response = await doorControlService.getTags(0, 0);
       
-      if (response) {
-        setApiResponseData(response);
-        setShowApiResponseModal(true);
-        console.log('✅ Prueba API exitosa:', response);
-      } else {
-        console.error('❌ No se recibieron datos de la API');
-        // Aquí podrías mostrar un mensaje de error al usuario
-      }
-    } catch (error) {
-      console.error('❌ Error en prueba API:', error);
-      // Aquí podrías mostrar un mensaje de error al usuario
-    } finally {
-      setIsTestingApi(false);
-    }
-  };
+  //     if (response) {
+  //       setApiResponseData(response);
+  //       setShowApiResponseModal(true);
+  //       console.log('✅ Prueba API exitosa:', response);
+  //     } else {
+  //       console.error('❌ No se recibieron datos de la API');
+  //       // Aquí podrías mostrar un mensaje de error al usuario
+  //     }
+  //   } catch (error) {
+  //     console.error('❌ Error en prueba API:', error);
+  //     // Aquí podrías mostrar un mensaje de error al usuario
+  //   } finally {
+  //     setIsTestingApi(false);
+  //   }
+  // };
 
   const updateDoor = (index: number, field: keyof DoorConfig, value: any) => {
     const newDoors = [...config.doors];
@@ -780,7 +830,8 @@ export default function NewConfigurationModal({
         <View style={styles.header}>
           <Text style={styles.headerTitle}>CONFIGURACIÓN DEL SISTEMA</Text>
           
-          <View style={styles.sandboxModeContainer}>
+          {/* Toggle de sandbox deshabilitado */}
+          {/* <View style={styles.sandboxModeContainer}>
             <Settings size={16} color="#FFFFFF" />
             <Text style={styles.sandboxModeText}>MODO SANDBOX</Text>
             <Switch
@@ -789,7 +840,7 @@ export default function NewConfigurationModal({
               trackColor={{ false: '#CED4DA', true: '#28A745' }}
               thumbColor={initialSandboxMode ? '#FFFFFF' : '#FFFFFF'}
             />
-          </View>
+          </View> */}
           
           <TouchableOpacity style={styles.closeButton} onPress={onClose}>
             <X size={24} color="#FFFFFF" />
@@ -952,7 +1003,8 @@ export default function NewConfigurationModal({
                   />
                 </View>
                 
-                <TouchableOpacity 
+                {/* Botón de prueba de API deshabilitado */}
+                {/* <TouchableOpacity 
                   style={[styles.testApiButton, isTestingApi && styles.testApiButtonDisabled]}
                   onPress={handleTestApiConnection}
                   disabled={isTestingApi}
@@ -961,7 +1013,7 @@ export default function NewConfigurationModal({
                   <Text style={styles.testApiButtonText}>
                     {isTestingApi ? 'PROBANDO...' : 'PROBAR CONEXIÓN API'}
                   </Text>
-                </TouchableOpacity>
+                </TouchableOpacity> */}
               </View>
             </View>
 

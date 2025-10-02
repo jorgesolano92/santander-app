@@ -1,0 +1,15 @@
+{
+  "name": "proxy-camara-safire",
+  "version": "1.0.0",
+  "main": "index.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "axios": "^1.6.7",
+    "bolt-expo-starter": "file:..",
+    "express": "^4.18.2",
+    "node-fetch": "^2.6.7"
+  }
+}

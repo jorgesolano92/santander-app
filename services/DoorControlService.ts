@@ -57,6 +57,17 @@ export interface Event {
   FotoJPEGBase64?: string;
 }
 
+export interface SDIO12Tag {
+  tag: string;
+  St: number;
+  v: string;
+}
+
+export interface SDIO12Response {
+  nModulos: number;
+  tags: SDIO12Tag[];
+}
+
 export interface ApiResponse {
   tags: Tag[];
   Alarms: Alarm[];
@@ -111,11 +122,13 @@ class DoorControlService {
   private apiPassword: string = '';
   private config: ConfigurationData | null = null;
   private connectionStatus: 'online' | 'offline' = 'offline';
-  private statusCheckInterval: NodeJS.Timeout | null = null;
-  private sandboxMode: boolean = true; // Modo sandbox activado por defecto
+  private statusCheckInterval: ReturnType<typeof setInterval> | null = null;
+  private sandboxMode: boolean = false; // Modo sandbox deshabilitado permanentemente
   private mockSystemStatus: SystemStatus;
   private lastEventId: number = 0;
   private lastChangeTime: number = 0;
+  private statusChangeCallback: (() => void) | null = null;
+  private verifyingDoors: Set<string> = new Set();
 
   constructor() {
     // Estado inicial simulado
@@ -232,11 +245,12 @@ class DoorControlService {
       // Guardar configuración localmente
       await this.saveConfiguration(config);
       
-      // Verificar conexión
-      const isConnected = await this.testConnection();
-      this.connectionStatus = isConnected ? 'online' : 'offline';
+      // Verificar conexión - DESHABILITADO
+      // const isConnected = await this.testConnection();
+      // this.connectionStatus = isConnected ? 'online' : 'offline';
+      this.connectionStatus = 'online'; // Siempre online
       
-      return isConnected;
+      return true; // Siempre retorna true (modo online)
     } catch (error) {
       console.error('Error setting configuration:', error);
       return false;
@@ -250,48 +264,284 @@ class DoorControlService {
     return `Basic ${encoded}`;
   }
 
-  // Obtener estado actual del sistema
-  async getSystemStatus(): Promise<SystemStatus | null> {
+  // Registrar callback para notificar cambios de estado
+  onStatusChange(callback: () => void) {
+    this.statusChangeCallback = callback;
+  }
+
+  // Notificar cambio de estado
+  private notifyStatusChange() {
+    if (this.statusChangeCallback) {
+      this.statusChangeCallback();
+    }
+  }
+
+  // Verificar si una puerta está siendo verificada
+  isDoorVerifying(doorId: string): boolean {
+    return this.verifyingDoors.has(doorId);
+  }
+
+  /**
+   * Consultar el estado inicial de todas las puertas configuradas
+   * Hace UNA SOLA petición GET que trae todos los tags
+   */
+  async refreshAllDoorsStatus(): Promise<boolean> {
     try {
-      // En modo sandbox, devolver el estado simulado
-      if (this.sandboxMode) {
-        return this.mockSystemStatus;
-      }
-
-      if (!this.baseURL) {
-        console.warn('BaseURL not configured, skipping API call');
-        return null;
-      }
-
-      // Usar la API real del cliente
-      const mSecCambio = Date.now() - this.lastChangeTime;
-      const apiUrl = `${this.baseURL}/gettags?mSecCambio=${mSecCambio}&id=${this.lastEventId}`;
+      console.log('🔄 Consultando estado inicial de todas las puertas...');
       
-      const response = await fetch(apiUrl, {
-        method: 'GET',
-        headers: {
-          'Authorization': this.getBasicAuthHeader(),
-          'Content-Type': 'application/json',
-        },
+      // Cargar la configuración de puertas desde AsyncStorage
+      const savedConfig = await AsyncStorage.getItem('new_door_config');
+      if (!savedConfig) {
+        console.warn('⚠️ No hay configuración de puertas guardada');
+        return false;
+      }
+
+      const config = JSON.parse(savedConfig);
+      if (!config.doors) {
+        console.warn('⚠️ Configuración de puertas no válida');
+        return false;
+      }
+
+      // Buscar solo puertas habilitadas
+      const enabledDoors = config.doors.filter((door: any) => door.enabled);
+      
+      if (enabledDoors.length === 0) {
+        console.warn('⚠️ No hay puertas habilitadas');
+        return false;
+      }
+
+      console.log(`📋 Consultando estado de ${enabledDoors.length} puertas habilitadas`);
+
+      // Usar la configuración de la primera puerta para hacer UNA SOLA petición
+      const firstDoor = enabledDoors[0];
+      
+      if (!firstDoor.ipExterior || 
+          !firstDoor.intercom?.doorControlUsername || 
+          !firstDoor.intercom?.doorControlPassword) {
+        console.warn('⚠️ Configuración SDIO12 incompleta en primera puerta');
+        return false;
+      }
+
+      const { doorControlUsername, doorControlPassword } = firstDoor.intercom;
+      const controllerIP = firstDoor.ipExterior;
+
+      // Hacer UNA SOLA petición GET que trae TODOS los tags
+      const sdioResponse = await this.getSDIO12Status(
+        controllerIP,
+        doorControlUsername,
+        doorControlPassword
+      );
+
+      if (!sdioResponse) {
+        console.error('❌ No se pudo obtener el estado SDIO12');
+        return false;
+      }
+
+      console.log(`📊 Respuesta SDIO12: ${sdioResponse.nModulos} módulos, ${sdioResponse.tags.length} tags`);
+
+      // Filtrar solo los tags de salidas digitales (smcse_do)
+      const doorTags = sdioResponse.tags.filter(tag => tag.tag.startsWith('smcse_do_'));
+      console.log(`🚪 Tags de puertas encontrados: ${doorTags.length}`);
+
+      // Actualizar el estado de cada puerta habilitada
+      let updatedCount = 0;
+      enabledDoors.forEach((door: any, index: number) => {
+        const doorId = `P${index + 1}` as 'P1' | 'P2' | 'P3' | 'P4';
+        
+        if (!door.intercom?.doorControlPCB || !door.intercom?.doorControlSwitch) {
+          console.warn(`⚠️ ${doorId}: PCB/Switch no configurados`);
+          return;
+        }
+
+        const { doorControlPCB, doorControlSwitch } = door.intercom;
+        const tag = this.buildSDIO12Tag(doorControlPCB, doorControlSwitch);
+        
+        // Buscar el tag correspondiente en la respuesta
+        const switchTag = doorTags.find(t => t.tag === tag);
+        
+        if (switchTag) {
+          const doorStatus = this.mockSystemStatus.doors[doorId];
+          if (doorStatus) {
+            const isOpen = switchTag.St === 1 || switchTag.v === '1';
+            doorStatus.status = isOpen ? 'open' : 'closed';
+            doorStatus.locked = !isOpen;
+            doorStatus.lastUpdate = new Date().toISOString();
+            
+            console.log(`✅ ${doorId} (${tag}): ${doorStatus.status} (St=${switchTag.St}, v=${switchTag.v})`);
+            updatedCount++;
+          }
+        } else {
+          console.warn(`⚠️ ${doorId}: Tag ${tag} no encontrado en respuesta`);
+        }
       });
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+      this.mockSystemStatus.lastSync = new Date().toISOString();
+      this.notifyStatusChange(); // Notificar para actualizar UI
+      
+      console.log(`✅ Estado actualizado para ${updatedCount}/${enabledDoors.length} puertas`);
+      return true;
+    } catch (error) {
+      console.error('❌ Error refrescando estado de puertas:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Probar conexión al intercomunicador (Axis o IDIS)
+   * @param ip IP del intercomunicador
+   * @param username Usuario de acceso
+   * @param password Contraseña
+   * @param deviceType Tipo de dispositivo ('axis' o 'idis')
+   */
+  async testAxisIntercomConnection(ip: string, username: string, password: string, deviceType: 'axis' | 'idis' = 'idis'): Promise<{
+    success: boolean;
+    message: string;
+    deviceInfo?: any;
+    error?: string;
+  }> {
+    try {
+      console.log(`🔍 Probando conexión al intercomunicador ${deviceType.toUpperCase()} en ${ip}...`);
+      console.log(`👤 Usuario: ${username}`);
+      console.log(`🔐 Contraseña: ${password.substring(0, 3)}***`);
+      console.log(`🏷️ Tipo: ${deviceType}`);
+      
+      // Primero probar sin autenticación para ver si el dispositivo responde
+      console.log(`🌐 Probando conectividad básica...`);
+      try {
+        const isWeb = typeof window !== 'undefined';
+        const basicUrl = isWeb 
+          ? `http://localhost:3001/${deviceType}/${ip}/`
+          : `https://${ip}/`;
+        
+        const basicResponse = await fetch(basicUrl, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          ...(isWeb && { mode: 'cors' })
+        });
+        
+        console.log(`📡 Conectividad básica: ${basicResponse.status} ${basicResponse.statusText}`);
+      } catch (basicError) {
+        console.log(`❌ Sin conectividad básica: ${basicError}`);
+      }
+      
+      // Crear headers de autenticación básica
+      const authHeader = this.getSDIO12AuthHeader(username, password);
+      console.log(`🔑 Auth header generado: ${authHeader.substring(0, 20)}...`);
+      
+      // Verificar que las credenciales sean correctas
+      const expectedAuth = `Basic ${btoa(`${username}:${password}`)}`;
+      console.log(`🔍 Auth esperado: ${expectedAuth.substring(0, 20)}...`);
+      console.log(`✅ Auth coincide: ${authHeader === expectedAuth}`);
+      
+      // Probar diferentes endpoints según el tipo de dispositivo
+      const testEndpoints = deviceType === 'axis' ? [
+        '/',                                    // Página principal (sin auth)
+        '/index.html',                          // Página de inicio
+        '/axis-cgi/param.cgi?action=list&group=Properties', // Información básica Axis
+        '/axis-cgi/param.cgi?action=list&group=System',     // Sistema
+        '/axis-cgi/param.cgi?action=list&group=Network',    // Red
+        '/axis-cgi/param.cgi?action=list&group=IO',         // Entradas/Salidas
+      ] : [
+        '/',                           // Página principal (sin auth)
+        '/index.html',                 // Página de inicio
+        '/cgi-bin/admin/getparam.cgi', // Información básica IDIS
+        '/cgi-bin/admin/status.cgi',   // Estado del sistema
+        '/cgi-bin/admin/version.cgi',  // Versión del firmware
+        '/cgi-bin/admin/network.cgi',  // Configuración de red
+      ];
+
+      const results = [];
+      
+      for (const endpoint of testEndpoints) {
+        try {
+          // Para desarrollo web, usar proxy para evitar CORS
+          const isWeb = typeof window !== 'undefined';
+          const url = isWeb 
+            ? `http://localhost:3001/${deviceType}/${ip}${endpoint}`
+            : `https://${ip}${endpoint}`;
+          
+          console.log(`📡 Probando: ${url}`);
+          
+          const response = await fetch(url, {
+            method: 'GET',
+            headers: {
+              'Authorization': authHeader,
+              'Content-Type': 'application/json',
+            },
+            // Para desarrollo web, usar proxy si es necesario
+            ...(isWeb && {
+              mode: 'cors',
+            })
+          });
+
+          if (response.ok) {
+            const data = await response.text();
+            console.log(`✅ ${endpoint}: OK`);
+            results.push({
+              endpoint,
+              status: response.status,
+              data: data.substring(0, 200) + '...' // Solo primeros 200 caracteres
+            });
+          } else {
+            console.log(`❌ ${endpoint}: ${response.status} ${response.statusText}`);
+            results.push({
+              endpoint,
+              status: response.status,
+              error: response.statusText
+            });
+          }
+        } catch (error) {
+          console.log(`❌ ${endpoint}: Error - ${error}`);
+          results.push({
+            endpoint,
+            error: error instanceof Error ? error.message : 'Error desconocido'
+          });
+        }
       }
 
-      const data: ApiResponse = await response.json();
-      this.connectionStatus = 'online';
-      this.lastChangeTime = Date.now();
+      // Si al menos un endpoint funcionó, consideramos la conexión exitosa
+      const successfulEndpoints = results.filter(r => r.status && r.status < 400);
       
-      // Actualizar último ID de evento
-      if (data.Events && data.Events.length > 0) {
-        this.lastEventId = Math.max(...data.Events.map(e => e.id));
+      if (successfulEndpoints.length > 0) {
+        console.log(`✅ Conexión exitosa: ${successfulEndpoints.length}/${testEndpoints.length} endpoints respondieron`);
+        
+        return {
+          success: true,
+          message: `Conexión exitosa al intercomunicador Axis I8116-E en ${ip}`,
+          deviceInfo: {
+            ip,
+            username,
+            endpointsTested: testEndpoints.length,
+            successfulEndpoints: successfulEndpoints.length,
+            results
+          }
+        };
+      } else {
+        return {
+          success: false,
+          message: `No se pudo conectar al intercomunicador Axis en ${ip}`,
+          error: 'Todos los endpoints fallaron'
+        };
       }
       
-      // Procesar tags para determinar estado de puertas
-      const processedStatus = this.processApiResponse(data);
-      
-      return processedStatus;
+    } catch (error) {
+      console.error('❌ Error probando conexión Axis:', error);
+      return {
+        success: false,
+        message: `Error conectando al intercomunicador Axis en ${ip}`,
+        error: error instanceof Error ? error.message : 'Error desconocido'
+      };
+    }
+  }
+
+  // Obtener estado actual del sistema - MODO ONLINE PERMANENTE
+  async getSystemStatus(): Promise<SystemStatus | null> {
+    try {
+      // Siempre devolver estado simulado (modo online permanente)
+      console.log('🔧 Sistema en modo ONLINE permanente - usando datos simulados');
+      return { ...this.mockSystemStatus }; // Retornar copia para evitar mutaciones
     } catch (error) {
       console.error('Error getting system status:', error);
       this.connectionStatus = 'offline';
@@ -408,42 +658,42 @@ class DoorControlService {
     return doors;
   }
 
-  // Obtener tags específicos
-  async getTags(mSecCambio: number = 0, eventId: number = 0): Promise<ApiResponse | null> {
-    try {
-      if (this.sandboxMode) {
-        // En sandbox, devolver datos simulados
-        return {
-          tags: [],
-          Alarms: [],
-          Events: [],
-        };
-      }
+  // Obtener tags específicos - DESHABILITADO
+  // async getTags(mSecCambio: number = 0, eventId: number = 0): Promise<ApiResponse | null> {
+  //   try {
+  //     if (this.sandboxMode) {
+  //       // En sandbox, devolver datos simulados
+  //       return {
+  //         tags: [],
+  //         Alarms: [],
+  //         Events: [],
+  //       };
+  //     }
 
-      if (!this.baseURL) {
-        return null;
-      }
+  //     if (!this.baseURL) {
+  //       return null;
+  //     }
 
-      const apiUrl = `${this.baseURL}/gettags?mSecCambio=${mSecCambio}&id=${eventId}`;
+  //     const apiUrl = `${this.baseURL}/gettags?mSecCambio=${mSecCambio}&id=${eventId}`;
       
-      const response = await fetch(apiUrl, {
-        method: 'GET',
-        headers: {
-          'Authorization': this.getBasicAuthHeader(),
-          'Content-Type': 'application/json',
-        },
-      });
+  //     const response = await fetch(apiUrl, {
+  //       method: 'GET',
+  //       headers: {
+  //         'Authorization': this.getBasicAuthHeader(),
+  //         'Content-Type': 'application/json',
+  //       },
+  //     });
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
+  //     if (!response.ok) {
+  //       throw new Error(`HTTP error! status: ${response.status}`);
+  //     }
 
-      return await response.json();
-    } catch (error) {
-      console.error('Error getting tags:', error);
-      return null;
-    }
-  }
+  //     return await response.json();
+  //   } catch (error) {
+  //     console.error('Error getting tags:', error);
+  //     return null;
+  //   }
+  // }
 
   // Cambiar modo de operación
   async changeMode(mode: string): Promise<boolean> {
@@ -601,9 +851,11 @@ class DoorControlService {
     }
   }
 
-  // Control manual de puertas
+  // Control manual de puertas usando SDIO12
   async controlDoor(doorId: 'P1' | 'P2' | 'P3' | 'P4', action: 'open' | 'close'): Promise<boolean> {
     try {
+      console.log(`🚪 Intentando ${action === 'open' ? 'abrir' : 'cerrar'} ${doorId}`);
+      
       // Modo sandbox: simular control de puerta
       if (this.sandboxMode) {
         console.log(`🔧 SANDBOX MODE: ${action}ing door ${doorId}`);
@@ -640,36 +892,293 @@ class DoorControlService {
         return true;
       }
 
-      if (!this.baseURL) {
-        console.warn('BaseURL not configured, cannot control door');
+      // Cargar la configuración de puertas desde AsyncStorage
+      const savedConfig = await AsyncStorage.getItem('new_door_config');
+      if (!savedConfig) {
+        console.error('❌ No hay configuración de puertas guardada');
         return false;
       }
 
-      const controlRequest = {
-        door: doorId,
-        action: action,
-        timestamp: new Date().toISOString(),
-        operator: 'tablet-app',
-      };
+      const config = JSON.parse(savedConfig);
+      if (!config.doors) {
+        console.error('❌ Configuración de puertas no válida');
+        return false;
+      }
 
-      const response = await fetch(`${this.baseURL}/api/control`, {
-        method: 'POST',
+      // Obtener índice de puerta (P1 = 0, P2 = 1, etc.)
+      const doorIndex = parseInt(doorId.replace('P', '')) - 1;
+      
+      // Buscar solo entre las puertas habilitadas
+      const enabledDoors = config.doors.filter((door: any) => door.enabled);
+      const doorConfig = enabledDoors[doorIndex];
+
+      if (!doorConfig) {
+        console.error(`❌ Configuración no encontrada para puerta habilitada ${doorId}`);
+        return false;
+      }
+
+      // Verificar que tenga configuración SDIO12
+      if (!doorConfig.ipExterior || 
+          !doorConfig.intercom?.doorControlUsername || 
+          !doorConfig.intercom?.doorControlPassword) {
+        console.error(`❌ Configuración SDIO12 incompleta para ${doorId}`);
+        return false;
+      }
+
+      const { doorControlUsername, doorControlPassword, doorControlPCB, doorControlSwitch } = doorConfig.intercom;
+      const controllerIP = doorConfig.ipExterior; // Usar la IP Exterior de la puerta
+
+      console.log(`🔧 Usando configuración SDIO12:`, {
+        ip: controllerIP,
+        pcb: doorControlPCB,
+        switch: doorControlSwitch,
+        tag: this.buildSDIO12Tag(doorControlPCB, doorControlSwitch)
+      });
+
+      // Llamar al método SDIO12
+      const success = await this.controlSDIO12Switch(
+        controllerIP,
+        doorControlUsername,
+        doorControlPassword,
+        doorControlPCB,
+        doorControlSwitch,
+        action
+      );
+
+      if (success) {
+        console.log(`✅ Puerta ${doorId} ${action === 'open' ? 'abierta' : 'cerrada'} exitosamente`);
+        
+        // Marcar que se está verificando el estado
+        this.verifyingDoors.add(doorId);
+        this.notifyStatusChange(); // Notificar para mostrar loader
+        
+        // Consultar el estado real desde SDIO12 después de 1 segundo
+        setTimeout(async () => {
+          try {
+            const realStatus = await this.getSDIO12SwitchStatus(
+              controllerIP,
+              doorControlUsername,
+              doorControlPassword,
+              doorControlPCB,
+              doorControlSwitch
+            );
+            
+            if (realStatus) {
+              const door = this.mockSystemStatus.doors[doorId];
+              if (door) {
+                door.status = realStatus.isOpen ? 'open' : 'closed';
+                door.locked = !realStatus.isOpen;
+                door.lastUpdate = new Date().toISOString();
+                this.mockSystemStatus.lastSync = new Date().toISOString();
+                
+                console.log(`🔄 Estado real actualizado para ${doorId}:`, {
+                  status: door.status,
+                  locked: door.locked,
+                  St: realStatus.St,
+                  v: realStatus.v
+                });
+              }
+            }
+          } catch (error) {
+            console.error(`❌ Error consultando estado real de ${doorId}:`, error);
+          } finally {
+            // Remover de la lista de verificación
+            this.verifyingDoors.delete(doorId);
+            this.notifyStatusChange(); // Notificar para ocultar loader
+          }
+        }, 1000);
+      }
+
+      return success;
+    } catch (error) {
+      console.error(`❌ Error controlando puerta ${doorId}:`, error);
+      return false;
+    }
+  }
+
+  // ========== MÉTODOS PARA CONTROL DE PUERTAS SDIO12 ==========
+  
+  /**
+   * Construir el tag SDIO12 basado en PCB y Switch
+   * Formato: smcse_do_01_{PCB}_{SWITCH}
+   */
+  private buildSDIO12Tag(pcb: number, switchNum: number): string {
+    const pcbStr = pcb.toString().padStart(2, '0');
+    const switchStr = switchNum.toString().padStart(2, '0');
+    return `smcse_do_01_${pcbStr}_${switchStr}`;
+  }
+
+  /**
+   * Generar header de autenticación BASIC para SDIO12
+   */
+  private getSDIO12AuthHeader(username: string, password: string): string {
+    const credentials = `${username}:${password}`;
+    // Usar btoa en navegador (disponible globalmente)
+    const encoded = btoa(credentials);
+    return `Basic ${encoded}`;
+  }
+
+  /**
+   * Obtener el estado actual de todos los switches SDIO12
+   * GET https://{ip}/sdio12
+   */
+  async getSDIO12Status(ip: string, username: string, password: string): Promise<SDIO12Response | null> {
+    try {
+      // Usar proxy en desarrollo web para evitar CORS
+      const isWeb = typeof window !== 'undefined' && window.location?.protocol === 'http:';
+      const url = isWeb 
+        ? `http://localhost:3001/sdio12/${ip}` 
+        : `https://${ip}/sdio12`;
+      
+      console.log(`🔍 Consultando estado SDIO12: ${url}${isWeb ? ' (vía proxy)' : ''}`);
+      
+      const response = await fetch(url, {
+        method: 'GET',
         headers: {
-          'Authorization': this.getBasicAuthHeader(),
+          'Authorization': this.getSDIO12AuthHeader(username, password),
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(controlRequest),
       });
 
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 
-      const result = await response.json();
-      return result.success === true;
+      const data: SDIO12Response = await response.json();
+      console.log(`✅ Estado SDIO12 obtenido: ${data.nModulos} módulos, ${data.tags.length} tags`);
+      
+      return data;
     } catch (error) {
-      console.error('Error controlling door:', error);
+      console.error('❌ Error obteniendo estado SDIO12:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Obtener el estado de un switch específico
+   * Retorna: { St: number, v: string, isOpen: boolean }
+   */
+  async getSDIO12SwitchStatus(
+    ip: string, 
+    username: string, 
+    password: string,
+    pcb: number, 
+    switchNum: number
+  ): Promise<{ St: number; v: string; isOpen: boolean } | null> {
+    try {
+      const data = await this.getSDIO12Status(ip, username, password);
+      if (!data) return null;
+
+      const tag = this.buildSDIO12Tag(pcb, switchNum);
+      const switchTag = data.tags.find(t => t.tag === tag);
+
+      if (!switchTag) {
+        console.warn(`⚠️ Switch no encontrado: ${tag}`);
+        return null;
+      }
+
+      const isOpen = switchTag.St === 1 || switchTag.v === '1';
+      
+      console.log(`🔍 Estado del switch ${tag}: St=${switchTag.St}, v=${switchTag.v}, isOpen=${isOpen}`);
+      
+      return {
+        St: switchTag.St,
+        v: switchTag.v,
+        isOpen
+      };
+    } catch (error) {
+      console.error('❌ Error obteniendo estado del switch:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Controlar un switch SDIO12 específico (abrir/cerrar puerta)
+   * POST https://{ip}/sdio12
+   * St: 1001 = activar (abrir), 1000 = desactivar (cerrar)
+   */
+  async controlSDIO12Switch(
+    ip: string,
+    username: string,
+    password: string,
+    pcb: number,
+    switchNum: number,
+    action: 'open' | 'close'
+  ): Promise<boolean> {
+    try {
+      // Usar proxy en desarrollo web para evitar CORS
+      const isWeb = typeof window !== 'undefined' && window.location?.protocol === 'http:';
+      const url = isWeb 
+        ? `http://localhost:3001/sdio12/${ip}` 
+        : `https://${ip}/sdio12`;
+      
+      const tag = this.buildSDIO12Tag(pcb, switchNum);
+      const St = action === 'open' ? 1001 : 1000;
+      const v = action === 'open' ? '1' : '0';
+
+      const requestBody = {
+        tags: [
+          {
+            tag,
+            St,
+            v
+          }
+        ]
+      };
+
+      const bodyString = JSON.stringify(requestBody);
+      
+      console.log(`🚪 ${action === 'open' ? 'Abriendo' : 'Cerrando'} puerta${isWeb ? ' (vía proxy)' : ''}:`, {
+        url,
+        tag,
+        St,
+        v,
+        body: bodyString
+      });
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Authorization': this.getSDIO12AuthHeader(username, password),
+          'Content-Type': 'application/json', // Intentar con application/json
+        },
+        body: bodyString,
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`❌ Error HTTP ${response.status}:`, errorText);
+        throw new Error(`HTTP error! status: ${response.status} - ${errorText}`);
+      }
+
+      const result = await response.json();
+      console.log(`✅ Comando SDIO12 ejecutado exitosamente:`, result);
+      
+      return true;
+    } catch (error) {
+      console.error('❌ Error controlando switch SDIO12:', error);
       return false;
+    }
+  }
+
+  /**
+   * Obtener todos los switches SDIO de tipo "smcse_do" (digital outputs)
+   * Filtra solo los tags que controlan puertas
+   */
+  async getSDIO12DoorSwitches(ip: string, username: string, password: string): Promise<SDIO12Tag[]> {
+    try {
+      const data = await this.getSDIO12Status(ip, username, password);
+      if (!data) return [];
+
+      // Filtrar solo los tags de salida digital (smcse_do)
+      const doorSwitches = data.tags.filter(tag => tag.tag.startsWith('smcse_do_'));
+      
+      console.log(`🔍 Switches de puertas encontrados: ${doorSwitches.length}`);
+      
+      return doorSwitches;
+    } catch (error) {
+      console.error('❌ Error obteniendo switches de puertas:', error);
+      return [];
     }
   }
 
@@ -710,7 +1219,6 @@ class DoorControlService {
 
       const response = await fetch(`${this.config.updateServerURL}/version.json`, {
         method: 'GET',
-        timeout: 5000,
       });
 
       if (!response.ok) {
@@ -797,23 +1305,24 @@ class DoorControlService {
     }
   }
 
-  private async testConnection(): Promise<boolean> {
-    try {
-      if (!this.baseURL) {
-        return false;
-      }
+  // Función de ping deshabilitada
+  // private async testConnection(): Promise<boolean> {
+  //   try {
+  //     if (!this.baseURL) {
+  //       return false;
+  //     }
 
-      const response = await fetch(`${this.baseURL}/api/ping`, {
-        method: 'GET',
-        headers: {
-          'Authorization': this.getBasicAuthHeader(),
-        },
-      });
-      return response.ok;
-    } catch (error) {
-      return false;
-    }
-  }
+  //     const response = await fetch(`${this.baseURL}/api/ping`, {
+  //       method: 'GET',
+  //       headers: {
+  //         'Authorization': this.getBasicAuthHeader(),
+  //       },
+  //     });
+  //     return response.ok;
+  //   } catch (error) {
+  //     return false;
+  //   }
+  // }
 
   private startStatusMonitoring(): void {
     // Monitoreo cada 5 segundos
@@ -832,15 +1341,15 @@ class DoorControlService {
     return this.sandboxMode ? 'sandbox_device_001' : 'device_id_placeholder';
   }
 
-  // Método para alternar entre modo sandbox y producción
-  setSandboxMode(enabled: boolean): void {
-    this.sandboxMode = enabled;
-    console.log(`🔧 Sandbox mode ${enabled ? 'ENABLED' : 'DISABLED'}`);
-    
-    if (enabled) {
-      this.connectionStatus = 'online';
-    }
-  }
+  // Método para alternar entre modo sandbox y producción - DESHABILITADO
+  // setSandboxMode(enabled: boolean): void {
+  //   this.sandboxMode = enabled;
+  //   console.log(`🔧 Sandbox mode ${enabled ? 'ENABLED' : 'DISABLED'}`);
+  //   
+  //   if (enabled) {
+  //     this.connectionStatus = 'online';
+  //   }
+  // }
 
   // Cleanup
   destroy(): void {

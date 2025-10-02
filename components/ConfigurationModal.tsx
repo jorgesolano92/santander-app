@@ -331,7 +331,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.2,
     shadowRadius: 8,
     elevation: 4,
-    alignSelf: 'center',
+    // alignSelf: 'center',
     marginTop: 24,
   },
   acceptButtonDisabled: {

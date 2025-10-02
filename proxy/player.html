@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reproductor de Stream de Cámara</title>
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+        .controls {
+            margin: 20px 0;
+            text-align: center;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            margin: 0 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        button:disabled {
+            background-color: #6c757d;
+            cursor: not-allowed;
+        }
+        .status {
+            margin: 20px 0;
+            padding: 10px;
+            border-radius: 4px;
+            text-align: center;
+        }
+        .status.success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .status.error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .status.info {
+            background-color: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        #video {
+            width: 100%;
+            max-width: 800px;
+            height: auto;
+            background-color: #000;
+            border-radius: 4px;
+        }
+        .info {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #f8f9fa;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📹 Reproductor de Stream de Cámara</h1>
+        
+        <div class="controls">
+            <button id="startBtn" onclick="startStream()">▶️ Iniciar Stream</button>
+            <button id="stopBtn" onclick="stopStream()" disabled>⏹️ Detener Stream</button>
+            <button id="snapshotBtn" onclick="getSnapshot()">📸 Captura</button>
+        </div>
+
+        <div id="status" class="status info">
+            Estado: Listo para iniciar el stream
+        </div>
+
+        <video id="video" controls autoplay muted>
+            Tu navegador no soporta la reproducción de video.
+        </video>
+
+        <div class="info">
+            <h3>Instrucciones:</h3>
+            <ol>
+                <li>Haz clic en "Iniciar Stream" para comenzar la conversión RTSP a HLS</li>
+                <li>Espera unos segundos para que FFmpeg procese el stream</li>
+                <li>El video debería aparecer automáticamente</li>
+                <li>Usa "Detener Stream" para parar la conversión</li>
+                <li>Usa "Captura" para obtener una imagen estática</li>
+            </ol>
+            
+            <h3>Información técnica:</h3>
+            <ul>
+                <li><strong>URL RTSP:</strong> rtsp://192.168.1.117:554/profile1</li>
+                <li><strong>Formato:</strong> HLS (HTTP Live Streaming)</li>
+                <li><strong>Codec de video:</strong> H.264</li>
+                <li><strong>Codec de audio:</strong> AAC</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        let hls = null;
+        let isStreamActive = false;
+
+        function updateStatus(message, type = 'info') {
+            const statusDiv = document.getElementById('status');
+            statusDiv.textContent = message;
+            statusDiv.className = `status ${type}`;
+        }
+
+        function updateButtons() {
+            document.getElementById('startBtn').disabled = isStreamActive;
+            document.getElementById('stopBtn').disabled = !isStreamActive;
+        }
+
+        async function startStream() {
+            try {
+                updateStatus('Iniciando stream...', 'info');
+                
+                // Iniciar el proceso de conversión en el servidor
+                const response = await fetch('/start-stream');
+                const data = await response.json();
+                
+                if (data.status === 'ok') {
+                    updateStatus('Stream iniciado, esperando conversión...', 'info');
+                    
+                    // Esperar un poco para que FFmpeg genere los archivos
+                    setTimeout(() => {
+                        loadHLSStream();
+                    }, 3000);
+                } else {
+                    updateStatus('Error al iniciar stream: ' + data.message, 'error');
+                }
+            } catch (error) {
+                updateStatus('Error al iniciar stream: ' + error.message, 'error');
+            }
+        }
+
+        function loadHLSStream() {
+            const video = document.getElementById('video');
+            const videoSrc = '/hls/stream.m3u8';
+            
+            if (Hls.isSupported()) {
+                if (hls) {
+                    hls.destroy();
+                }
+                
+                hls = new Hls();
+                hls.loadSource(videoSrc);
+                hls.attachMedia(video);
+                
+                hls.on(Hls.Events.MANIFEST_PARSED, function() {
+                    updateStatus('Stream cargado correctamente', 'success');
+                    isStreamActive = true;
+                    updateButtons();
+                });
+                
+                hls.on(Hls.Events.ERROR, function(event, data) {
+                    console.error('Error HLS:', data);
+                    if (data.fatal) {
+                        updateStatus('Error fatal en el stream: ' + data.details, 'error');
+                        isStreamActive = false;
+                        updateButtons();
+                    }
+                });
+                
+            } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+                // Safari nativo
+                video.src = videoSrc;
+                video.addEventListener('loadedmetadata', function() {
+                    updateStatus('Stream cargado correctamente', 'success');
+                    isStreamActive = true;
+                    updateButtons();
+                });
+            } else {
+                updateStatus('Tu navegador no soporta HLS', 'error');
+            }
+        }
+
+        async function stopStream() {
+            try {
+                const response = await fetch('/stop-stream');
+                const data = await response.json();
+                
+                if (data.status === 'ok') {
+                    if (hls) {
+                        hls.destroy();
+                        hls = null;
+                    }
+                    
+                    const video = document.getElementById('video');
+                    video.src = '';
+                    
+                    updateStatus('Stream detenido', 'info');
+                    isStreamActive = false;
+                    updateButtons();
+                } else {
+                    updateStatus('Error al detener stream: ' + data.message, 'error');
+                }
+            } catch (error) {
+                updateStatus('Error al detener stream: ' + error.message, 'error');
+            }
+        }
+
+        async function getSnapshot() {
+            try {
+                const response = await fetch('/camera');
+                if (response.ok) {
+                    const blob = await response.blob();
+                    const url = URL.createObjectURL(blob);
+                    
+                    // Crear un enlace de descarga
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = 'snapshot_' + new Date().getTime() + '.jpg';
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                    
+                    updateStatus('Captura descargada', 'success');
+                } else {
+                    updateStatus('Error al obtener captura', 'error');
+                }
+            } catch (error) {
+                updateStatus('Error al obtener captura: ' + error.message, 'error');
+            }
+        }
+
+        // Verificar estado del stream al cargar la página
+        async function checkStreamStatus() {
+            try {
+                const response = await fetch('/stream-status');
+                const data = await response.json();
+                
+                if (data.isRunning) {
+                    updateStatus('Stream ya está activo, cargando...', 'info');
+                    loadHLSStream();
+                }
+            } catch (error) {
+                console.log('No se pudo verificar el estado del stream');
+            }
+        }
+
+        // Inicializar
+        updateButtons();
+        checkStreamStatus();
+    </script>
+</body>
+</html>

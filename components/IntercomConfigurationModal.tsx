@@ -22,6 +22,10 @@ export interface IntercomConfig {
   preferredResolution: string;
   preferredFPS: number;
   defaultOpenTime: number;
+  doorControlUsername: string;
+  doorControlPassword: string;
+  doorControlPCB: number;
+  doorControlSwitch: number;
 }
 
 interface IntercomConfigurationModalProps {
@@ -50,6 +54,10 @@ const defaultIntercomConfig: IntercomConfig = {
   preferredResolution: '1920x1080',
   preferredFPS: 25,
   defaultOpenTime: 5,
+  doorControlUsername: 'Scati2023',
+  doorControlPassword: 'Scati2023',
+  doorControlPCB: 1,
+  doorControlSwitch: 1,
 };
 
 export default function IntercomConfigurationModal({ 
@@ -455,6 +463,74 @@ export default function IntercomConfigurationModal({
                   placeholder="pbx.local"
                   autoCapitalize="none"
                 />
+              </View>
+            </View>
+          </View>
+
+          {/* Configuración SDIO12 */}
+          <View style={styles.section}>
+            <View style={styles.sectionTitle}>
+              <Text style={styles.sectionTitle}>CONFIGURACIÓN CONTROL DE PUERTAS (SDIO12)</Text>
+            </View>
+            <View style={styles.sectionCard}>
+              <View style={styles.inputRow}>
+                <Text style={styles.inputLabel}>Usuario SDIO12:</Text>
+                <TextInput
+                  style={styles.textInput}
+                  value={config.doorControlUsername}
+                  onChangeText={(text) => updateConfig('doorControlUsername', text)}
+                  placeholder="Scati2023"
+                />
+              </View>
+              
+              <View style={styles.inputRow}>
+                <Text style={styles.inputLabel}>Contraseña SDIO12:</Text>
+                <TextInput
+                  style={styles.textInput}
+                  value={config.doorControlPassword}
+                  onChangeText={(text) => updateConfig('doorControlPassword', text)}
+                  placeholder="Scati2023"
+                  secureTextEntry={true}
+                />
+              </View>
+              
+              <View style={styles.inputRow}>
+                <Text style={styles.inputLabel}>PCB:</Text>
+                <View style={styles.pickerContainer}>
+                  <Picker
+                    selectedValue={config.doorControlPCB}
+                    onValueChange={(value) => updateConfig('doorControlPCB', value)}
+                    style={styles.picker}
+                  >
+                    <Picker.Item label="PCB 01" value={1} />
+                    <Picker.Item label="PCB 02" value={2} />
+                    <Picker.Item label="PCB 03" value={3} />
+                  </Picker>
+                </View>
+              </View>
+              
+              <View style={styles.inputRow}>
+                <Text style={styles.inputLabel}>Switch:</Text>
+                <View style={styles.pickerContainer}>
+                  <Picker
+                    selectedValue={config.doorControlSwitch}
+                    onValueChange={(value) => updateConfig('doorControlSwitch', value)}
+                    style={styles.picker}
+                  >
+                    <Picker.Item label="Switch 01" value={1} />
+                    <Picker.Item label="Switch 02" value={2} />
+                    <Picker.Item label="Switch 03" value={3} />
+                    <Picker.Item label="Switch 04" value={4} />
+                    <Picker.Item label="Switch 05" value={5} />
+                    <Picker.Item label="Switch 06" value={6} />
+                    <Picker.Item label="Switch 07" value={7} />
+                    <Picker.Item label="Switch 08" value={8} />
+                    <Picker.Item label="Switch 09" value={9} />
+                    <Picker.Item label="Switch 10" value={10} />
+                    <Picker.Item label="Switch 11" value={11} />
+                    <Picker.Item label="Switch 12" value={12} />
+                  </Picker>
+                </View>
               </View>
             </View>
           </View>

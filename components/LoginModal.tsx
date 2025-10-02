@@ -16,8 +16,8 @@ export default function LoginModal({ visible, onClose, onSuccess }: LoginModalPr
   const isLargeTablet = width >= 1200;
   const isMounted = useRef(false);
 
-  const [ordinal, setOrdinal] = useState<string>('');
-  const [password, setPassword] = useState<string>('');
+  const [ordinal, setOrdinal] = useState<string>('admin');
+  const [password, setPassword] = useState<string>('123456');
   const [error, setError] = useState<string>('');
   const [isLoading, setIsLoading] = useState(false);
   const [availableVersion, setAvailableVersion] = useState<string | null>(null);
@@ -94,8 +94,8 @@ export default function LoginModal({ visible, onClose, onSuccess }: LoginModalPr
       if (ordinal === TEST_CREDENTIALS.ordinal && 
           password === TEST_CREDENTIALS.password) {
         // Login exitoso
-        setOrdinal('');
-        setPassword('');
+        setOrdinal('admin');
+        setPassword('123456');
         setError('');
         onSuccess();
       } else {
@@ -106,8 +106,8 @@ export default function LoginModal({ visible, onClose, onSuccess }: LoginModalPr
   };
 
   const handleClose = () => {
-    setOrdinal('');
-    setPassword('');
+    setOrdinal('admin');
+    setPassword('123456');
     setError('');
     onClose();
   };
@@ -281,28 +281,6 @@ export default function LoginModal({ visible, onClose, onSuccess }: LoginModalPr
       opacity: 0.6,
     },
     loginButtonText: {
-      fontSize: 14,
-      fontWeight: '700',
-      color: '#FFFFFF',
-      letterSpacing: 0.5,
-    },
-    updateButton: {
-      flex: 1,
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'center',
-      backgroundColor: '#17A2B8',
-      paddingHorizontal: 24,
-      paddingVertical: 14,
-      borderRadius: 8,
-      gap: 6,
-      shadowColor: '#17A2B8',
-      shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.2,
-      shadowRadius: 8,
-      elevation: 4,
-    },
-    updateButtonText: {
       fontSize: 14,
       fontWeight: '700',
       color: '#FFFFFF',
