@@ -2,7 +2,7 @@ import { View, Text, StyleSheet, TouchableOpacity, Dimensions, Platform } from '
 import { useWindowDimensions } from 'react-native';
 import { useState, useEffect, useCallback } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Settings, MessageCircle, DoorOpen, HardHat, Wifi } from 'lucide-react-native';
+import { Settings, MessageCircle, DoorOpen, HardHat, Wifi, Phone } from 'lucide-react-native';
 import { Image } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import LoginModal from '@/components/LoginModal';
@@ -11,6 +11,7 @@ import ModeSelectionModal from '@/components/ModeSelectionModal';
 import TechnicianModal from '@/components/TechnicianModal';
 import ManualModeModal from '@/components/ManualModeModal';
 import EmergencyConfirmationModal from '@/components/EmergencyConfirmationModal';
+import AxisTestModal from '@/components/AxisTestModal';
 import { useDoorControl } from '@/hooks/useDoorControl';
 import { doorControlService } from '@/services/DoorControlService';
 // (Eliminar) import * as FileSystem from 'expo-file-system';
@@ -135,6 +136,7 @@ export default function MainScreen() {
   const [showEmergencyConfirmModal, setShowEmergencyConfirmModal] = useState(false);
   const [currentDateTime, setCurrentDateTime] = useState(new Date());
   const [communicatingDoors, setCommunicatingDoors] = useState<Set<string>>(new Set());
+  const [showAxisTestModal, setShowAxisTestModal] = useState(false);
   // const [isSandboxMode, setIsSandboxMode] = useState(false); // Modo sandbox deshabilitado permanentemente
   const [systemConfig, setSystemConfig] = useState<SystemConfig | null>(null);
 
@@ -976,6 +978,13 @@ export default function MainScreen() {
               color={connectionStatus === 'connected' ? '#28A745' : '#DC3545'} 
             />
           </View>
+          <TouchableOpacity 
+            style={styles.configButton}
+            onPress={() => setShowAxisTestModal(true)}
+          >
+            <Phone size={isSmallTablet ? 20 : isLargeTablet ? 24 : 22} color="#495057" />
+            <Text style={styles.configButtonText}>PROBAR AXIS</Text>
+          </TouchableOpacity>
           
           <TouchableOpacity 
             style={styles.configButton}
@@ -1163,6 +1172,11 @@ export default function MainScreen() {
         onClose={() => setShowEmergencyConfirmModal(false)}
         onConfirm={handleEmergencyConfirm}
         isDeactivating={isEmergencyActive}
+      />
+
+      <AxisTestModal
+        visible={showAxisTestModal}
+        onClose={() => setShowAxisTestModal(false)}
       />
     </View>
   );

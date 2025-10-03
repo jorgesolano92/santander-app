@@ -1,5 +1,5 @@
-import { View, Text, StyleSheet, TouchableOpacity, Modal } from 'react-native';
-import { X, MessageCircle, DoorOpen, PhoneCall, PhoneOff, Mic, MicOff, Volume2 } from 'lucide-react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Modal, ActivityIndicator } from 'react-native';
+import { X, MessageCircle, DoorOpen, PhoneCall, PhoneOff, Mic, MicOff, Volume2, Camera } from 'lucide-react-native';
 import { ScrollView } from 'react-native';
 import { useWindowDimensions } from 'react-native';
 import { useState, useEffect } from 'react';
@@ -31,6 +31,8 @@ interface ManualModeModalProps {
   };
   isDoorButtonDisabled: (doorId: string) => boolean;
   getDoorButtonText: (doorId: string) => string;
+  isDoorVerifying: (doorId: string) => boolean;
+  refreshAllDoorsStatus: () => Promise<boolean>;
   intercomConfigs: DoorConfig[];
 }
 
@@ -44,6 +46,8 @@ export default function ManualModeModal({
   getDoorStatus,
   isDoorButtonDisabled,
   getDoorButtonText,
+  isDoorVerifying,
+  refreshAllDoorsStatus,
   intercomConfigs
 }: ManualModeModalProps) {
   const { width = 0 } = useWindowDimensions();
@@ -52,6 +56,7 @@ export default function ManualModeModal({
 
   // Estado local para la configuración de puertas
   const [currentIntercomConfigs, setCurrentIntercomConfigs] = useState<DoorConfig[]>(intercomConfigs || []);
+  const [cameraConfigs, setCameraConfigs] = useState<DoorConfig[]>([]);
   
   // Filter enabled doors for styling calculations
   const enabledDoors = currentIntercomConfigs.filter(door => door.enabled);
@@ -60,8 +65,14 @@ export default function ManualModeModal({
   useEffect(() => {
     if (visible) {
       loadCurrentConfig();
+      // Consultar estado inicial de todas las puertas
+      refreshAllDoorsStatus().then(() => {
+        console.log('🔄 Estado inicial de puertas consultado al abrir ManualModeModal');
+      }).catch((error) => {
+        console.error('❌ Error consultando estado inicial:', error);
+      });
     }
-  }, [visible]);
+  }, [visible, refreshAllDoorsStatus]);
   
   // Actualizar cuando cambie la prop
   useEffect(() => {
@@ -76,14 +87,35 @@ export default function ManualModeModal({
       if (savedConfig) {
         const parsedConfig = JSON.parse(savedConfig);
         if (parsedConfig.doors) {
-          setCurrentIntercomConfigs(parsedConfig.doors);
-          console.log('🔄 Configuración de puertas cargada en ManualModeModal:', parsedConfig.doors);
+          // Migrar configuraciones antiguas que no tienen campos SDIO12
+          const migratedDoors = parsedConfig.doors.map((door: any, index: number) => {
+            if (door.intercom) {
+              // Remover doorControlIP si existe (campo obsoleto)
+              const { doorControlIP, ...intercomRest } = door.intercom;
+              return {
+                ...door,
+                intercom: {
+                  ...intercomRest,
+                  doorControlUsername: door.intercom.doorControlUsername || 'Scati2023',
+                  doorControlPassword: door.intercom.doorControlPassword || 'Scati2023',
+                  doorControlPCB: door.intercom.doorControlPCB ?? 1,
+                  doorControlSwitch: door.intercom.doorControlSwitch ?? (index + 1),
+                }
+              };
+            }
+            return door;
+          });
+          
+          setCurrentIntercomConfigs(migratedDoors);
+          setCameraConfigs(migratedDoors);
+          console.log('🔄 Configuración de puertas y cámaras cargada en ManualModeModal:', migratedDoors);
         }
       }
     } catch (error) {
       console.error('❌ Error cargando configuración en ManualModeModal:', error);
     }
   };
+
 
   const { 
     controlDoor, 
@@ -601,21 +633,38 @@ export default function ManualModeModal({
                         style={[
                           styles.doorControlButton,
                           getDoorStatus(doorId).isOpen && styles.doorControlButtonClose,
-                          isDoorButtonDisabled(doorId) && styles.doorControlButtonDisabled
+                          (isDoorButtonDisabled(doorId) || isDoorVerifying(doorId)) && styles.doorControlButtonDisabled
                         ]}
                         onPress={() => handleOpenDoor(doorId as 'P1' | 'P2', door.name)}
-                        disabled={isDoorButtonDisabled(doorId)}
+                        disabled={isDoorButtonDisabled(doorId) || isDoorVerifying(doorId)}
                       >
-                        <DoorOpen 
-                          size={16} 
-                          color={getDoorStatus(doorId).isOpen ? "#FFFFFF" : "#495057"} 
-                        />
-                        <Text style={[
-                          styles.doorControlButtonText,
-                          getDoorStatus(doorId).isOpen && styles.doorControlButtonCloseText
-                        ]}>
-                          {getDoorButtonText(doorId)}
-                        </Text>
+                        {isDoorVerifying(doorId) ? (
+                          <>
+                            <ActivityIndicator 
+                              size="small" 
+                              color={getDoorStatus(doorId).isOpen ? "#FFFFFF" : "#495057"} 
+                            />
+                            <Text style={[
+                              styles.doorControlButtonText,
+                              getDoorStatus(doorId).isOpen && styles.doorControlButtonCloseText
+                            ]}>
+                              VERIFICANDO...
+                            </Text>
+                          </>
+                        ) : (
+                          <>
+                            <DoorOpen 
+                              size={16} 
+                              color={getDoorStatus(doorId).isOpen ? "#FFFFFF" : "#495057"} 
+                            />
+                            <Text style={[
+                              styles.doorControlButtonText,
+                              getDoorStatus(doorId).isOpen && styles.doorControlButtonCloseText
+                            ]}>
+                              {getDoorButtonText(doorId)}
+                            </Text>
+                          </>
+                        )}
                       </TouchableOpacity>
                     </View>
                   </View>
@@ -623,6 +672,7 @@ export default function ManualModeModal({
               );
             })}
           </View>
+
 
           {/* Bottom Buttons */}
           <View style={styles.bottomButtons}>

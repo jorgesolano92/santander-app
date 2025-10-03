@@ -394,6 +394,32 @@ app.get('/axis/:ip/*', async (req, res) => {
     console.log(`🔑 Auth value: ${auth.substring(0, 20)}...`);
   }
   
+  // 1) Si el cliente envía Authorization, probarlo primero
+  if (auth) {
+    try {
+      const directResp = await axios.get(`https://${ip}/${path}`, {
+        headers: {
+          'Authorization': auth,
+          'Content-Type': 'application/json',
+        },
+        httpsAgent,
+        timeout: 10000,
+        validateStatus: () => true,
+      });
+
+      if (directResp.status >= 200 && directResp.status < 300) {
+        console.log(`✅ Axis GET con credenciales provistas - Status: ${directResp.status}`);
+        res.set('Content-Type', 'text/plain');
+        return res.send(directResp.data);
+      } else {
+        console.log(`⚠️ Credenciales provistas no válidas: ${directResp.status} ${directResp.statusText}`);
+      }
+    } catch (e) {
+      console.log(`❌ Error usando credenciales provistas: ${e.message}`);
+      // Continuar con fallback
+    }
+  }
+  
   // Probar diferentes combinaciones de credenciales para Axis
   const credentials = [
     { user: 'admin', pass: 'Santander25' }, // Específico

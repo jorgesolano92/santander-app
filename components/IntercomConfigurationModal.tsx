@@ -1,8 +1,9 @@
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, Modal, ScrollView, Switch } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, Modal, ScrollView, Switch, ActivityIndicator, Alert } from 'react-native';
 import { useState, useEffect } from 'react';
 import { ArrowLeft, Save, X, Camera, Phone } from 'lucide-react-native';
 import { Picker } from '@react-native-picker/picker';
 import { useWindowDimensions } from 'react-native';
+import { doorControlService } from '../services/DoorControlService';
 
 export interface IntercomConfig {
   name: string;
@@ -13,6 +14,7 @@ export interface IntercomConfig {
   onvifPassword: string;
   rtspPort: number;
   videoProfile: 'MainStream' | 'SubStream' | 'Auto';
+  rtspPath?: string; // Ruta RTSP personalizada (p.ej. axis-media/media.amp?...)
   sipUri: string;
   sipUsername: string;
   sipPassword: string;
@@ -45,6 +47,7 @@ const defaultIntercomConfig: IntercomConfig = {
   onvifPassword: '',
   rtspPort: 554,
   videoProfile: 'MainStream',
+  rtspPath: '',
   sipUri: '',
   sipUsername: '',
   sipPassword: '',
@@ -72,6 +75,8 @@ export default function IntercomConfigurationModal({
   const isLargeTablet = width >= 1200;
 
   const [config, setConfig] = useState<IntercomConfig>(defaultIntercomConfig);
+  const [isTestingAxis, setIsTestingAxis] = useState(false);
+  const [axisTestMessage, setAxisTestMessage] = useState<string | null>(null);
 
   useEffect(() => {
     if (visible) {
@@ -93,6 +98,33 @@ export default function IntercomConfigurationModal({
 
   const updateConfig = (field: keyof IntercomConfig, value: any) => {
     setConfig(prev => ({ ...prev, [field]: value }));
+  };
+
+  const handleTestAxis = async () => {
+    try {
+      setIsTestingAxis(true);
+      setAxisTestMessage(null);
+      if (!config.cameraIP || !config.onvifUsername || !config.onvifPassword) {
+        Alert.alert('Faltan datos', 'IP, usuario y contraseña son requeridos');
+        setIsTestingAxis(false);
+        return;
+      }
+      const result = await doorControlService.testAxisIntercomConnection(
+        config.cameraIP,
+        config.onvifUsername,
+        config.onvifPassword,
+        'axis'
+      );
+      if (result.success) {
+        setAxisTestMessage(`Conexión OK. Endpoints OK: ${result.deviceInfo?.successfulEndpoints}/${result.deviceInfo?.endpointsTested}`);
+      } else {
+        setAxisTestMessage(`Fallo conexión: ${result.message}${result.error ? ' - ' + result.error : ''}`);
+      }
+    } catch (e: any) {
+      setAxisTestMessage(`Error de prueba: ${e?.message || e}`);
+    } finally {
+      setIsTestingAxis(false);
+    }
   };
 
   const styles = StyleSheet.create({
@@ -409,6 +441,19 @@ export default function IntercomConfigurationModal({
                     </Picker>
                   </View>
                 </View>
+
+              <View style={styles.inputRow}>
+                <Text style={styles.inputLabel}>Ruta RTSP (opcional):</Text>
+                <TextInput
+                  style={styles.textInput}
+                  value={config.rtspPath || ''}
+                  onChangeText={(text) => updateConfig('rtspPath', text)}
+                  placeholder="axis-media/media.amp?videocodec=h264&audio=1"
+                  autoCapitalize="none"
+                />
+              </View>
+
+                {/* Botón eliminado: prueba AXIS movida a modal independiente */}
               </View>
             </View>
           </View>

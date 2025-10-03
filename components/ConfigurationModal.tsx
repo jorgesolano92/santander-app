@@ -1,7 +1,8 @@
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, Modal } from 'react-native';
 import { useState } from 'react';
-import { User, X, RefreshCw, ArrowLeft } from 'lucide-react-native';
+import { User, X, RefreshCw, ArrowLeft, Phone } from 'lucide-react-native';
 import { ScrollView } from 'react-native';
+import AxisTestModal from './AxisTestModal';
 
 interface ConfigurationModalProps {
   visible: boolean;
@@ -18,6 +19,7 @@ export default function ConfigurationModal({ visible, onClose, onSuccess, office
   });
   const [error, setError] = useState<string>('');
   const [isLoading, setIsLoading] = useState(false);
+  const [axisModalVisible, setAxisModalVisible] = useState(false);
 
   // Credenciales de prueba
   const TEST_CREDENTIALS = {
@@ -64,9 +66,9 @@ export default function ConfigurationModal({ visible, onClose, onSuccess, office
               <Text style={styles.updateButtonText}>ACTUALIZAR VERSION</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.updateButton} onPress={handleUpdateVersion}>
-              <RefreshCw size={20} color="#FFFFFF" />
-              <Text style={styles.updateButtonText}>ACTUALIZAR VERSION</Text>
+            <TouchableOpacity style={styles.updateButton} onPress={() => setAxisModalVisible(true)}>
+              <Phone size={20} color="#FFFFFF" />
+              <Text style={styles.updateButtonText}>PROBAR AXIS</Text>
             </TouchableOpacity>
 
             <Text style={styles.headerTitle}>CONFIGURACIÓN</Text>
@@ -153,6 +155,7 @@ export default function ConfigurationModal({ visible, onClose, onSuccess, office
             </View>
           </ScrollView>
         </View>
+        <AxisTestModal visible={axisModalVisible} onClose={() => setAxisModalVisible(false)} />
       </Modal>
   );
 }

@@ -164,7 +164,7 @@ export default function DoorVideoStream({ intercomConfig, doorName }: DoorVideoS
       console.log(`📹 Configuración:`, {
         ip: intercomConfig.cameraIP,
         rtspPort: intercomConfig.rtspPort,
-        videoProfile: intercomConfig.videoProfile,
+        videoProfile: intercomConfig.rtspPath || intercomConfig.videoProfile,
         username: intercomConfig.onvifUsername,
       });
 
@@ -177,7 +177,7 @@ export default function DoorVideoStream({ intercomConfig, doorName }: DoorVideoS
         body: JSON.stringify({
           ip: intercomConfig.cameraIP,
           rtspPort: intercomConfig.rtspPort,
-          videoProfile: intercomConfig.videoProfile,
+          videoProfile: intercomConfig.rtspPath || intercomConfig.videoProfile,
           username: intercomConfig.onvifUsername,
           password: intercomConfig.onvifPassword,
         }),

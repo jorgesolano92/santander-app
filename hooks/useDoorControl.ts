@@ -15,6 +15,14 @@ export interface UseDoorControlReturn {
   validateDevice: () => Promise<boolean>;
   determineScheduleMode: () => string;
   controlDoor: (doorId: string, action: 'open' | 'close') => Promise<boolean>;
+  isDoorVerifying: (doorId: string) => boolean;
+  refreshAllDoorsStatus: () => Promise<boolean>;
+  testAxisIntercomConnection: (ip: string, username: string, password: string) => Promise<{
+    success: boolean;
+    message: string;
+    deviceInfo?: any;
+    error?: string;
+  }>;
   // SIP functionality
   sipCallState: SipCallState | null;
   startIntercomCall: (intercomConfig: IntercomConfig) => Promise<boolean>;
@@ -33,52 +41,6 @@ export function useDoorControl(): UseDoorControlReturn {
   const [currentScheduleMode, setCurrentScheduleMode] = useState<string | null>(null);
   const [sipCallState, setSipCallState] = useState<SipCallState | null>(null);
   const [activeSipCallDoorId, setActiveSipCallDoorId] = useState<string | null>(null);
-
-  // Initialize sandbox mode on mount
-  useEffect(() => {
-    isMountedRef.current = true;
-    
-    // Set up SIP service event listeners
-    const handleSipEvent = (eventType: SipEventType, data?: any) => {
-      if (!isMountedRef.current) return;
-      
-      console.log(`🔊 SIP Event: ${eventType}`, data);
-      
-      switch (eventType) {
-        case 'callStarted':
-          setSipCallState(sipService.getCallState());
-          break;
-        case 'callConnected':
-          setSipCallState(sipService.getCallState());
-          break;
-        case 'callEnded':
-          setSipCallState(null);
-          setActiveSipCallDoorId(null);
-          break;
-        case 'callFailed':
-          setSipCallState(null);
-          setActiveSipCallDoorId(null);
-          setError('Error en la llamada SIP: ' + (data?.message || 'Error desconocido'));
-          break;
-        case 'error':
-          setError('Error SIP: ' + (data?.message || 'Error desconocido'));
-          break;
-      }
-    };
-
-    // Add SIP event listeners
-    sipService.on('callStarted', (data) => handleSipEvent('callStarted', data));
-    sipService.on('callConnected', (data) => handleSipEvent('callConnected', data));
-    sipService.on('callEnded', (data) => handleSipEvent('callEnded', data));
-    sipService.on('callFailed', (data) => handleSipEvent('callFailed', data));
-    sipService.on('error', (data) => handleSipEvent('error', data));
-    
-    return () => {
-      isMountedRef.current = false;
-      // Clean up SIP service listeners
-      sipService.removeAllListeners();
-    };
-  }, []);
 
   const updateSystemStatus = useCallback(async () => {
     try {
@@ -381,6 +343,59 @@ export function useDoorControl(): UseDoorControlReturn {
     }
   }, []);
 
+  // Initialize sandbox mode on mount
+  useEffect(() => {
+    isMountedRef.current = true;
+    
+    // Set up SIP service event listeners
+    const handleSipEvent = (eventType: SipEventType, data?: any) => {
+      if (!isMountedRef.current) return;
+      
+      console.log(`🔊 SIP Event: ${eventType}`, data);
+      
+      switch (eventType) {
+        case 'callStarted':
+          setSipCallState(sipService.getCallState());
+          break;
+        case 'callConnected':
+          setSipCallState(sipService.getCallState());
+          break;
+        case 'callEnded':
+          setSipCallState(null);
+          setActiveSipCallDoorId(null);
+          break;
+        case 'callFailed':
+          setSipCallState(null);
+          setActiveSipCallDoorId(null);
+          setError('Error en la llamada SIP: ' + (data?.message || 'Error desconocido'));
+          break;
+        case 'error':
+          setError('Error SIP: ' + (data?.message || 'Error desconocido'));
+          break;
+      }
+    };
+
+    // Add SIP event listeners
+    sipService.on('callStarted', (data) => handleSipEvent('callStarted', data));
+    sipService.on('callConnected', (data) => handleSipEvent('callConnected', data));
+    sipService.on('callEnded', (data) => handleSipEvent('callEnded', data));
+    sipService.on('callFailed', (data) => handleSipEvent('callFailed', data));
+    sipService.on('error', (data) => handleSipEvent('error', data));
+    
+    // Suscribirse a cambios de estado del servicio de puertas
+    doorControlService.onStatusChange(() => {
+      if (isMountedRef.current) {
+        updateSystemStatus();
+      }
+    });
+    
+    return () => {
+      isMountedRef.current = false;
+      // Clean up SIP service listeners
+      sipService.removeAllListeners();
+    };
+  }, [updateSystemStatus]);
+
   // Auto-refresh system status periodically when connected
   useEffect(() => {
     let interval: NodeJS.Timeout;
@@ -398,6 +413,30 @@ export function useDoorControl(): UseDoorControlReturn {
     };
   }, [connectionStatus, updateSystemStatus]);
 
+  const isDoorVerifying = useCallback((doorId: string): boolean => {
+    return doorControlService.isDoorVerifying(doorId);
+  }, []);
+
+  const refreshAllDoorsStatus = useCallback(async (): Promise<boolean> => {
+    try {
+      if (!isMountedRef.current) return false;
+      
+      const success = await doorControlService.refreshAllDoorsStatus();
+      
+      if (!isMountedRef.current) return false;
+      
+      // Actualizar el estado después de refrescar
+      await updateSystemStatus();
+      
+      return success;
+    } catch (err) {
+      if (isMountedRef.current) {
+        setError(err instanceof Error ? err.message : 'Error refrescando estado de puertas');
+      }
+      return false;
+    }
+  }, [updateSystemStatus]);
+
   return {
     systemStatus,
     isLoading,
@@ -410,6 +449,9 @@ export function useDoorControl(): UseDoorControlReturn {
     validateDevice,
     determineScheduleMode,
     controlDoor,
+    isDoorVerifying,
+    refreshAllDoorsStatus,
+    testAxisIntercomConnection: doorControlService.testAxisIntercomConnection.bind(doorControlService),
     sipCallState,
     startIntercomCall,
     endIntercomCall,
