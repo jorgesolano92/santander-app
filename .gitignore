@@ -34,4 +34,4 @@ yarn-error.*
 # typescript
 *.tsbuildinfo
 
-proxy/hls
+proxy/hls/
