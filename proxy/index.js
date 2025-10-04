@@ -83,16 +83,24 @@ function startRTSPToHLS(cameraId, cameraConfig) {
   const ffmpegProcess = spawn('ffmpeg', [
     '-rtsp_transport', 'tcp',  // Usar TCP para mayor estabilidad
     '-i', rtspUrl,
+    // Mapear video y audio opcionalmente (si no hay audio, no falla)
+    '-map', '0:v:0',
+    '-map', '0:a?',
+    // Video
     '-c:v', 'libx264',
     '-preset', 'veryfast',     // Codificación más rápida
     '-tune', 'zerolatency',    // Optimizado para baja latencia
+    // Audio (asegurar metadatos válidos en TS)
     '-c:a', 'aac',
-    '-ar', '44100',            // Frecuencia de audio
-    '-b:a', '64k',             // Bitrate de audio
+    '-ar', '48000',            // Frecuencia de audio consistente
+    '-ac', '1',                // Mononural (coincide con la mayoría de cámaras)
+    '-b:a', '96k',             // Bitrate de audio
+    // Muxing / HLS
     '-f', 'hls',
     '-hls_time', '2',
     '-hls_list_size', '5',     // Mantener más segmentos
-    '-hls_flags', 'delete_segments',
+    '-hls_flags', 'delete_segments+independent_segments',
+    '-mpegts_flags', 'resend_headers',
     '-hls_segment_filename', path.join(cameraHlsDir, 'segment_%03d.ts'),
     '-start_number', '1',      // Empezar desde segmento 1
     outputPath
