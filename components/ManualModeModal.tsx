@@ -182,6 +182,14 @@ export default function ManualModeModal({
     }
   };
 
+  const handleEmergency = () => {
+    console.log('🚨 Emergencia activada desde ManualModeModal - cerrando modal');
+    onClose(); // Cerrar el modal primero
+    setTimeout(() => {
+      onEmergency(); // Luego activar emergencia
+    }, 100); // Pequeño delay para que se cierre suavemente
+  };
+
   const handleMuteMicrophone = async () => {
     if (sipCallState) {
       await muteMicrophone(!sipCallState.isMuted);
@@ -678,7 +686,7 @@ export default function ManualModeModal({
           <View style={styles.bottomButtons}>
             <TouchableOpacity 
               style={styles.emergencyButton}
-              onPress={onEmergency}
+              onPress={handleEmergency}
             >
               <Text style={styles.emergencyButtonText}>EMERGENCIA</Text>
             </TouchableOpacity>

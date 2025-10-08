@@ -274,24 +274,49 @@ export default function DoorVideoStream({ intercomConfig, doorName }: DoorVideoS
     setIsLoading(true);
 
     try {
-      const response = await fetch(`${proxyBaseUrl}/stop-stream/${doorName}`, {
-        method: 'GET',
-      });
+      // Si está usando servidor proxy (modo web), detener el stream del servidor
+      if (useServerProxy) {
+        const response = await fetch(`${proxyBaseUrl}/stop-stream/${doorName}`, {
+          method: 'GET',
+        });
 
-      if (response.ok) {
-        setIsStreaming(false);
-        console.log(`✅ Stream detenido para ${doorName}`);
-        // Limpieza del reproductor
-        if (hlsRef.current) {
-          try { hlsRef.current.destroy(); } catch {}
-          hlsRef.current = null;
-        }
-        if (videoRef.current) {
-          try { videoRef.current.src = ''; } catch {}
+        if (response.ok) {
+          console.log(`✅ Stream del servidor detenido para ${doorName}`);
         }
       }
+
+      // Detener el stream localmente (funciona tanto en web como en Android)
+      setIsStreaming(false);
+      console.log(`✅ Stream local detenido para ${doorName}`);
+      
+      // Limpieza del reproductor HLS (web)
+      if (hlsRef.current) {
+        try { 
+          hlsRef.current.destroy(); 
+          console.log('🧹 HLS player destruido');
+        } catch (e) {
+          console.log('⚠️ Error destruyendo HLS player:', e);
+        }
+        hlsRef.current = null;
+      }
+      
+      // Limpieza del elemento de video (web)
+      if (videoRef.current && Platform.OS === 'web') {
+        try { 
+          videoRef.current.src = ''; 
+          console.log('🧹 Video src limpiado');
+        } catch (e) {
+          console.log('⚠️ Error limpiando video src:', e);
+        }
+      }
+      
+      // En Android, el componente Video de react-native-video se limpia automáticamente
+      // cuando cambia isStreaming a false, ya que el source se establece condicionalmente
+      
     } catch (error) {
       console.error('❌ Error deteniendo stream:', error);
+      // Aún así, intentar detener el stream localmente
+      setIsStreaming(false);
     } finally {
       setIsLoading(false);
     }
