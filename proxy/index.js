@@ -254,12 +254,14 @@ app.get('/stop-stream/:cameraId', (req, res) => {
   }
 });
 
-app.get('/camera/:cameraId', async (req, res) => {
+// Eliminado: endpoint antiguo de snapshot /camera/:cameraId (reemplazado por /camera/snapshot/:cameraId)
+
+// Snapshot por modelo con descarga directa
+app.get('/camera/snapshot/:cameraId', async (req, res) => {
   const { cameraId } = req.params;
   let cameraConfig = cameraConfigs.get(cameraId);
-  
+
   if (!cameraConfig) {
-    // Usar configuración por defecto si no hay configuración específica
     cameraConfig = {
       ip: '192.168.1.117',
       rtspPort: 554,
@@ -267,29 +269,70 @@ app.get('/camera/:cameraId', async (req, res) => {
       username: 'ceroideas',
       password: '12345678'
     };
-    console.log(`Usando configuración por defecto para snapshot de cámara ${cameraId}`);
+    console.log(`⚠️ Usando configuración por defecto para snapshot de ${cameraId}`);
   }
-  
-  const cameraUrl = `http://${cameraConfig.username}:${cameraConfig.password}@${cameraConfig.ip}:80/GetSnapshot/1`;
-  
-  try {
-    const response = await axios.get(cameraUrl, {
-      responseType: 'arraybuffer',
-      timeout: 5000,
-      validateStatus: () => true
-    });
 
-    if (response.status === 200) {
-      res.set('Content-Type', 'image/jpeg');
-      return res.send(Buffer.from(response.data));
-    } else {
-      console.error('Respuesta de la cámara:', response.data.toString());
-      return res.status(response.status).send(response.data.toString());
+  const user = cameraConfig.username || '';
+  const pass = cameraConfig.password || '';
+  const ip = cameraConfig.ip;
+  const explicitPath = cameraConfig.snapshotPath; // nueva propiedad opcional
+
+  // Generar candidatos conocidos por fabricante + genéricos
+  const httpBase = `http://${ip}`;
+  const httpsBase = `https://${ip}`;
+  const candidates = explicitPath ? [
+    `${httpBase}/${explicitPath.startsWith('/') ? explicitPath.substring(1) : explicitPath}`,
+    `${httpsBase}/${explicitPath.startsWith('/') ? explicitPath.substring(1) : explicitPath}`,
+  ] : [
+    // Hikvision / Safire
+    `${httpBase}/ISAPI/Streaming/channels/101/picture`,
+    `${httpsBase}/ISAPI/Streaming/channels/101/picture`,
+    `${httpBase}/Streaming/channels/101/picture`,
+    `${httpsBase}/Streaming/channels/101/picture`,
+    // Axis
+    `${httpBase}/axis-cgi/jpg/image.cgi`,
+    `${httpsBase}/axis-cgi/jpg/image.cgi`,
+    // Dahua
+    `${httpBase}/cgi-bin/snapshot.cgi?channel=1`,
+    `${httpsBase}/cgi-bin/snapshot.cgi?channel=1`,
+    // Genéricos
+    `${httpBase}/GetSnapshot/1`,
+    `${httpsBase}/GetSnapshot/1`,
+    `${httpBase}/snapshot.jpg`,
+    `${httpsBase}/snapshot.jpg`,
+    `${httpBase}/jpeg/snap.jpg`,
+    `${httpsBase}/jpeg/snap.jpg`,
+  ];
+
+  const authHeader = user || pass ? { 'Authorization': `Basic ${Buffer.from(`${user}:${pass}`).toString('base64')}` } : {};
+
+  for (const url of candidates) {
+    try {
+      const response = await axios.get(url, {
+        responseType: 'arraybuffer',
+        headers: {
+          ...authHeader,
+          'Accept': 'image/*',
+        },
+        httpsAgent,
+        timeout: 8000,
+        validateStatus: () => true,
+      });
+
+      if (response.status === 200 && (response.headers['content-type'] || '').includes('image')) {
+        const ts = new Date().toISOString().replace(/[:.]/g, '-');
+        const filename = `snapshot_${ip}_${ts}.jpg`;
+        res.set('Content-Type', response.headers['content-type'] || 'image/jpeg');
+        res.set('Content-Disposition', `attachment; filename="${filename}"`);
+        res.set('Cache-Control', 'no-store');
+        return res.send(Buffer.from(response.data));
+      }
+    } catch (e) {
+      // probar siguiente
     }
-  } catch (e) {
-    console.error('Error al obtener la imagen:', e);
-    res.status(500).send('Error al obtener la imagen');
   }
+
+  res.status(502).json({ error: 'No se pudo obtener snapshot', ip });
 });
 
 // ========== PROXY PARA SDIO12 (Control de Puertas) ==========
@@ -536,7 +579,7 @@ app.get('/idis/:ip/*', async (req, res) => {
   });
 });
 
-app.listen(3001, () => {
+app.listen(3001, '0.0.0.0',() => {
   console.log('Proxy escuchando en http://localhost:3001');
   console.log('Endpoints disponibles:');
   console.log('- GET /camera - Obtener snapshot');

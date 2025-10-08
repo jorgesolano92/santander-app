@@ -1,6 +1,9 @@
 import React, { useState, useEffect, useRef, forwardRef, useImperativeHandle } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Dimensions, Platform, Alert } from 'react-native';
 import { Play, Pause, Square, Camera } from 'lucide-react-native';
+import Video from 'react-native-video';
+import { getProxyBaseUrl, getUseServerProxy } from '../services/AppMode';
+import { downloadCameraSnapshotDirect } from '../services/SnapshotService';
 
 interface CameraConfig {
   ip: string;
@@ -50,9 +53,17 @@ const CameraStream = forwardRef<CameraStreamRef, CameraStreamProps>(({ style, on
     }
   }, []);
 
-  // Verificar estado del stream al cargar
+  // Proxy base url and mode
+  const [proxyBaseUrl, setProxyBaseUrl] = useState<string>('http://localhost:3001');
+  const [useServerProxy, setUseServerProxy] = useState<boolean>(true);
+
   useEffect(() => {
-    checkStreamStatus();
+    (async () => {
+      const [base, useProxy] = await Promise.all([getProxyBaseUrl(), getUseServerProxy()]);
+      setProxyBaseUrl(base);
+      setUseServerProxy(useProxy);
+      checkStreamStatus(base);
+    })();
   }, []);
 
   // Generar URLs dinámicas basadas en la configuración de la cámara
@@ -61,20 +72,21 @@ const CameraStream = forwardRef<CameraStreamRef, CameraStreamProps>(({ style, on
     return cameraConfig.ip.replace(/\./g, '_');
   };
 
-  const getStreamUrls = () => {
+  const getStreamUrls = (base?: string) => {
     const cameraId = getCameraId();
+    const b = base || proxyBaseUrl;
     return {
-      status: `http://localhost:3001/stream-status/${cameraId}`,
-      start: `http://localhost:3001/start-stream/${cameraId}`,
-      stop: `http://localhost:3001/stop-stream/${cameraId}`,
-      hls: `http://localhost:3001/hls/${cameraId}/stream.m3u8`,
-      snapshot: `http://localhost:3001/camera/${cameraId}`
+      status: `${b}/stream-status/${cameraId}`,
+      start: `${b}/start-stream/${cameraId}`,
+      stop: `${b}/stop-stream/${cameraId}`,
+      hls: `${b}/hls/${cameraId}/stream.m3u8`,
+      snapshot: `${b}/camera/${cameraId}`
     };
   };
 
-  const checkStreamStatus = async () => {
+  const checkStreamStatus = async (base?: string) => {
     try {
-      const urls = getStreamUrls();
+      const urls = getStreamUrls(base);
       const response = await fetch(urls.status);
       const data = await response.json();
       setStreamStatus(data);
@@ -93,7 +105,7 @@ const CameraStream = forwardRef<CameraStreamRef, CameraStreamProps>(({ style, on
     
     try {
       const cameraId = getCameraId();
-      const response = await fetch(`http://localhost:3001/configure-camera/${cameraId}`, {
+      const response = await fetch(`${proxyBaseUrl}/configure-camera/${cameraId}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -120,6 +132,31 @@ const CameraStream = forwardRef<CameraStreamRef, CameraStreamProps>(({ style, on
       setError(null);
       onStart?.();
       
+      if (!useServerProxy) {
+        if (Platform.OS === 'android') {
+          const cam = cameraConfig;
+          const user = encodeURIComponent(cam?.username || '');
+          const pass = encodeURIComponent(cam?.password || '');
+          const auth = user && pass ? `${user}:${pass}@` : '';
+          const host = cam?.ip || '0.0.0.0';
+          const port = cam?.rtspPort || 554;
+          const path = cam?.videoProfile || cam?.ip ? (cam as any).rtspPath || 'Streaming/Channels/101' : 'Streaming/Channels/101';
+          const rtspUrl = `rtsp://${auth}${host}:${port}/${path}`;
+          // En modo directo con video nativo no usamos HLS; señalamos activo
+          setIsStreamActive(true);
+          setError(null);
+          setIsLoading(false);
+          onSuccess?.();
+          return;
+        } else {
+          const msg = 'Modo directo soportado solo en Android';
+          setError(msg);
+          onError?.(msg);
+          setIsLoading(false);
+          return;
+        }
+      }
+
       // Configurar la cámara en el servidor antes de iniciar el stream
       const configured = await configureCameraOnServer();
       if (!configured) {
@@ -236,30 +273,43 @@ const CameraStream = forwardRef<CameraStreamRef, CameraStreamProps>(({ style, on
 
   const getSnapshot = async () => {
     try {
-      const urls = getStreamUrls();
-      const response = await fetch(urls.snapshot);
-      if (response.ok) {
-        const blob = await response.blob();
-        const url = URL.createObjectURL(blob);
-        
-        // Crear un enlace de descarga
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'snapshot_' + new Date().getTime() + '.jpg';
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-        
-        if (onSnapshot) {
-          onSnapshot();
+      if (useServerProxy) {
+        const cameraId = getCameraId();
+        const link = `${proxyBaseUrl}/camera/snapshot/${cameraId}`;
+        if (typeof window !== 'undefined') {
+          window.open(link, '_blank');
         }
       } else {
-        setError('Error al obtener captura');
+        if (Platform.OS === 'android') {
+          const cam = cameraConfig;
+          if (!cam?.ip) throw new Error('No hay IP configurada');
+          const uri = await downloadCameraSnapshotDirect({
+            ip: cam.ip,
+            username: cam.username,
+            password: cam.password,
+            snapshotPath: (cam as any).snapshotPath,
+          });
+          if (!uri) throw new Error('No se pudo descargar la captura');
+          Alert.alert('Éxito', 'Captura guardada en la galería');
+        } else {
+          Alert.alert('Info', 'Captura directa solo en Android');
+        }
       }
+      if (onSnapshot) onSnapshot();
     } catch (error) {
       setError('Error al obtener captura: ' + (error as Error).message);
     }
+  };
+
+  const getRTSPUrl = () => {
+    const cam = cameraConfig;
+    const user = encodeURIComponent(cam?.username || '');
+    const pass = encodeURIComponent(cam?.password || '');
+    const auth = user && pass ? `${user}:${pass}@` : '';
+    const host = cam?.ip || '0.0.0.0';
+    const port = cam?.rtspPort || 554;
+    const path = cam?.videoProfile || (cam as any).rtspPath || 'Streaming/Channels/101';
+    return `rtsp://${auth}${host}:${port}/${path}`;
   };
 
   return (
@@ -276,10 +326,26 @@ const CameraStream = forwardRef<CameraStreamRef, CameraStreamProps>(({ style, on
           >
             Tu navegador no soporta la reproducción de video.
           </video>
+        ) : isStreamActive && !useServerProxy ? (
+          <Video
+            source={{ uri: getRTSPUrl() }}
+            style={styles.video}
+            controls={true}
+            resizeMode="contain"
+            onError={(error) => {
+              console.error('Error en Video:', error);
+              setError('Error reproduciendo video: ' + JSON.stringify(error));
+              setIsStreamActive(false);
+            }}
+            onLoad={() => {
+              console.log('Video cargado correctamente');
+              setError(null);
+            }}
+          />
         ) : (
           <View style={styles.placeholder}>
             <Text style={styles.placeholderText}>
-              Stream de video no disponible en React Native
+              {isStreamActive ? 'Cargando stream...' : 'Presiona Iniciar para ver el stream'}
             </Text>
           </View>
         )}

@@ -1,7 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Alert, Platform } from 'react-native';
 import { Play, Square, Camera, Wifi, WifiOff } from 'lucide-react-native';
+import Video from 'react-native-video';
 import { IntercomConfig } from './IntercomConfigurationModal';
+import { getProxyBaseUrl, getUseServerProxy } from '../services/AppMode';
+import { downloadCameraSnapshotDirect } from '../services/SnapshotService';
 
 interface DoorVideoStreamProps {
   intercomConfig: IntercomConfig;
@@ -14,7 +17,16 @@ export default function DoorVideoStream({ intercomConfig, doorName }: DoorVideoS
   const [streamError, setStreamError] = useState<string | null>(null);
   const [cameraStatus, setCameraStatus] = useState<'online' | 'offline' | 'unknown'>('unknown');
   const [hlsUrl, setHlsUrl] = useState<string>('');
-  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const [proxyBaseUrl, setProxyBaseUrl] = useState<string>('http://localhost:3001');
+  const [useServerProxy, setUseServerProxy] = useState<boolean>(true);
+  useEffect(() => {
+    (async () => {
+      const [base, useProxy] = await Promise.all([getProxyBaseUrl(), getUseServerProxy()]);
+      setProxyBaseUrl(base);
+      setUseServerProxy(useProxy);
+    })();
+  }, []);
+  const videoRef = useRef<any>(null);
   const hlsRef = useRef<any>(null);
 
   // Verificar estado de la cámara al montar
@@ -31,6 +43,8 @@ export default function DoorVideoStream({ intercomConfig, doorName }: DoorVideoS
   // Verificar periódicamente si el archivo HLS está disponible
   useEffect(() => {
     if (!isStreaming || !hlsUrl) return;
+    // Solo verificar en modo servidor proxy (no en RTSP directo)
+    if (!useServerProxy) return;
 
     const checkHLSFile = async () => {
       try {
@@ -54,10 +68,11 @@ export default function DoorVideoStream({ intercomConfig, doorName }: DoorVideoS
     const interval = setInterval(checkHLSFile, 2000);
 
     return () => clearInterval(interval);
-  }, [isStreaming, hlsUrl]);
+  }, [isStreaming, hlsUrl, useServerProxy]);
 
   // Cargar hls.js en web (CDN) una sola vez
   useEffect(() => {
+    if (Platform.OS !== 'web') return; // Solo ejecutar en web
     if (typeof window === 'undefined') return;
     if ((window as any).Hls) return;
     const script = document.createElement('script');
@@ -68,6 +83,7 @@ export default function DoorVideoStream({ intercomConfig, doorName }: DoorVideoS
 
   // Inicializar reproducción HLS cuando esté listo el stream
   useEffect(() => {
+    if (Platform.OS !== 'web') return; // Solo ejecutar en web
     if (typeof window === 'undefined') return;
     if (!isStreaming || !hlsUrl) return;
     if (streamError === 'Generando stream...') return;
@@ -168,8 +184,31 @@ export default function DoorVideoStream({ intercomConfig, doorName }: DoorVideoS
         username: intercomConfig.onvifUsername,
       });
 
+      if (!useServerProxy) {
+        // RTSP nativo en Android: construir URL RTSP y abrir en reproductor nativo
+        if (Platform.OS === 'android') {
+          const user = encodeURIComponent(intercomConfig.onvifUsername || '');
+          const pass = encodeURIComponent(intercomConfig.onvifPassword || '');
+          const auth = user && pass ? `${user}:${pass}@` : '';
+          const host = intercomConfig.cameraIP;
+          const port = intercomConfig.rtspPort || 554;
+          const path = intercomConfig.rtspPath || 'Streaming/Channels/101';
+          // Formatos comunes: Axis/IDIS pueden variar; permitir ruta personalizada en config
+          const rtspUrl = `rtsp://${auth}${host}:${port}/${path}`;
+          setHlsUrl(rtspUrl);
+          setIsStreaming(true);
+          setStreamError(null);
+          setIsLoading(false);
+          return;
+        } else {
+          setStreamError('Modo directo soportado solo en Android');
+          setIsLoading(false);
+          return;
+        }
+      }
+
       // Primero configurar la cámara en el backend
-      const configResponse = await fetch(`http://localhost:3001/configure-camera/${doorName}`, {
+      const configResponse = await fetch(`${proxyBaseUrl}/configure-camera/${doorName}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -180,6 +219,7 @@ export default function DoorVideoStream({ intercomConfig, doorName }: DoorVideoS
           videoProfile: intercomConfig.rtspPath || intercomConfig.videoProfile,
           username: intercomConfig.onvifUsername,
           password: intercomConfig.onvifPassword,
+          snapshotPath: intercomConfig.snapshotPath,
         }),
       });
 
@@ -195,7 +235,7 @@ export default function DoorVideoStream({ intercomConfig, doorName }: DoorVideoS
       await new Promise(resolve => setTimeout(resolve, 1000));
 
       // Luego iniciar el stream RTSP a HLS
-      const streamResponse = await fetch(`http://localhost:3001/start-stream/${doorName}`, {
+      const streamResponse = await fetch(`${proxyBaseUrl}/start-stream/${doorName}`, {
         method: 'GET',
       });
 
@@ -204,7 +244,7 @@ export default function DoorVideoStream({ intercomConfig, doorName }: DoorVideoS
         console.log(`✅ Stream iniciado para ${doorName}:`, streamData);
         
         // Usar la URL HLS que viene del backend
-        const fullHlsUrl = `http://localhost:3001${streamData.hlsUrl}`;
+        const fullHlsUrl = `${proxyBaseUrl}${streamData.hlsUrl}`;
         console.log(`🎬 URL HLS del backend: ${fullHlsUrl}`);
         console.log(`📁 Carpeta IP: ${streamData.ipFolder}`);
         
@@ -234,7 +274,7 @@ export default function DoorVideoStream({ intercomConfig, doorName }: DoorVideoS
     setIsLoading(true);
 
     try {
-      const response = await fetch(`http://localhost:3001/stop-stream/${doorName}`, {
+      const response = await fetch(`${proxyBaseUrl}/stop-stream/${doorName}`, {
         method: 'GET',
       });
 
@@ -264,15 +304,29 @@ export default function DoorVideoStream({ intercomConfig, doorName }: DoorVideoS
     }
 
     try {
-      const response = await fetch(`http://localhost:3001/camera/${doorName}`, {
-        method: 'GET',
-      });
-
-      if (response.ok) {
-        Alert.alert('Éxito', 'Captura tomada correctamente');
-        console.log(`✅ Captura tomada para ${doorName}`);
+      if (useServerProxy) {
+        const link = `${proxyBaseUrl}/camera/snapshot/${doorName}`;
+        Alert.alert('Descarga', 'Abriendo descarga de snapshot...');
+        if (typeof window !== 'undefined') {
+          window.open(link, '_blank');
+        }
       } else {
-        throw new Error('Error tomando captura');
+        if (Platform.OS === 'android') {
+          const uri = await downloadCameraSnapshotDirect({
+            ip: intercomConfig.cameraIP,
+            username: intercomConfig.onvifUsername,
+            password: intercomConfig.onvifPassword,
+            preferHttps: intercomConfig.enableTLS,
+            snapshotPath: intercomConfig.snapshotPath,
+          });
+          if (uri) {
+            Alert.alert('Éxito', 'Captura guardada en la galería');
+          } else {
+            throw new Error('No se pudo descargar la captura');
+          }
+        } else {
+          Alert.alert('Info', 'Captura directa solo en Android');
+        }
       }
     } catch (error) {
       console.error('❌ Error tomando captura:', error);
@@ -296,6 +350,36 @@ export default function DoorVideoStream({ intercomConfig, doorName }: DoorVideoS
     }
   };
 
+  const getRTSPUrl = () => {
+    // Para RTSP, necesitamos encoding especial para caracteres especiales en password
+    // No usar encodeURIComponent porque el parser RTSP lo interpreta mal
+    const user = intercomConfig.onvifUsername || '';
+    const pass = (intercomConfig.onvifPassword || '')
+      .replace(/:/g, '%3A')  // Escape colon
+      .replace(/@/g, '%40')  // Escape @
+      .replace(/\//g, '%2F') // Escape /
+      .replace(/#/g, '%23'); // Escape #
+    
+    const auth = user && pass ? `${user}:${pass}@` : '';
+    const host = intercomConfig.cameraIP;
+    const port = intercomConfig.rtspPort || 554;
+    const path = intercomConfig.rtspPath || 'Streaming/Channels/101';
+    const rtspUrl = `rtsp://${auth}${host}:${port}/${path}`;
+    
+    console.log('🎬 Construyendo URL RTSP:', {
+      host,
+      port,
+      path,
+      hasAuth: !!auth,
+      originalPassword: intercomConfig.onvifPassword,
+      encodedPassword: pass,
+      urlLength: rtspUrl.length,
+      url: rtspUrl.replace(/:[^:@]+@/, ':****@') // Log con password oculta
+    });
+    
+    return rtspUrl;
+  };
+
   return (
     <View style={styles.container}>
       {/* Video Stream Area */}
@@ -307,25 +391,49 @@ export default function DoorVideoStream({ intercomConfig, doorName }: DoorVideoS
                 <Text style={styles.loadingText}>⏳ Generando stream...</Text>
                 <Text style={styles.loadingSubtext}>Esperando archivos HLS</Text>
               </View>
+            ) : Platform.OS === 'web' ? (
+              <video
+                ref={videoRef}
+                style={styles.videoElement as any}
+                controls
+                autoPlay
+                muted
+                playsInline
+              />
+            ) : !useServerProxy && Platform.OS === 'android' ? (
+              <Video
+                source={{ 
+                  uri: getRTSPUrl(),
+                  type: 'rtsp'
+                }}
+                style={styles.videoElement}
+                controls={true}
+                resizeMode="contain"
+                bufferConfig={{
+                  minBufferMs: 2500,
+                  maxBufferMs: 5000,
+                  bufferForPlaybackMs: 2500,
+                  bufferForPlaybackAfterRebufferMs: 2500
+                }}
+                onError={(error) => {
+                  console.error('❌ Error en Video RTSP:', error);
+                  console.error('❌ Detalles del error:', JSON.stringify(error, null, 2));
+                  setStreamError('Error reproduciendo video RTSP');
+                  setIsStreaming(false);
+                }}
+                onLoad={() => {
+                  console.log('✅ Video RTSP cargado correctamente');
+                  setStreamError(null);
+                }}
+                onBuffer={(buffer) => {
+                  console.log('📊 Buffer status:', buffer);
+                }}
+              />
             ) : (
-              <>
-                {typeof window !== 'undefined' ? (
-                  <video
-                    ref={videoRef}
-                    style={styles.videoElement as any}
-                    controls
-                    autoPlay
-                    muted
-                    playsInline
-                  >
-                    Tu navegador no soporta la reproducción de video.
-                  </video>
-                ) : (
-                  <View style={styles.loadingContainer}>
-                    <Text style={styles.loadingText}>Reproductor no disponible</Text>
-                  </View>
-                )}
-              </>
+              <View style={styles.loadingContainer}>
+                <Text style={styles.loadingText}>Modo HLS no soportado en móvil</Text>
+                <Text style={styles.loadingSubtext}>Usa modo directo en configuración</Text>
+              </View>
             )}
           </View>
         ) : (

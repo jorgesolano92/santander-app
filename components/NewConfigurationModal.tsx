@@ -1,11 +1,14 @@
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, Modal, ScrollView, Switch } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, Modal, ScrollView, Switch, Platform } from 'react-native';
 import { useState, useEffect } from 'react';
 import { ArrowLeft, Save, X, Wifi, RefreshCw, Settings } from 'lucide-react-native';
 import { useWindowDimensions } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { doorControlService, ApiResponse } from '@/services/DoorControlService';
+import { getUseServerProxy, setUseServerProxy, getProxyBaseUrl, setProxyBaseUrl } from '@/services/AppMode';
 import ApiResponseDisplayModal from './ApiResponseDisplayModal';
 import IntercomConfigurationModal, { IntercomConfig } from './IntercomConfigurationModal';
+import { Picker } from '@react-native-picker/picker';
+import { emergencyService } from '@/services/EmergencyService';
 
 interface NewConfigurationModalProps {
   visible: boolean;
@@ -28,6 +31,14 @@ interface ScheduleConfig {
   ini2: string;
 }
 
+interface EmergencyConfig {
+  enabled: boolean;
+  pcb1: number;
+  switch1: number;
+  pcb2: number;
+  switch2: number;
+}
+
 interface ConfigurationData {
   doors: DoorConfig[];
   network: {
@@ -47,6 +58,7 @@ interface ConfigurationData {
     cerrado: ScheduleConfig;
   };
   officeWithATM: boolean;
+  emergency: EmergencyConfig;
 }
 
 export default function NewConfigurationModal({ 
@@ -62,20 +74,21 @@ export default function NewConfigurationModal({
 
   const [config, setConfig] = useState<ConfigurationData>({
     doors: [
-      { 
-        enabled: true, 
-        name: 'Calle (P1)', 
-        ipExterior: '192.168.1.155', 
-        ipInterior: '', // '192.168.1.27',
+      {
+        enabled: true,
+        name: 'Calle (P1)',
+        ipExterior: '192.168.1.155',
+        ipInterior: '',
         intercom: {
           name: 'Intercomunicador Calle (P1)',
-          cameraIP: '',
+          cameraIP: '192.168.1.117',
           httpPort: 80,
           httpsPort: 443,
           onvifUsername: 'admin',
           onvifPassword: 'Santander@Notoca',
           rtspPort: 554,
           videoProfile: 'MainStream',
+          snapshotPath: 'ISAPI/Streaming/channels/101/picture',
           sipUri: '',
           sipUsername: '',
           sipPassword: '',
@@ -88,23 +101,25 @@ export default function NewConfigurationModal({
           doorControlUsername: 'Scati2023',
           doorControlPassword: 'Scati2023',
           doorControlPCB: 1,
-          doorControlSwitch: 1,
+          doorControlSwitch: 5,
+          rtspPath: 'profile1',
         }
       },
-      { 
-        enabled: true, 
-        name: 'Oficina (P2)', 
-        ipExterior: '192.168.1.28', 
-        ipInterior: '192.168.1.29',
+      {
+        enabled: true,
+        name: 'Oficina (P2)',
+        ipExterior: '192.168.1.155',
+        ipInterior: '',
         intercom: {
           name: 'Intercomunicador Oficina (P2)',
-          cameraIP: '',
+          cameraIP: '192.168.1.130',
           httpPort: 80,
           httpsPort: 443,
-          onvifUsername: 'admin',
-          onvifPassword: '',
+          onvifUsername: 'ceroideas',
+          onvifPassword: '12345678',
           rtspPort: 554,
           videoProfile: 'MainStream',
+          snapshotPath: 'axis-cgi/jpg/image.cgi',
           sipUri: '',
           sipUsername: '',
           sipPassword: '',
@@ -116,24 +131,26 @@ export default function NewConfigurationModal({
           defaultOpenTime: 5,
           doorControlUsername: 'Scati2023',
           doorControlPassword: 'Scati2023',
-          doorControlPCB: 1,
-          doorControlSwitch: 2,
+          doorControlPCB: 2,
+          doorControlSwitch: 10,
+          rtspPath: 'axis-media/media.amp?videocodec=h264&audio=1',
         }
       },
-      { 
-        enabled: false, 
-        name: 'Puerta 3', 
-        ipExterior: '', 
+      {
+        enabled: true,
+        name: 'Puerta 3',
+        ipExterior: '192.16.1.155',
         ipInterior: '',
         intercom: {
           name: 'Intercomunicador Puerta 3',
-          cameraIP: '',
+          cameraIP: '192.168.1.120',
           httpPort: 80,
           httpsPort: 443,
-          onvifUsername: 'admin',
-          onvifPassword: '',
+          onvifUsername: 'ceroideas',
+          onvifPassword: 'Jk21264712',
           rtspPort: 554,
           videoProfile: 'MainStream',
+          snapshotPath: 'cgi-bin/snapshot.cgi?channel=1',
           sipUri: '',
           sipUsername: '',
           sipPassword: '',
@@ -146,13 +163,14 @@ export default function NewConfigurationModal({
           doorControlUsername: 'Scati2023',
           doorControlPassword: 'Scati2023',
           doorControlPCB: 1,
-          doorControlSwitch: 3,
+          doorControlSwitch: 5,
+          rtspPath: 'trackID=1',
         }
       },
-      { 
-        enabled: false, 
-        name: 'Puerta 4', 
-        ipExterior: '', 
+      {
+        enabled: false,
+        name: 'Puerta 4',
+        ipExterior: '',
         ipInterior: '',
         intercom: {
           name: 'Intercomunicador Puerta 4',
@@ -178,10 +196,10 @@ export default function NewConfigurationModal({
           doorControlSwitch: 4,
         }
       },
-      { 
-        enabled: false, 
-        name: 'Puerta 5', 
-        ipExterior: '', 
+      {
+        enabled: false,
+        name: 'Puerta 5',
+        ipExterior: '',
         ipInterior: '',
         intercom: {
           name: 'Intercomunicador Puerta 5',
@@ -206,7 +224,7 @@ export default function NewConfigurationModal({
           doorControlPCB: 1,
           doorControlSwitch: 5,
         }
-      },
+      }
     ],
     network: {
       consoleIP: '192.168.1.25',
@@ -225,6 +243,13 @@ export default function NewConfigurationModal({
       cerrado: { ini1: '22:00', ini2: '08:00' },
     },
     officeWithATM: false,
+    emergency: {
+      enabled: false,
+      pcb1: 2,
+      switch1: 1,
+      pcb2: 3,
+      switch2: 1,
+    },
   });
 
   const [connectionStatus, setConnectionStatus] = useState<{ [key: string]: 'testing' | 'success' | 'error' | null }>({});
@@ -233,10 +258,17 @@ export default function NewConfigurationModal({
   const [isTestingApi, setIsTestingApi] = useState(false);
   const [showIntercomModal, setShowIntercomModal] = useState(false);
   const [selectedDoorIndex, setSelectedDoorIndex] = useState<number>(0);
+  const [useServerProxyState, setUseServerProxyState] = useState<boolean>(true);
+  const [proxyBaseUrlState, setProxyBaseUrlState] = useState<string>('http://localhost:3001');
 
   useEffect(() => {
     if (visible) {
       loadSavedConfiguration();
+      (async () => {
+        const [useProxy, base] = await Promise.all([getUseServerProxy(), getProxyBaseUrl()]);
+        setUseServerProxyState(useProxy);
+        setProxyBaseUrlState(base);
+      })();
     }
   }, [visible]);
 
@@ -267,6 +299,13 @@ export default function NewConfigurationModal({
           });
         }
         
+        // Cargar configuración de emergencia
+        const emergencyConfig = await emergencyService.getEmergencyConfig();
+        if (emergencyConfig) {
+          parsedConfig.emergency = emergencyConfig;
+          console.log('✅ Configuración de emergencia cargada:', emergencyConfig);
+        }
+        
         // Solo cargar configuración si no tiene IPs antiguas
         if (!parsedConfig.doors?.[0]?.ipExterior?.includes('192.168.1.26')) {
           setConfig(prev => ({ ...prev, ...parsedConfig }));
@@ -291,25 +330,42 @@ export default function NewConfigurationModal({
   };
 
   const handleSave = async () => {
-    await saveConfiguration(config);
-    
-    // Convertir la configuración al formato esperado por el componente padre
-    const configForParent = {
-      username: 'admin', // Usuario por defecto
-      password: '123456', // Password por defecto  
-      officeNumber: '1234', // Número de oficina por defecto
-      serverIP: config.network.consoleIP,
-      apiPort: config.api.port,
-      apiUsername: config.api.username,
-      apiPassword: config.api.password,
-      updateServerURL: 'http://192.168.1.200/updates',
-      deviceId: 'device_id_placeholder',
-      ...config // Spread de toda la configuración
-    };
-    
-    onSave(configForParent);
-    onClose(); // Cerrar el modal después de guardar
-    console.log('📋 Nueva configuración completa guardada:', config);
+    try {
+      await saveConfiguration(config);
+      
+      // Guardar configuración de emergencia
+      console.log('💾 Guardando configuración de emergencia:', config.emergency);
+      if (config.emergency) {
+        await emergencyService.setEmergencyConfig(config.emergency);
+        console.log('✅ Configuración de emergencia guardada exitosamente');
+        
+        // Verificar que se guardó correctamente
+        const savedEmergencyConfig = await emergencyService.getEmergencyConfig();
+        console.log('🔍 Verificación - Configuración guardada:', savedEmergencyConfig);
+      } else {
+        console.log('⚠️ No hay configuración de emergencia para guardar');
+      }
+      
+      // Convertir la configuración al formato esperado por el componente padre
+      const configForParent = {
+        username: 'admin', // Usuario por defecto
+        password: '123456', // Password por defecto  
+        officeNumber: '1234', // Número de oficina por defecto
+        serverIP: config.network.consoleIP,
+        apiPort: config.api.port,
+        apiUsername: config.api.username,
+        apiPassword: config.api.password,
+        updateServerURL: 'http://192.168.1.200/updates',
+        deviceId: 'device_id_placeholder',
+        ...config // Spread de toda la configuración
+      };
+      
+      onSave(configForParent);
+      onClose(); // Cerrar el modal después de guardar
+      console.log('📋 Nueva configuración completa guardada:', config);
+    } catch (error) {
+      console.error('❌ Error en handleSave:', error);
+    }
   };
 
   // Función de prueba de API deshabilitada (no usa gettags)
@@ -723,6 +779,86 @@ export default function NewConfigurationModal({
       color: '#495057',
       flex: 1,
     },
+    // Estilos de emergencia
+    emergencyCard: {
+      backgroundColor: '#FFFFFF',
+      borderRadius: 8,
+      padding: isSmallTablet ? 12 : isLargeTablet ? 16 : 14,
+      borderWidth: 1,
+      borderColor: '#E9ECEF',
+    },
+    emergencyRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+    },
+    emergencyLabel: {
+      fontSize: isSmallTablet ? 12 : isLargeTablet ? 14 : 13,
+      fontWeight: '600',
+      color: '#495057',
+      flex: 1,
+    },
+    emergencyConfig: {
+      marginTop: isSmallTablet ? 12 : isLargeTablet ? 16 : 14,
+      paddingTop: isSmallTablet ? 12 : isLargeTablet ? 16 : 14,
+      borderTopWidth: 1,
+      borderTopColor: '#E9ECEF',
+    },
+    emergencySubtitle: {
+      fontSize: isSmallTablet ? 11 : isLargeTablet ? 13 : 12,
+      fontWeight: '600',
+      color: '#6C757D',
+      marginBottom: isSmallTablet ? 8 : isLargeTablet ? 12 : 10,
+    },
+    emergencyInputs: {
+      gap: isSmallTablet ? 8 : isLargeTablet ? 12 : 10,
+    },
+    emergencyInputGroup: {
+      backgroundColor: '#F8F9FA',
+      borderRadius: 6,
+      padding: isSmallTablet ? 8 : isLargeTablet ? 12 : 10,
+    },
+    emergencyInputLabel: {
+      fontSize: isSmallTablet ? 10 : isLargeTablet ? 12 : 11,
+      fontWeight: '600',
+      color: '#495057',
+      marginBottom: isSmallTablet ? 4 : isLargeTablet ? 6 : 5,
+    },
+    emergencyInputRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: isSmallTablet ? 8 : isLargeTablet ? 12 : 10,
+    },
+    emergencyInput: {
+      flex: 1,
+      backgroundColor: '#FFFFFF',
+      borderWidth: 1,
+      borderColor: '#CED4DA',
+      borderRadius: 4,
+      paddingHorizontal: isSmallTablet ? 8 : isLargeTablet ? 12 : 10,
+      paddingVertical: isSmallTablet ? 6 : isLargeTablet ? 8 : 7,
+      fontSize: isSmallTablet ? 11 : isLargeTablet ? 13 : 12,
+      color: '#495057',
+    },
+    pickerContainer: {
+      flex: 1,
+      backgroundColor: '#FFFFFF',
+      borderWidth: 1,
+      borderColor: '#CED4DA',
+      borderRadius: 4,
+      overflow: 'hidden',
+    },
+    picker: {
+      height: isSmallTablet ? 35 : isLargeTablet ? 45 : 40,
+      fontSize: isSmallTablet ? 11 : isLargeTablet ? 13 : 12,
+      color: '#495057',
+    },
+    emergencyNote: {
+      fontSize: isSmallTablet ? 9 : isLargeTablet ? 11 : 10,
+      color: '#DC3545',
+      fontStyle: 'italic',
+      marginTop: isSmallTablet ? 8 : isLargeTablet ? 12 : 10,
+    },
     bottomButtons: {
       flexDirection: 'row',
       gap: isSmallTablet ? 8 : isLargeTablet ? 16 : 12,
@@ -851,6 +987,30 @@ export default function NewConfigurationModal({
           {/* Configuración de Puertas */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>CONFIGURACIÓN DE PUERTAS</Text>
+          
+          {/* Proxy settings */}
+          <View style={styles.networkCard}>
+            <View style={styles.networkRow}>
+              <Text style={styles.networkLabel}>USAR PROXY DE SERVIDOR</Text>
+              <Switch
+                value={useServerProxyState}
+                onValueChange={async (v) => { setUseServerProxyState(v); await setUseServerProxy(v); }}
+                trackColor={{ false: '#CED4DA', true: '#28A745' }}
+                thumbColor={useServerProxyState ? '#FFFFFF' : '#FFFFFF'}
+              />
+            </View>
+            <View style={styles.networkRow}>
+              <Text style={styles.networkLabel}>URL DEL PROXY</Text>
+              <TextInput
+                style={styles.networkInput}
+                value={proxyBaseUrlState}
+                onChangeText={setProxyBaseUrlState}
+                onBlur={async () => { await setProxyBaseUrl(proxyBaseUrlState); }}
+                autoCapitalize="none"
+                placeholder="http://192.168.1.x:3001"
+              />
+            </View>
+          </View>
             
             <View style={styles.doorsGrid}>
               {config.doors.map((door, index) => (
@@ -1064,6 +1224,107 @@ export default function NewConfigurationModal({
                   thumbColor={config.officeWithATM ? '#FFFFFF' : '#FFFFFF'}
                 />
               </View>
+            </View>
+          </View>
+
+          {/* SECCIÓN DE EMERGENCIA */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>CONFIGURACIÓN DE EMERGENCIA</Text>
+            <View style={styles.emergencyCard}>
+              <View style={styles.emergencyRow}>
+                <Text style={styles.emergencyLabel}>Habilitar sistema de emergencia</Text>
+                <Switch
+                  value={config.emergency.enabled}
+                  onValueChange={(value) => setConfig(prev => ({ 
+                    ...prev, 
+                    emergency: { ...prev.emergency, enabled: value }
+                  }))}
+                  trackColor={{ false: '#CED4DA', true: '#DC3545' }}
+                  thumbColor={config.emergency.enabled ? '#FFFFFF' : '#FFFFFF'}
+                />
+              </View>
+              
+              {config.emergency.enabled && (
+                <View style={styles.emergencyConfig}>
+                  <Text style={styles.emergencySubtitle}>Configuración de salidas de emergencia</Text>
+                  
+                  <View style={styles.emergencyInputs}>
+                    <View style={styles.emergencyInputGroup}>
+                      <Text style={styles.emergencyInputLabel}>Placa 1</Text>
+                      <View style={styles.emergencyInputRow}>
+                        <View style={styles.pickerContainer}>
+                          <Picker
+                            selectedValue={config.emergency.pcb1}
+                            onValueChange={(value) => setConfig(prev => ({
+                              ...prev,
+                              emergency: { ...prev.emergency, pcb1: value }
+                            }))}
+                            style={styles.picker}
+                          >
+                            <Picker.Item label="PCB 1" value={1} />
+                            <Picker.Item label="PCB 2" value={2} />
+                            <Picker.Item label="PCB 3" value={3} />
+                          </Picker>
+                        </View>
+                        <Text style={styles.emergencyInputLabel}>Switch</Text>
+                        <View style={styles.pickerContainer}>
+                          <Picker
+                            selectedValue={config.emergency.switch1}
+                            onValueChange={(value) => setConfig(prev => ({
+                              ...prev,
+                              emergency: { ...prev.emergency, switch1: value }
+                            }))}
+                            style={styles.picker}
+                          >
+                            {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(num => (
+                              <Picker.Item key={num} label={`Switch ${num}`} value={num} />
+                            ))}
+                          </Picker>
+                        </View>
+                      </View>
+                    </View>
+                    
+                    <View style={styles.emergencyInputGroup}>
+                      <Text style={styles.emergencyInputLabel}>Placa 2</Text>
+                      <View style={styles.emergencyInputRow}>
+                        <View style={styles.pickerContainer}>
+                          <Picker
+                            selectedValue={config.emergency.pcb2}
+                            onValueChange={(value) => setConfig(prev => ({
+                              ...prev,
+                              emergency: { ...prev.emergency, pcb2: value }
+                            }))}
+                            style={styles.picker}
+                          >
+                            <Picker.Item label="PCB 1" value={1} />
+                            <Picker.Item label="PCB 2" value={2} />
+                            <Picker.Item label="PCB 3" value={3} />
+                          </Picker>
+                        </View>
+                        <Text style={styles.emergencyInputLabel}>Switch</Text>
+                        <View style={styles.pickerContainer}>
+                          <Picker
+                            selectedValue={config.emergency.switch2}
+                            onValueChange={(value) => setConfig(prev => ({
+                              ...prev,
+                              emergency: { ...prev.emergency, switch2: value }
+                            }))}
+                            style={styles.picker}
+                          >
+                            {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(num => (
+                              <Picker.Item key={num} label={`Switch ${num}`} value={num} />
+                            ))}
+                          </Picker>
+                        </View>
+                      </View>
+                    </View>
+                  </View>
+                  
+                  <Text style={styles.emergencyNote}>
+                    ⚠️ Al activar emergencia se enviará comando permanente a las salidas configuradas
+                  </Text>
+                </View>
+              )}
             </View>
           </View>
 

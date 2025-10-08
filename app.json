@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "Puertas Santander",
-    "slug": "puertas-santander",
+    "slug": "puertas-santander-new",
     "version": "1.0.0",
     "orientation": "landscape",
     "icon": "./assets/images/icon.png",
@@ -12,7 +12,8 @@
       "**/*"
     ],
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bitcode": false
     },
     "web": {
       "bundler": "metro",
@@ -21,8 +22,11 @@
     },
     "plugins": [
       "expo-router",
-      "expo-font", 
+      "expo-font",
       "expo-web-browser",
+      "expo-media-library",
+      "expo-file-system",
+      "./plugins/with-dependency-resolver.js",
       [
         "@config-plugins/react-native-webrtc",
         {
@@ -37,11 +41,28 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "fba05647-50d4-4815-afdd-0f8d93bf7a94"
+        "projectId": "3f60f9af-7441-4e9b-a0ce-742eef3ae6c8"
       }
     },
     "android": {
-      "package": "com.cess07.puertassantander"
-    }
+      "package": "com.cess07.puertassantander",
+      "permissions": [
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.READ_MEDIA_VISUAL_USER_SELECTED",
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.READ_MEDIA_VIDEO",
+        "android.permission.READ_MEDIA_AUDIO",
+        "android.permission.INTERNET",
+        "android.permission.ACCESS_NETWORK_STATE",
+        "android.permission.CAMERA",
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.SYSTEM_ALERT_WINDOW",
+        "android.permission.WAKE_LOCK",
+        "android.permission.BLUETOOTH"
+      ]
+    },
+    "owner": "jorgesolano92"
   }
 }

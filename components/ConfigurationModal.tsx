@@ -1,8 +1,10 @@
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, Modal } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, Modal, Switch } from 'react-native';
 import { useState } from 'react';
 import { User, X, RefreshCw, ArrowLeft, Phone } from 'lucide-react-native';
 import { ScrollView } from 'react-native';
 import AxisTestModal from './AxisTestModal';
+import { useEffect } from 'react';
+import { getUseServerProxy, setUseServerProxy, getProxyBaseUrl, setProxyBaseUrl } from '../services/AppMode';
 
 interface ConfigurationModalProps {
   visible: boolean;
@@ -20,6 +22,16 @@ export default function ConfigurationModal({ visible, onClose, onSuccess, office
   const [error, setError] = useState<string>('');
   const [isLoading, setIsLoading] = useState(false);
   const [axisModalVisible, setAxisModalVisible] = useState(false);
+  const [useServerProxyState, setUseServerProxyState] = useState<boolean>(true);
+  const [proxyBaseUrlState, setProxyBaseUrlState] = useState<string>('http://localhost:3001');
+
+  useEffect(() => {
+    (async () => {
+      const [useProxy, base] = await Promise.all([getUseServerProxy(), getProxyBaseUrl()]);
+      setUseServerProxyState(useProxy);
+      setProxyBaseUrlState(base);
+    })();
+  }, []);
 
   // Credenciales de prueba
   const TEST_CREDENTIALS = {
@@ -48,6 +60,15 @@ export default function ConfigurationModal({ visible, onClose, onSuccess, office
 
   const handleUpdateVersion = () => {
     // Implementar lógica de actualización
+  };
+
+  const toggleUseProxy = async (value: boolean) => {
+    setUseServerProxyState(value);
+    await setUseServerProxy(value);
+  };
+
+  const saveProxyBaseUrl = async () => {
+    await setProxyBaseUrl(proxyBaseUrlState);
   };
 
   const handleClose = () => {
@@ -103,6 +124,27 @@ export default function ConfigurationModal({ visible, onClose, onSuccess, office
 
             {/* Form Section */}
             <View style={styles.formSection}>
+              {/* Proxy Settings */}
+              <View style={styles.inputContainer}>
+                <Text style={styles.inputLabel}>USAR PROXY DE SERVIDOR:</Text>
+                <View style={styles.inputUnderline} />
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <Text style={{ fontSize: 14, color: '#212529' }}>{useServerProxyState ? 'Sí' : 'No'}</Text>
+                  <Switch value={useServerProxyState} onValueChange={toggleUseProxy} />
+                </View>
+              </View>
+
+              <View style={styles.inputContainer}>
+                <Text style={styles.inputLabel}>URL DEL PROXY:</Text>
+                <View style={styles.inputUnderline} />
+                <TextInput
+                  style={styles.textInput}
+                  value={proxyBaseUrlState}
+                  onChangeText={setProxyBaseUrlState}
+                  onBlur={saveProxyBaseUrl}
+                  autoCapitalize="none"
+                />
+              </View>
               <View style={styles.inputContainer}>
                 <Text style={styles.inputLabel}>USUARIO:</Text>
                 <View style={styles.inputUnderline} />

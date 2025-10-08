@@ -15,6 +15,7 @@ export interface IntercomConfig {
   rtspPort: number;
   videoProfile: 'MainStream' | 'SubStream' | 'Auto';
   rtspPath?: string; // Ruta RTSP personalizada (p.ej. axis-media/media.amp?...)
+  snapshotPath?: string; // Ruta HTTP(S) de snapshot por modelo
   sipUri: string;
   sipUsername: string;
   sipPassword: string;
@@ -48,6 +49,7 @@ const defaultIntercomConfig: IntercomConfig = {
   rtspPort: 554,
   videoProfile: 'MainStream',
   rtspPath: '',
+  snapshotPath: '',
   sipUri: '',
   sipUsername: '',
   sipPassword: '',
@@ -451,6 +453,44 @@ export default function IntercomConfigurationModal({
                   placeholder="axis-media/media.amp?videocodec=h264&audio=1"
                   autoCapitalize="none"
                 />
+              </View>
+
+              <View style={styles.inputRow}>
+                <Text style={styles.inputLabel}>Ruta Snapshot (opcional):</Text>
+                <TextInput
+                  style={styles.textInput}
+                  value={config.snapshotPath || ''}
+                  onChangeText={(text) => updateConfig('snapshotPath', text)}
+                  placeholder="ISAPI/Streaming/channels/101/picture | axis-cgi/jpg/image.cgi"
+                  autoCapitalize="none"
+                />
+              </View>
+
+              {/* Ayuda contextual y botones rápidos */}
+              <View style={{ marginTop: 6 }}>
+                <Text style={{ fontSize: isSmallTablet ? 10 : isLargeTablet ? 12 : 11, color: '#6C757D', marginBottom: 6 }}>
+                  Ejemplos de rutas por fabricante:
+                </Text>
+                <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
+                  <TouchableOpacity
+                    style={{ backgroundColor: '#F1F3F5', paddingHorizontal: 8, paddingVertical: 6, borderRadius: 6, borderWidth: 1, borderColor: '#E9ECEF' }}
+                    onPress={() => updateConfig('snapshotPath', 'ISAPI/Streaming/channels/101/picture')}
+                  >
+                    <Text style={{ fontSize: 11, color: '#212529' }}>Safire/Hik: ISAPI/Streaming/channels/101/picture</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={{ backgroundColor: '#F1F3F5', paddingHorizontal: 8, paddingVertical: 6, borderRadius: 6, borderWidth: 1, borderColor: '#E9ECEF' }}
+                    onPress={() => updateConfig('snapshotPath', 'axis-cgi/jpg/image.cgi')}
+                  >
+                    <Text style={{ fontSize: 11, color: '#212529' }}>Axis: axis-cgi/jpg/image.cgi</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={{ backgroundColor: '#F1F3F5', paddingHorizontal: 8, paddingVertical: 6, borderRadius: 6, borderWidth: 1, borderColor: '#E9ECEF' }}
+                    onPress={() => updateConfig('snapshotPath', 'cgi-bin/snapshot.cgi?channel=1')}
+                  >
+                    <Text style={{ fontSize: 11, color: '#212529' }}>IDIS/Dahua: cgi-bin/snapshot.cgi?channel=1</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
 
                 {/* Botón eliminado: prueba AXIS movida a modal independiente */}

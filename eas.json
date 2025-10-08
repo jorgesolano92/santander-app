@@ -19,6 +19,87 @@
         "buildType": "apk",
         "gradleCommand": ":app:assembleDebug"
       }
+    },
+    "debug": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk",
+        "gradleCommand": ":app:assembleDebug"
+      }
+    },
+    "standalone": {
+      "android": {
+        "buildType": "apk",
+        "gradleCommand": ":app:assembleRelease"
+      }
+    },
+    "apk-release": {
+      "android": {
+        "buildType": "apk",
+        "gradleCommand": ":app:assembleRelease"
+      },
+      "env": {
+        "EXPO_NO_TELEMETRY": "1"
+      }
+    },
+    "hls-only": {
+      "android": {
+        "buildType": "apk",
+        "gradleCommand": ":app:assembleRelease"
+      },
+      "env": {
+        "EXPO_NO_TELEMETRY": "1",
+        "DISABLE_RTSP": "true"
+      }
+    },
+    "rtsp-enabled": {
+      "android": {
+        "buildType": "apk",
+        "gradleCommand": ":app:assembleRelease"
+      },
+      "env": {
+        "EXPO_NO_TELEMETRY": "1"
+      }
+    },
+    "standalone-dev": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk",
+        "gradleCommand": ":app:assembleDebug"
+      },
+      "env": {
+        "EXPO_NO_TELEMETRY": "1"
+      }
+    },
+    "production-rtsp": {
+      "android": {
+        "buildType": "apk",
+        "gradleCommand": ":app:assembleRelease"
+      },
+      "env": {
+        "EXPO_NO_TELEMETRY": "1"
+      }
+    },
+    "production-hls": {
+      "android": {
+        "buildType": "apk",
+        "gradleCommand": ":app:assembleRelease"
+      },
+      "env": {
+        "EXPO_NO_TELEMETRY": "1",
+        "DISABLE_RTSP": "true"
+      }
+    },
+    "standalone-debug": {
+      "android": {
+        "buildType": "apk",
+        "gradleCommand": ":app:assembleDebug"
+      },
+      "env": {
+        "EXPO_NO_TELEMETRY": "1"
+      }
     }
   },
   "submit": {

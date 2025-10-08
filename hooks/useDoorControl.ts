@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { doorControlService, ConfigurationData, SystemStatus } from '../services/DoorControlService';
 import { sipService, SipConfig, SipCallState, SipEventType } from '../services/SipService';
 import { IntercomConfig } from '../components/IntercomConfigurationModal';
+import { emergencyService } from '../services/EmergencyService';
 
 export interface UseDoorControlReturn {
   systemStatus: SystemStatus | null;
@@ -42,11 +43,13 @@ export function useDoorControl(): UseDoorControlReturn {
   const [sipCallState, setSipCallState] = useState<SipCallState | null>(null);
   const [activeSipCallDoorId, setActiveSipCallDoorId] = useState<string | null>(null);
 
-  const updateSystemStatus = useCallback(async () => {
+  const updateSystemStatus = useCallback(async (showLoader: boolean = false) => {
     try {
       if (!isMountedRef.current) return;
       
-      setIsLoading(true);
+      if (showLoader) {
+        setIsLoading(true);
+      }
       setError(null);
       setConnectionStatus('connecting');
       
@@ -54,7 +57,31 @@ export function useDoorControl(): UseDoorControlReturn {
       
       if (!isMountedRef.current) return;
       
-      setSystemStatus(status);
+      // Primero verificar si la emergencia está habilitada en la configuración
+      const emergencyConfig = await emergencyService.getEmergencyConfig();
+      let updatedStatus = {
+        ...status,
+        emergencyActive: false,
+        emergencyConfigured: emergencyConfig?.enabled || false
+      };
+      
+      // Solo obtener estado de emergencia si está habilitada
+      if (emergencyConfig?.enabled) {
+        const emergencyStatus = await doorControlService.getEmergencyStatus();
+        updatedStatus = {
+          ...status,
+          emergencyActive: emergencyStatus.isActive,
+          emergencyConfigured: emergencyStatus.isConfigured
+        };
+        
+        // Log del estado de emergencia
+        console.log('🔍 Estado de emergencia:', {
+          isActive: emergencyStatus.isActive,
+          switches: emergencyStatus.switchesStatus
+        });
+      }
+      
+      setSystemStatus(updatedStatus);
       setConnectionStatus('connected');
       
       // Determine current mode from system status
@@ -68,7 +95,7 @@ export function useDoorControl(): UseDoorControlReturn {
         setConnectionStatus('disconnected');
       }
     } finally {
-      if (isMountedRef.current) {
+      if (isMountedRef.current && showLoader) {
         setIsLoading(false);
       }
     }
@@ -87,8 +114,8 @@ export function useDoorControl(): UseDoorControlReturn {
       
       setCurrentScheduleMode(mode);
       
-      // Refresh system status after mode change
-      await updateSystemStatus();
+      // Refresh system status after mode change (sin loader, ya se está procesando el cambio de modo)
+      await updateSystemStatus(false);
       return true;
     } catch (err) {
       if (isMountedRef.current) {
@@ -109,13 +136,36 @@ export function useDoorControl(): UseDoorControlReturn {
       setIsLoading(true);
       setError(null);
       
-      await doorControlService.toggleEmergencyMode(newState);
+      console.log('🚨 toggleEmergency:', newState ? 'ACTIVANDO' : 'DESACTIVANDO');
+      
+      let success: boolean = false;
+      try {
+        if (newState) {
+          success = await doorControlService.activateEmergency();
+        } else {
+          success = await doorControlService.deactivateEmergency();
+        }
+      } catch (emergencyError) {
+        console.error('❌ Error en activateEmergency/deactivateEmergency:', emergencyError);
+        console.error('❌ Error tipo:', emergencyError instanceof Error ? emergencyError.constructor.name : typeof emergencyError);
+        console.error('❌ Error mensaje:', emergencyError instanceof Error ? emergencyError.message : String(emergencyError));
+        if (emergencyError instanceof Error && emergencyError.stack) {
+          console.error('❌ Error stack:', emergencyError.stack);
+        }
+        success = false;
+      }
       
       if (!isMountedRef.current) return false;
       
-      // Refresh system status after emergency toggle
-      await updateSystemStatus();
-      return true;
+      if (success) {
+        console.log('✅ Emergencia:', newState ? 'ACTIVADA' : 'DESACTIVADA');
+        // Refresh system status after emergency toggle (sin loader, ya se está procesando)
+        await updateSystemStatus(false);
+        return true;
+      } else {
+        console.error('❌ Error en toggleEmergency - success es false');
+        return false;
+      }
     } catch (err) {
       if (isMountedRef.current) {
         setError(err instanceof Error ? err.message : 'Error en modo emergencia');
@@ -170,7 +220,7 @@ export function useDoorControl(): UseDoorControlReturn {
       
       if (isValid) {
         setConnectionStatus('connected');
-        await updateSystemStatus();
+        await updateSystemStatus(true); // Mostrar loader en la carga inicial
       } else {
         setConnectionStatus('disconnected');
         setError('Dispositivo no válido o no accesible');
@@ -218,8 +268,8 @@ export function useDoorControl(): UseDoorControlReturn {
       
       if (!isMountedRef.current) return false;
       
-      // Refresh system status after door control
-      await updateSystemStatus();
+      // Refresh system status after door control (sin loader, la acción de puerta ya tiene feedback)
+      await updateSystemStatus(false);
       return true;
     } catch (err) {
       if (isMountedRef.current) {
@@ -385,7 +435,7 @@ export function useDoorControl(): UseDoorControlReturn {
     // Suscribirse a cambios de estado del servicio de puertas
     doorControlService.onStatusChange(() => {
       if (isMountedRef.current) {
-        updateSystemStatus();
+        updateSystemStatus(false); // NO mostrar loader en cambios de estado
       }
     });
     
@@ -402,7 +452,7 @@ export function useDoorControl(): UseDoorControlReturn {
     
     if (connectionStatus === 'connected') {
       interval = setInterval(() => {
-        updateSystemStatus();
+        updateSystemStatus(false); // NO mostrar loader en actualizaciones periódicas
       }, 5000); // Refresh every 5 seconds
     }
     
@@ -425,8 +475,8 @@ export function useDoorControl(): UseDoorControlReturn {
       
       if (!isMountedRef.current) return false;
       
-      // Actualizar el estado después de refrescar
-      await updateSystemStatus();
+      // Actualizar el estado después de refrescar (sin loader, ya está el de refreshing)
+      await updateSystemStatus(false);
       
       return success;
     } catch (err) {

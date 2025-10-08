@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, TouchableOpacity, Dimensions, Platform } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Dimensions, Platform, ScrollView } from 'react-native';
 import { useWindowDimensions } from 'react-native';
 import { useState, useEffect, useCallback } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -13,6 +13,7 @@ import ManualModeModal from '@/components/ManualModeModal';
 import EmergencyConfirmationModal from '@/components/EmergencyConfirmationModal';
 import AxisTestModal from '@/components/AxisTestModal';
 import { useDoorControl } from '@/hooks/useDoorControl';
+import { getUseServerProxy, getProxyBaseUrl } from '@/services/AppMode';
 import { doorControlService } from '@/services/DoorControlService';
 // (Eliminar) import * as FileSystem from 'expo-file-system';
 
@@ -139,6 +140,8 @@ export default function MainScreen() {
   const [showAxisTestModal, setShowAxisTestModal] = useState(false);
   // const [isSandboxMode, setIsSandboxMode] = useState(false); // Modo sandbox deshabilitado permanentemente
   const [systemConfig, setSystemConfig] = useState<SystemConfig | null>(null);
+  const [useServerProxyBadge, setUseServerProxyBadge] = useState<boolean>(true);
+  const [proxyBaseUrl, setProxyBaseUrl] = useState<string>('http://localhost:3001');
 
   // Actualizar fecha y hora cada segundo
   useEffect(() => {
@@ -165,6 +168,9 @@ export default function MainScreen() {
           setSystemConfig(parsedConfig);
           console.log('📋 Configuración del sistema cargada:', parsedConfig);
         }
+        const [useProxy, base] = await Promise.all([getUseServerProxy(), getProxyBaseUrl()]);
+        setUseServerProxyBadge(useProxy);
+        setProxyBaseUrl(base);
       } catch (error) {
         console.error('❌ Error cargando configuración del sistema:', error);
       }
@@ -345,6 +351,13 @@ export default function MainScreen() {
     container: {
       flex: 1,
       backgroundColor: '#F8F9FA',
+    },
+    scrollContent: {
+      flex: 1,
+    },
+    scrollContentContainer: {
+      flexGrow: 1,
+      paddingBottom: 20,
     },
     header: {
       backgroundColor: '#495057',
@@ -682,6 +695,14 @@ export default function MainScreen() {
       color: '#FFFFFF',
       letterSpacing: 1,
     },
+    emergencyButtonActive: {
+      backgroundColor: '#1A1A1A', // Negro oscuro
+      shadowColor: '#1A1A1A',
+    },
+    emergencyButtonTextActive: {
+      color: '#FFFFFF',
+      fontWeight: '800',
+    },
     visualizationButton: {
       flex: 1,
       backgroundColor: '#495057',
@@ -935,6 +956,19 @@ export default function MainScreen() {
       letterSpacing: 0.5,
     },
     // Estilos adicionales para modo manual responsivo
+    modeBadge: {
+      backgroundColor: '#343A40',
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      borderRadius: 8,
+      marginRight: 8,
+    },
+    modeBadgeText: {
+      color: '#FFFFFF',
+      fontSize: isSmallTablet ? 10 : isLargeTablet ? 12 : 11,
+      fontWeight: '700',
+      letterSpacing: 0.5,
+    }
   });
 
 
@@ -972,19 +1006,17 @@ export default function MainScreen() {
 
         {/* Right Section */}
         <View style={styles.rightHeaderSection}>
+          <View style={styles.modeBadge}>
+            <Text style={styles.modeBadgeText}>
+              {useServerProxyBadge ? 'MODO: PROXY' : 'MODO: DIRECTO'}
+            </Text>
+          </View>
           <View style={styles.connectionIndicator}>
             <Wifi 
               size={isSmallTablet ? 20 : isLargeTablet ? 24 : 22} 
               color={connectionStatus === 'connected' ? '#28A745' : '#DC3545'} 
             />
           </View>
-          <TouchableOpacity 
-            style={styles.configButton}
-            onPress={() => setShowAxisTestModal(true)}
-          >
-            <Phone size={isSmallTablet ? 20 : isLargeTablet ? 24 : 22} color="#495057" />
-            <Text style={styles.configButtonText}>PROBAR AXIS</Text>
-          </TouchableOpacity>
           
           <TouchableOpacity 
             style={styles.configButton}
@@ -1009,7 +1041,12 @@ export default function MainScreen() {
         </View>
       )}
 
-      {/* Main Content */}
+      {/* Main Content - ScrollView */}
+      <ScrollView 
+        style={styles.scrollContent}
+        contentContainerStyle={styles.scrollContentContainer}
+        showsVerticalScrollIndicator={true}
+      >
       {isEmergencyActive ? (
         /* Emergency Mode View */
         <View style={styles.emergencyContent}>
@@ -1066,10 +1103,18 @@ export default function MainScreen() {
 
           <View style={styles.bottomButtons}>
             <TouchableOpacity 
-              style={styles.emergencyButton}
+              style={[
+                styles.emergencyButton,
+                isEmergencyActive && styles.emergencyButtonActive
+              ]}
               onPress={handleEmergencyToggle}
             >
-              <Text style={styles.emergencyButtonText}>EMERGENCIA</Text>
+              <Text style={[
+                styles.emergencyButtonText,
+                isEmergencyActive && styles.emergencyButtonTextActive
+              ]}>
+                {isEmergencyActive ? 'EMERGENCIA ACTIVADA' : 'EMERGENCIA'}
+              </Text>
             </TouchableOpacity>
             <TouchableOpacity 
               style={styles.visualizationButton}
@@ -1109,10 +1154,18 @@ export default function MainScreen() {
 
           <View style={styles.bottomButtons}>
             <TouchableOpacity 
-              style={styles.emergencyButton}
+              style={[
+                styles.emergencyButton,
+                isEmergencyActive && styles.emergencyButtonActive
+              ]}
               onPress={handleEmergencyToggle}
             >
-              <Text style={styles.emergencyButtonText}>ACTIVAR EMERGENCIA</Text>
+              <Text style={[
+                styles.emergencyButtonText,
+                isEmergencyActive && styles.emergencyButtonTextActive
+              ]}>
+                {isEmergencyActive ? 'EMERGENCIA ACTIVADA' : 'ACTIVAR EMERGENCIA'}
+              </Text>
             </TouchableOpacity>
             <TouchableOpacity 
               style={styles.visualizationButton}
@@ -1123,6 +1176,7 @@ export default function MainScreen() {
           </View>
         </View>
       )}
+      </ScrollView>
 
       <LoginModal
         visible={showLoginModal}

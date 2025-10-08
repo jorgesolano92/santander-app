@@ -1,4 +1,19 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Platform } from 'react-native';
+import axios from 'axios';
+import { getUseServerProxy, getProxyBaseUrl } from './AppMode';
+import { emergencyService, EmergencyConfig } from './EmergencyService';
+
+// Importar RNFetchBlob solo en React Native (no en web)
+let RNFetchBlob: any = null;
+if (Platform.OS !== 'web') {
+  try {
+    RNFetchBlob = require('rn-fetch-blob').default || require('rn-fetch-blob');
+    console.log('✅ RNFetchBlob cargado correctamente');
+  } catch (error) {
+    console.log('⚠️ RNFetchBlob no disponible en este entorno:', error);
+  }
+}
 
 export interface DoorStatus {
   id: string;
@@ -18,6 +33,7 @@ export interface SystemStatus {
     P4?: DoorStatus;
   };
   emergencyActive: boolean;
+  emergencyConfigured?: boolean;
   connectionStatus: 'online' | 'offline';
   lastSync: string;
   tags?: Tag[];
@@ -408,9 +424,10 @@ class DoorControlService {
       // Primero probar sin autenticación para ver si el dispositivo responde
       console.log(`🌐 Probando conectividad básica...`);
       try {
-        const isWeb = typeof window !== 'undefined';
-        const basicUrl = isWeb 
-          ? `http://localhost:3001/${deviceType}/${ip}/`
+        const useProxy = await getUseServerProxy();
+        const proxyBase = await getProxyBaseUrl();
+        const basicUrl = useProxy 
+          ? `${proxyBase}/${deviceType}/${ip}/`
           : `https://${ip}/`;
         
         const basicResponse = await fetch(basicUrl, {
@@ -418,7 +435,6 @@ class DoorControlService {
           headers: {
             'Content-Type': 'application/json',
           },
-          ...(isWeb && { mode: 'cors' })
         });
         
         console.log(`📡 Conectividad básica: ${basicResponse.status} ${basicResponse.statusText}`);
@@ -430,8 +446,8 @@ class DoorControlService {
       const authHeader = this.getSDIO12AuthHeader(username, password);
       console.log(`🔑 Auth header generado: ${authHeader.substring(0, 20)}...`);
       
-      // Verificar que las credenciales sean correctas
-      const expectedAuth = `Basic ${btoa(`${username}:${password}`)}`;
+      // Verificar que las credenciales sean correctas (usando el mismo método)
+      const expectedAuth = this.getSDIO12AuthHeader(username, password);
       console.log(`🔍 Auth esperado: ${expectedAuth.substring(0, 20)}...`);
       console.log(`✅ Auth coincide: ${authHeader === expectedAuth}`);
       
@@ -456,10 +472,10 @@ class DoorControlService {
       
       for (const endpoint of testEndpoints) {
         try {
-          // Para desarrollo web, usar proxy para evitar CORS
-          const isWeb = typeof window !== 'undefined';
-          const url = isWeb 
-            ? `http://localhost:3001/${deviceType}/${ip}${endpoint}`
+          const useProxy = await getUseServerProxy();
+          const proxyBase = await getProxyBaseUrl();
+          const url = useProxy 
+            ? `${proxyBase}/${deviceType}/${ip}${endpoint}`
             : `https://${ip}${endpoint}`;
           
           console.log(`📡 Probando: ${url}`);
@@ -470,10 +486,6 @@ class DoorControlService {
               'Authorization': authHeader,
               'Content-Type': 'application/json',
             },
-            // Para desarrollo web, usar proxy si es necesario
-            ...(isWeb && {
-              mode: 'cors',
-            })
           });
 
           if (response.ok) {
@@ -1013,9 +1025,132 @@ class DoorControlService {
    */
   private getSDIO12AuthHeader(username: string, password: string): string {
     const credentials = `${username}:${password}`;
-    // Usar btoa en navegador (disponible globalmente)
-    const encoded = btoa(credentials);
+    
+    // React Native compatible base64 encoding
+    let encoded: string;
+    try {
+      // Intentar con btoa si está disponible (web)
+      if (typeof btoa !== 'undefined') {
+        encoded = btoa(credentials);
+      } else {
+        // Fallback para React Native: usar Buffer
+        encoded = Buffer.from(credentials, 'utf-8').toString('base64');
+      }
+    } catch (error) {
+      console.error('❌ Error encoding credentials:', error);
+      // Fallback manual si todo falla
+      encoded = this.base64Encode(credentials);
+    }
+    
+    console.log('🔑 Authorization header creado correctamente');
     return `Basic ${encoded}`;
+  }
+
+  /**
+   * Fallback manual de base64 encoding
+   */
+  private base64Encode(str: string): string {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=';
+    let output = '';
+    let i = 0;
+    
+    while (i < str.length) {
+      const a = str.charCodeAt(i++);
+      const b = i < str.length ? str.charCodeAt(i++) : 0;
+      const c = i < str.length ? str.charCodeAt(i++) : 0;
+      
+      const bitmap = (a << 16) | (b << 8) | c;
+      
+      output += chars.charAt((bitmap >> 18) & 63);
+      output += chars.charAt((bitmap >> 12) & 63);
+      output += chars.charAt(i - 2 < str.length ? (bitmap >> 6) & 63 : 64);
+      output += chars.charAt(i - 1 < str.length ? bitmap & 63 : 64);
+    }
+    
+    return output;
+  }
+
+  /**
+   * Probar diferentes configuraciones de conexión para SCATI
+   */
+  private async tryDirectConnection(ip: string, username: string, password: string, isPost: boolean = false, body?: any): Promise<any> {
+    const url = `https://${ip}/sdio12`;
+    
+    try {
+      console.log(`🔍 Conectando directamente a: ${url}`);
+      console.log(`🔑 Authorization: ${this.getSDIO12AuthHeader(username, password).substring(0, 30)}...`);
+      
+      // Verificar si RNFetchBlob está disponible (solo en React Native)
+      console.log(`🔍 Platform.OS: ${Platform.OS}`);
+      console.log(`🔍 RNFetchBlob disponible: ${!!RNFetchBlob}`);
+      console.log(`🔍 RNFetchBlob.config: ${!!(RNFetchBlob && RNFetchBlob.config)}`);
+      
+      if (Platform.OS !== 'web' && RNFetchBlob && RNFetchBlob.config) {
+        console.log(`📱 Usando RNFetchBlob (React Native)`);
+        
+        const response = isPost 
+          ? await RNFetchBlob.config({
+              trusty: true, // Acepta certificados SSL autofirmados
+              timeout: 10000
+            }).fetch('POST', url, {
+              'Authorization': this.getSDIO12AuthHeader(username, password),
+              'Content-Type': 'application/json',
+            }, JSON.stringify(body))
+          : await RNFetchBlob.config({
+              trusty: true, // Acepta certificados SSL autofirmados
+              timeout: 10000
+            }).fetch('GET', url, {
+              'Authorization': this.getSDIO12AuthHeader(username, password),
+              'Content-Type': 'application/json',
+            });
+
+        const status = response.info().status;
+        console.log(`📊 Respuesta directa: ${status}`);
+
+        if (status >= 200 && status < 300) {
+          console.log(`✅ Conexión directa exitosa: ${url}`);
+          
+          // Obtener el texto de la respuesta primero
+          const responseText = response.text();
+          console.log(`📄 Respuesta del servidor: "${responseText}"`);
+          
+          // Verificar si la respuesta está vacía
+          if (!responseText || responseText.trim() === '') {
+            console.log(`⚠️ Respuesta vacía del servidor SCATI`);
+            return { response: { status, data: { success: true, message: 'Comando ejecutado' } }, endpoint: url };
+          }
+          
+          // Intentar parsear JSON
+          try {
+            const data = JSON.parse(responseText);
+            console.log(`📊 JSON parseado correctamente:`, data);
+            return { response: { status, data }, endpoint: url };
+          } catch (jsonError) {
+            console.log(`⚠️ No es JSON válido, tratando como texto plano`);
+            return { response: { status, data: { success: true, message: responseText } }, endpoint: url };
+          }
+        } else {
+          const errorText = response.text();
+          console.log(`⚠️ Respuesta no exitosa: ${status} - ${errorText}`);
+          throw new Error(`HTTP ${status}: ${errorText}`);
+        }
+      } else {
+        // Fallback para web o cuando RNFetchBlob no está disponible
+        console.log(`🌐 RNFetchBlob no disponible, usando modo proxy`);
+        throw new Error('RNFetchBlob no disponible en este entorno');
+      }
+    } catch (error) {
+      console.log(`❌ Conexión directa falló: ${url}`);
+      console.log(`❌ Error: ${error instanceof Error ? error.message : String(error)}`);
+      
+      if (error instanceof Error) {
+        console.log(`❌ Tipo de error: ${error.constructor.name}`);
+        if ('code' in error) {
+          console.log(`❌ Código de error: ${(error as any).code}`);
+        }
+      }
+      throw error;
+    }
   }
 
   /**
@@ -1024,30 +1159,51 @@ class DoorControlService {
    */
   async getSDIO12Status(ip: string, username: string, password: string): Promise<SDIO12Response | null> {
     try {
-      // Usar proxy en desarrollo web para evitar CORS
-      const isWeb = typeof window !== 'undefined' && window.location?.protocol === 'http:';
-      const url = isWeb 
-        ? `http://localhost:3001/sdio12/${ip}` 
-        : `https://${ip}/sdio12`;
+      const useProxy = await getUseServerProxy();
+      const proxyBase = await getProxyBaseUrl();
       
-      console.log(`🔍 Consultando estado SDIO12: ${url}${isWeb ? ' (vía proxy)' : ''}`);
-      
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: {
-          'Authorization': this.getSDIO12AuthHeader(username, password),
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+      if (useProxy) {
+        const url = `${proxyBase}/sdio12/${ip}`;
+        console.log(`🔍 Consultando estado SDIO12 (proxy): ${url}`);
+      } else {
+        console.log(`🔍 Consultando estado SDIO12 (directo): ${ip}`);
       }
-
-      const data: SDIO12Response = await response.json();
-      console.log(`✅ Estado SDIO12 obtenido: ${data.nModulos} módulos, ${data.tags.length} tags`);
       
-      return data;
+      if (useProxy) {
+        // Usar proxy
+        const url = `${proxyBase}/sdio12/${ip}`;
+        console.log('📡 Haciendo petición GET a:', url);
+        
+        const response = await axios.get(url, {
+          headers: {
+            'Authorization': this.getSDIO12AuthHeader(username, password),
+            'Content-Type': 'application/json',
+          },
+          timeout: 10000,
+          validateStatus: () => true,
+        });
+        
+        console.log('📥 Respuesta recibida:', response.status);
+
+        if (response.status < 200 || response.status >= 300) {
+          console.error(`❌ Error HTTP ${response.status}:`, response.data);
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const data: SDIO12Response = response.data;
+        console.log(`✅ Estado SDIO12 obtenido: ${data.nModulos} módulos, ${data.tags.length} tags`);
+        return data;
+      } else {
+        // Modo directo: conexión directa con RNFetchBlob
+        const { response, endpoint } = await this.tryDirectConnection(ip, username, password, false);
+        
+        console.log('📥 Respuesta recibida:', response.status);
+        console.log(`✅ Endpoint funcional: ${endpoint}`);
+
+        const data: SDIO12Response = response.data;
+        console.log(`✅ Estado SDIO12 obtenido: ${data.nModulos} módulos, ${data.tags.length} tags`);
+        return data;
+      }
     } catch (error) {
       console.error('❌ Error obteniendo estado SDIO12:', error);
       return null;
@@ -1106,10 +1262,10 @@ class DoorControlService {
     action: 'open' | 'close'
   ): Promise<boolean> {
     try {
-      // Usar proxy en desarrollo web para evitar CORS
-      const isWeb = typeof window !== 'undefined' && window.location?.protocol === 'http:';
-      const url = isWeb 
-        ? `http://localhost:3001/sdio12/${ip}` 
+      const useProxy = await getUseServerProxy();
+      const proxyBase = await getProxyBaseUrl();
+      const url = useProxy 
+        ? `${proxyBase}/sdio12/${ip}` 
         : `https://${ip}/sdio12`;
       
       const tag = this.buildSDIO12Tag(pcb, switchNum);
@@ -1128,7 +1284,7 @@ class DoorControlService {
 
       const bodyString = JSON.stringify(requestBody);
       
-      console.log(`🚪 ${action === 'open' ? 'Abriendo' : 'Cerrando'} puerta${isWeb ? ' (vía proxy)' : ''}:`, {
+      console.log(`🚪 ${action === 'open' ? 'Abriendo' : 'Cerrando'} puerta:`, {
         url,
         tag,
         St,
@@ -1136,25 +1292,44 @@ class DoorControlService {
         body: bodyString
       });
 
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Authorization': this.getSDIO12AuthHeader(username, password),
-          'Content-Type': 'application/json', // Intentar con application/json
-        },
-        body: bodyString,
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error(`❌ Error HTTP ${response.status}:`, errorText);
-        throw new Error(`HTTP error! status: ${response.status} - ${errorText}`);
-      }
-
-      const result = await response.json();
-      console.log(`✅ Comando SDIO12 ejecutado exitosamente:`, result);
+      console.log('📡 Haciendo petición POST a:', url);
+      console.log('🔑 Authorization:', this.getSDIO12AuthHeader(username, password).substring(0, 30) + '...');
+      console.log('📦 Body:', bodyString);
       
-      return true;
+      if (useProxy) {
+        // Usar proxy
+        console.log('📡 Haciendo petición POST a:', url);
+        
+        const response = await axios.post(url, requestBody, {
+          headers: {
+            'Authorization': this.getSDIO12AuthHeader(username, password),
+            'Content-Type': 'application/json',
+          },
+          timeout: 10000,
+          validateStatus: () => true,
+        });
+        
+        console.log('📥 Respuesta POST recibida:', response.status);
+
+        if (response.status < 200 || response.status >= 300) {
+          console.error(`❌ Error HTTP ${response.status}:`, response.data);
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const result = response.data;
+        console.log(`✅ Comando SDIO12 ejecutado exitosamente:`, result);
+        return true;
+      } else {
+        // Modo directo: conexión directa con RNFetchBlob
+        const { response, endpoint } = await this.tryDirectConnection(ip, username, password, true, requestBody);
+        
+        console.log('📥 Respuesta POST recibida:', response.status);
+        console.log(`✅ Endpoint funcional: ${endpoint}`);
+
+        const result = response.data;
+        console.log(`✅ Comando SDIO12 ejecutado exitosamente:`, result);
+        return true;
+      }
     } catch (error) {
       console.error('❌ Error controlando switch SDIO12:', error);
       return false;
@@ -1355,6 +1530,242 @@ class DoorControlService {
   destroy(): void {
     if (this.statusCheckInterval) {
       clearInterval(this.statusCheckInterval);
+    }
+  }
+
+  /**
+   * ===== MÉTODOS DE EMERGENCIA =====
+   */
+
+  /**
+   * Activar sistema de emergencia
+   * Envía comando permanente a las salidas configuradas
+   */
+  async activateEmergency(): Promise<boolean> {
+    try {
+      console.log('🚨 ACTIVANDO SISTEMA DE EMERGENCIA');
+      
+      const config = await emergencyService.getEmergencyConfig();
+      console.log('🔍 Configuración de emergencia obtenida:', config);
+      
+      if (!config || !config.enabled) {
+        console.error('❌ Configuración de emergencia no habilitada');
+        console.error('❌ config:', config);
+        console.error('❌ config.enabled:', config?.enabled);
+        return false;
+      }
+
+      const ip = '192.168.1.155'; // IP del servidor SCATI
+      const username = 'Scati2023';
+      const password = 'Scati2023';
+
+      console.log('🔧 Configuración de emergencia:', {
+        pcb1: config.pcb1,
+        switch1: config.switch1,
+        pcb2: config.pcb2,
+        switch2: config.switch2
+      });
+
+      try {
+        // Activar salida 1 (Placa 1)
+        console.log(`🔌 Activando salida 1: PCB ${config.pcb1}, Switch ${config.switch1}`);
+        const success1 = await this.controlSDIO12Switch(
+          ip, username, password,
+          config.pcb1, config.switch1, 'open'
+        );
+        console.log(`${success1 ? '✅' : '❌'} Salida 1: ${success1 ? 'Activada' : 'Falló'}`);
+
+        // Activar salida 2 (Placa 2)
+        console.log(`🔌 Activando salida 2: PCB ${config.pcb2}, Switch ${config.switch2}`);
+        const success2 = await this.controlSDIO12Switch(
+          ip, username, password,
+          config.pcb2, config.switch2, 'open'
+        );
+        console.log(`${success2 ? '✅' : '❌'} Salida 2: ${success2 ? 'Activada' : 'Falló'}`);
+
+        if (success1 && success2) {
+          await emergencyService.activateEmergency();
+          console.log('✅ EMERGENCIA ACTIVADA EXITOSAMENTE');
+          return true;
+        } else {
+          console.error('❌ Error activando emergencia - falló alguna salida');
+          console.error(`❌ Salida 1: ${success1}, Salida 2: ${success2}`);
+          return false;
+        }
+      } catch (switchError) {
+        console.error('❌ Error en controlSDIO12Switch:', switchError);
+        console.error('❌ Error stack:', switchError instanceof Error ? switchError.stack : 'No stack');
+        return false;
+      }
+    } catch (error) {
+      console.error('❌ Error activando emergencia:', error);
+      console.error('❌ Error tipo:', error instanceof Error ? error.constructor.name : typeof error);
+      console.error('❌ Error mensaje:', error instanceof Error ? error.message : String(error));
+      if (error instanceof Error && error.stack) {
+        console.error('❌ Error stack:', error.stack);
+      }
+      return false;
+    }
+  }
+
+  /**
+   * Desactivar sistema de emergencia
+   * Envía comando para desactivar las salidas configuradas
+   */
+  async deactivateEmergency(): Promise<boolean> {
+    try {
+      console.log('✅ DESACTIVANDO SISTEMA DE EMERGENCIA');
+      
+      const config = await emergencyService.getEmergencyConfig();
+      if (!config || !config.enabled) {
+        console.error('❌ Configuración de emergencia no habilitada');
+        return false;
+      }
+
+      const ip = '192.168.1.155'; // IP del servidor SCATI
+      const username = 'Scati2023';
+      const password = 'Scati2023';
+
+      // Desactivar salida 1 (Placa 1)
+      const success1 = await this.controlSDIO12Switch(
+        ip, username, password,
+        config.pcb1, config.switch1, 'close'
+      );
+
+      // Desactivar salida 2 (Placa 2)
+      const success2 = await this.controlSDIO12Switch(
+        ip, username, password,
+        config.pcb2, config.switch2, 'close'
+      );
+
+      if (success1 && success2) {
+        await emergencyService.deactivateEmergency();
+        console.log('✅ EMERGENCIA DESACTIVADA EXITOSAMENTE');
+        return true;
+      } else {
+        console.error('❌ Error desactivando emergencia - falló alguna salida');
+        return false;
+      }
+    } catch (error) {
+      console.error('❌ Error desactivando emergencia:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Verificar estado de emergencia
+   * Comprueba si los switches configurados están activos
+   */
+  async checkEmergencyStatus(): Promise<boolean> {
+    try {
+      const config = await emergencyService.getEmergencyConfig();
+      if (!config || !config.enabled) {
+        return false;
+      }
+
+      const ip = '192.168.1.155';
+      const username = 'Scati2023';
+      const password = 'Scati2023';
+
+      // Obtener estado de todas las salidas
+      const status = await this.getSDIO12Status(ip, username, password);
+      if (!status) {
+        console.log('⚠️ No se pudo obtener estado SDIO12 para verificar emergencia');
+        return false;
+      }
+
+      // Buscar los switches configurados
+      const switch1Tag = this.buildSDIO12Tag(config.pcb1, config.switch1);
+      const switch2Tag = this.buildSDIO12Tag(config.pcb2, config.switch2);
+
+      const switch1Status = status.tags.find(tag => tag.tag === switch1Tag);
+      const switch2Status = status.tags.find(tag => tag.tag === switch2Tag);
+
+      const switch1Active = switch1Status?.v === '1';
+      const switch2Active = switch2Status?.v === '1';
+
+      console.log('🔍 Estado de switches de emergencia:', {
+        switch1: { tag: switch1Tag, active: switch1Active },
+        switch2: { tag: switch2Tag, active: switch2Active }
+      });
+
+      // Ambos switches deben estar activos para considerar emergencia activa
+      return switch1Active && switch2Active;
+    } catch (error) {
+      console.error('❌ Error verificando estado de emergencia:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Obtener estado completo de emergencia
+   */
+  async getEmergencyStatus(): Promise<{
+    isConfigured: boolean;
+    isActive: boolean;
+    switchesStatus: {
+      switch1: { active: boolean; tag: string };
+      switch2: { active: boolean; tag: string };
+    };
+  }> {
+    try {
+      const config = await emergencyService.getEmergencyConfig();
+      const isConfigured = config?.enabled || false;
+      
+      if (!isConfigured) {
+        return {
+          isConfigured: false,
+          isActive: false,
+          switchesStatus: {
+            switch1: { active: false, tag: '' },
+            switch2: { active: false, tag: '' }
+          }
+        };
+      }
+
+      const ip = '192.168.1.155';
+      const username = 'Scati2023';
+      const password = 'Scati2023';
+
+      const status = await this.getSDIO12Status(ip, username, password);
+      if (!status) {
+        return {
+          isConfigured: true,
+          isActive: false,
+          switchesStatus: {
+            switch1: { active: false, tag: this.buildSDIO12Tag(config!.pcb1, config!.switch1) },
+            switch2: { active: false, tag: this.buildSDIO12Tag(config!.pcb2, config!.switch2) }
+          }
+        };
+      }
+
+      const switch1Tag = this.buildSDIO12Tag(config!.pcb1, config!.switch1);
+      const switch2Tag = this.buildSDIO12Tag(config!.pcb2, config!.switch2);
+
+      const switch1Status = status.tags.find(tag => tag.tag === switch1Tag);
+      const switch2Status = status.tags.find(tag => tag.tag === switch2Tag);
+
+      const switch1Active = switch1Status?.v === '1';
+      const switch2Active = switch2Status?.v === '1';
+
+      return {
+        isConfigured: true,
+        isActive: switch1Active && switch2Active,
+        switchesStatus: {
+          switch1: { active: switch1Active, tag: switch1Tag },
+          switch2: { active: switch2Active, tag: switch2Tag }
+        }
+      };
+    } catch (error) {
+      console.error('❌ Error obteniendo estado de emergencia:', error);
+      return {
+        isConfigured: false,
+        isActive: false,
+        switchesStatus: {
+          switch1: { active: false, tag: '' },
+          switch2: { active: false, tag: '' }
+        }
+      };
     }
   }
 }
