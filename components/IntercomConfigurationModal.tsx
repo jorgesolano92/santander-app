@@ -29,6 +29,7 @@ export interface IntercomConfig {
   doorControlPassword: string;
   doorControlPCB: number;
   doorControlSwitch: number;
+  hasAudio?: boolean; // Indica si la cámara tiene audio (por defecto true)
 }
 
 interface IntercomConfigurationModalProps {
@@ -63,6 +64,7 @@ const defaultIntercomConfig: IntercomConfig = {
   doorControlPassword: 'Scati2023',
   doorControlPCB: 1,
   doorControlSwitch: 1,
+  hasAudio: true, // Por defecto las cámaras tienen audio
 };
 
 export default function IntercomConfigurationModal({ 
@@ -643,6 +645,16 @@ export default function IntercomConfigurationModal({
                   onValueChange={(value) => updateConfig('enableTLS', value)}
                   trackColor={{ false: '#CED4DA', true: '#28A745' }}
                   thumbColor={config.enableTLS ? '#FFFFFF' : '#FFFFFF'}
+                />
+              </View>
+              
+              <View style={styles.switchRow}>
+                <Text style={styles.switchLabel}>Cámara con audio (RTSP)</Text>
+                <Switch
+                  value={config.hasAudio !== false}
+                  onValueChange={(value) => updateConfig('hasAudio', value)}
+                  trackColor={{ false: '#CED4DA', true: '#28A745' }}
+                  thumbColor={config.hasAudio !== false ? '#FFFFFF' : '#FFFFFF'}
                 />
               </View>
               

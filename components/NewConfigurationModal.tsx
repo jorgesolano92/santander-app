@@ -137,9 +137,9 @@ export default function NewConfigurationModal({
         }
       },
       {
-        enabled: true,
+        enabled: false,
         name: 'Puerta 3',
-        ipExterior: '192.16.1.155',
+        ipExterior: '192.168.1.155',
         ipInterior: '',
         intercom: {
           name: 'Intercomunicador Puerta 3',
@@ -165,6 +165,7 @@ export default function NewConfigurationModal({
           doorControlPCB: 1,
           doorControlSwitch: 5,
           rtspPath: 'trackID=1',
+          hasAudio: false, // Esta cámara NO tiene audio
         }
       },
       {
@@ -847,11 +848,13 @@ export default function NewConfigurationModal({
       borderColor: '#CED4DA',
       borderRadius: 4,
       overflow: 'hidden',
+      minHeight: 40,
     },
     picker: {
-      height: isSmallTablet ? 35 : isLargeTablet ? 45 : 40,
-      fontSize: isSmallTablet ? 11 : isLargeTablet ? 13 : 12,
+      height: 50,
+      width: '100%',
       color: '#495057',
+      backgroundColor: 'transparent',
     },
     emergencyNote: {
       fontSize: isSmallTablet ? 9 : isLargeTablet ? 11 : 10,
@@ -1260,6 +1263,8 @@ export default function NewConfigurationModal({
                               emergency: { ...prev.emergency, pcb1: value }
                             }))}
                             style={styles.picker}
+                            mode="dropdown"
+                            dropdownIconColor="#495057"
                           >
                             <Picker.Item label="PCB 1" value={1} />
                             <Picker.Item label="PCB 2" value={2} />
@@ -1275,6 +1280,8 @@ export default function NewConfigurationModal({
                               emergency: { ...prev.emergency, switch1: value }
                             }))}
                             style={styles.picker}
+                            mode="dropdown"
+                            dropdownIconColor="#495057"
                           >
                             {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(num => (
                               <Picker.Item key={num} label={`Switch ${num}`} value={num} />
@@ -1295,6 +1302,8 @@ export default function NewConfigurationModal({
                               emergency: { ...prev.emergency, pcb2: value }
                             }))}
                             style={styles.picker}
+                            mode="dropdown"
+                            dropdownIconColor="#495057"
                           >
                             <Picker.Item label="PCB 1" value={1} />
                             <Picker.Item label="PCB 2" value={2} />
@@ -1310,6 +1319,8 @@ export default function NewConfigurationModal({
                               emergency: { ...prev.emergency, switch2: value }
                             }))}
                             style={styles.picker}
+                            mode="dropdown"
+                            dropdownIconColor="#495057"
                           >
                             {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(num => (
                               <Picker.Item key={num} label={`Switch ${num}`} value={num} />

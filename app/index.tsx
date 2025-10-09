@@ -259,6 +259,16 @@ export default function MainScreen() {
     
     // Recargar la configuración del sistema después de guardar
     await reloadSystemConfig();
+    
+    // Actualizar el badge de modo proxy
+    try {
+      const [useProxy, base] = await Promise.all([getUseServerProxy(), getProxyBaseUrl()]);
+      setUseServerProxyBadge(useProxy);
+      setProxyBaseUrl(base);
+      console.log('🔄 Badge actualizado:', useProxy ? 'PROXY' : 'DIRECTO');
+    } catch (error) {
+      console.error('❌ Error actualizando badge:', error);
+    }
   };
 
   const handleLoginSuccess = () => {

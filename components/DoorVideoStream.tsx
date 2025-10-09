@@ -434,6 +434,16 @@ export default function DoorVideoStream({ intercomConfig, doorName }: DoorVideoS
                 style={styles.videoElement}
                 controls={true}
                 resizeMode="contain"
+                audioOnly={false}
+                muted={intercomConfig.hasAudio === false}
+                ignoreSilentSwitch="ignore"
+                playInBackground={false}
+                playWhenInactive={false}
+                {...(intercomConfig.hasAudio === false && {
+                  selectedAudioTrack: {
+                    type: "disabled"
+                  }
+                })}
                 bufferConfig={{
                   minBufferMs: 2500,
                   maxBufferMs: 5000,
@@ -443,15 +453,22 @@ export default function DoorVideoStream({ intercomConfig, doorName }: DoorVideoS
                 onError={(error) => {
                   console.error('❌ Error en Video RTSP:', error);
                   console.error('❌ Detalles del error:', JSON.stringify(error, null, 2));
+                  console.error('❌ URL RTSP:', getRTSPUrl().replace(/:[^:@]+@/, ':****@'));
+                  console.error('❌ Audio configurado:', intercomConfig.hasAudio !== false ? 'SÍ' : 'NO');
                   setStreamError('Error reproduciendo video RTSP');
                   setIsStreaming(false);
                 }}
                 onLoad={() => {
                   console.log('✅ Video RTSP cargado correctamente');
+                  console.log('✅ URL:', getRTSPUrl().replace(/:[^:@]+@/, ':****@'));
+                  console.log('✅ Audio:', intercomConfig.hasAudio !== false ? 'Habilitado' : 'Deshabilitado');
                   setStreamError(null);
                 }}
                 onBuffer={(buffer) => {
                   console.log('📊 Buffer status:', buffer);
+                }}
+                onReadyForDisplay={() => {
+                  console.log('📺 Video listo para mostrar');
                 }}
               />
             ) : (
