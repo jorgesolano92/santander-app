@@ -42,10 +42,19 @@ export function useDoorControl(): UseDoorControlReturn {
   const [currentScheduleMode, setCurrentScheduleMode] = useState<string | null>(null);
   const [sipCallState, setSipCallState] = useState<SipCallState | null>(null);
   const [activeSipCallDoorId, setActiveSipCallDoorId] = useState<string | null>(null);
+  const isUpdatingStatusRef = useRef<boolean>(false);
 
   const updateSystemStatus = useCallback(async (showLoader: boolean = false) => {
+    // Evitar llamadas concurrentes
+    if (isUpdatingStatusRef.current) {
+      console.log('⚠️ updateSystemStatus ya en ejecución - omitiendo llamada');
+      return;
+    }
+
     try {
       if (!isMountedRef.current) return;
+      
+      isUpdatingStatusRef.current = true;
       
       if (showLoader) {
         setIsLoading(true);
@@ -57,28 +66,39 @@ export function useDoorControl(): UseDoorControlReturn {
       
       if (!isMountedRef.current) return;
       
-      // Primero verificar si la emergencia está habilitada en la configuración
+      // Verificar el estado de emergencia desde AsyncStorage (rápido, sin petición al servidor)
+      const emergencyState = await emergencyService.getEmergencyState();
+      const isEmergencyActiveLocal = emergencyState?.isActive || false;
       const emergencyConfig = await emergencyService.getEmergencyConfig();
+      
       let updatedStatus = {
         ...status,
-        emergencyActive: false,
+        emergencyActive: isEmergencyActiveLocal, // Usar estado local
         emergencyConfigured: emergencyConfig?.enabled || false
       };
       
-      // Solo obtener estado de emergencia si está habilitada
-      if (emergencyConfig?.enabled) {
-        const emergencyStatus = await doorControlService.getEmergencyStatus();
-        updatedStatus = {
-          ...status,
-          emergencyActive: emergencyStatus.isActive,
-          emergencyConfigured: emergencyStatus.isConfigured
-        };
-        
-        // Log del estado de emergencia
-        console.log('🔍 Estado de emergencia:', {
-          isActive: emergencyStatus.isActive,
-          switches: emergencyStatus.switchesStatus
-        });
+      // Solo verificar estado SDIO12 si la emergencia está ACTIVA (para confirmar que los switches siguen activos)
+      if (isEmergencyActiveLocal) {
+        console.log('🔍 Emergencia activa localmente - verificando estado SDIO12...');
+        try {
+          const emergencyStatus = await doorControlService.getEmergencyStatus();
+          
+          // Log del estado de emergencia
+          console.log('🔍 Estado verificado en SDIO12:', {
+            isActive: emergencyStatus.isActive,
+            switches: emergencyStatus.switchesStatus
+          });
+          
+          // Si los switches ya NO están activos, desactivar emergencia automáticamente
+          if (!emergencyStatus.isActive) {
+            console.log('⚠️ Switches desactivados - desactivando emergencia automáticamente');
+            await emergencyService.deactivateEmergency();
+            updatedStatus.emergencyActive = false;
+          }
+        } catch (error) {
+          console.error('❌ Error verificando estado SDIO12 de emergencia:', error);
+          // Mantener estado local si hay error en la verificación
+        }
       }
       
       setSystemStatus(updatedStatus);
@@ -95,6 +115,7 @@ export function useDoorControl(): UseDoorControlReturn {
         setConnectionStatus('disconnected');
       }
     } finally {
+      isUpdatingStatusRef.current = false;
       if (isMountedRef.current && showLoader) {
         setIsLoading(false);
       }
@@ -451,13 +472,16 @@ export function useDoorControl(): UseDoorControlReturn {
     let interval: NodeJS.Timeout;
     
     if (connectionStatus === 'connected') {
+      console.log('🔄 Iniciando intervalo de actualización cada 5 segundos');
       interval = setInterval(() => {
+        console.log('⏰ Ejecutando actualización periódica del sistema');
         updateSystemStatus(false); // NO mostrar loader en actualizaciones periódicas
       }, 5000); // Refresh every 5 seconds
     }
     
     return () => {
       if (interval) {
+        console.log('🛑 Deteniendo intervalo de actualización');
         clearInterval(interval);
       }
     };

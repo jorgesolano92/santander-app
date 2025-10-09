@@ -23,9 +23,9 @@ export async function setUseServerProxy(value: boolean): Promise<void> {
 export async function getProxyBaseUrl(): Promise<string> {
 	try {
 		const url = await AsyncStorage.getItem(PROXY_BASE_URL_KEY);
-		return url || 'http://localhost:3001';
+		return url || 'http://10.147.17.74:3001';
 	} catch {
-		return 'http://localhost:3001';
+		return 'http://10.147.17.74:3001';
 	}
 }
 

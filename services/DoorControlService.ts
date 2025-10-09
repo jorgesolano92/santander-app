@@ -1534,6 +1534,75 @@ class DoorControlService {
   }
 
   /**
+   * ===== MÉTODOS DE CONTROL DE PUERTA CON PULSO =====
+   */
+
+  /**
+   * Abrir puerta con control automático o manual
+   * - Modo Manual (manualMode = true): Envía comando y mantiene estado
+   * - Modo Automático (manualMode = false): Envía pulso temporal (abre y cierra)
+   */
+  async openDoorWithPulse(
+    ip: string,
+    username: string,
+    password: string,
+    pcb: number,
+    switchNum: number,
+    manualMode: boolean = false,
+    pulseTime: number = 1.0
+  ): Promise<boolean> {
+    try {
+      console.log(`🚪 Control de puerta - Modo: ${manualMode ? 'Manual (permanente)' : 'Automático (pulso)'}`);
+      console.log(`🔧 PCB: ${pcb}, Switch: ${switchNum}, Tiempo: ${pulseTime}s`);
+
+      // Enviar comando de apertura (activar relé)
+      console.log('🔓 Enviando comando de apertura (St: 1001)...');
+      const openSuccess = await this.controlSDIO12Switch(
+        ip, username, password,
+        pcb, switchNum, 'open'
+      );
+
+      if (!openSuccess) {
+        console.error('❌ Error - comando de apertura falló');
+        return false;
+      }
+
+      console.log('✅ Comando de apertura enviado');
+
+      // Si es modo AUTOMÁTICO (pulso temporal), esperar y cerrar
+      if (!manualMode) {
+        console.log(`⏳ Modo automático - Esperando ${pulseTime}s para cerrar...`);
+        
+        // Esperar el tiempo configurado
+        await new Promise(resolve => setTimeout(resolve, pulseTime * 1000));
+        
+        console.log('🔒 Enviando comando de cierre automático (St: 1000)...');
+        
+        // Enviar comando de cierre (desactivar relé)
+        const closeSuccess = await this.controlSDIO12Switch(
+          ip, username, password,
+          pcb, switchNum, 'close'
+        );
+
+        if (closeSuccess) {
+          console.log('✅ Puerta cerrada automáticamente');
+        } else {
+          console.error('⚠️ Error cerrando puerta automáticamente');
+        }
+
+        return closeSuccess;
+      } else {
+        // Modo MANUAL - mantener estado abierto
+        console.log('ℹ️ Modo manual - Puerta permanece abierta hasta cerrar manualmente');
+        return true;
+      }
+    } catch (error) {
+      console.error('❌ Error en openDoorWithPulse:', error);
+      return false;
+    }
+  }
+
+  /**
    * ===== MÉTODOS DE EMERGENCIA =====
    */
 

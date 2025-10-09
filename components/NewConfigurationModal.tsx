@@ -84,8 +84,8 @@ export default function NewConfigurationModal({
           cameraIP: '192.168.1.117',
           httpPort: 80,
           httpsPort: 443,
-          onvifUsername: 'admin',
-          onvifPassword: 'Santander@Notoca',
+          onvifUsername: 'ceroideas',
+          onvifPassword: '12345678',
           rtspPort: 554,
           videoProfile: 'MainStream',
           snapshotPath: 'ISAPI/Streaming/channels/101/picture',
@@ -103,6 +103,9 @@ export default function NewConfigurationModal({
           doorControlPCB: 1,
           doorControlSwitch: 5,
           rtspPath: 'profile1',
+          doorControlManualMode: false, // Pulso automático
+          doorControlPulseTime: 1.0,
+          hasAudio: true,
         }
       },
       {
@@ -134,12 +137,15 @@ export default function NewConfigurationModal({
           doorControlPCB: 2,
           doorControlSwitch: 10,
           rtspPath: 'axis-media/media.amp?videocodec=h264&audio=1',
+          doorControlManualMode: true, // Modo manual
+          doorControlPulseTime: 1.0,
+          hasAudio: true,
         }
       },
       {
         enabled: false,
         name: 'Puerta 3',
-        ipExterior: '192.168.1.155',
+        ipExterior: '192.16.1.155',
         ipInterior: '',
         intercom: {
           name: 'Intercomunicador Puerta 3',
@@ -245,7 +251,7 @@ export default function NewConfigurationModal({
     },
     officeWithATM: false,
     emergency: {
-      enabled: false,
+      enabled: true,
       pcb1: 2,
       switch1: 1,
       pcb2: 3,

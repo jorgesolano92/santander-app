@@ -30,6 +30,8 @@ export interface IntercomConfig {
   doorControlPCB: number;
   doorControlSwitch: number;
   hasAudio?: boolean; // Indica si la cámara tiene audio (por defecto true)
+  doorControlManualMode?: boolean; // true = control manual (permanente), false = pulso automático (temporal)
+  doorControlPulseTime?: number; // Tiempo de pulso en segundos (por defecto 1.0)
 }
 
 interface IntercomConfigurationModalProps {
@@ -65,6 +67,8 @@ const defaultIntercomConfig: IntercomConfig = {
   doorControlPCB: 1,
   doorControlSwitch: 1,
   hasAudio: true, // Por defecto las cámaras tienen audio
+  doorControlManualMode: false, // Por defecto pulso automático
+  doorControlPulseTime: 1.0, // 1 segundo por defecto
 };
 
 export default function IntercomConfigurationModal({ 
@@ -657,6 +661,32 @@ export default function IntercomConfigurationModal({
                   thumbColor={config.hasAudio !== false ? '#FFFFFF' : '#FFFFFF'}
                 />
               </View>
+              
+              <View style={styles.switchRow}>
+                <Text style={styles.switchLabel}>Control manual de puerta</Text>
+                <Switch
+                  value={config.doorControlManualMode !== false}
+                  onValueChange={(value) => updateConfig('doorControlManualMode', value)}
+                  trackColor={{ false: '#CED4DA', true: '#FFC107' }}
+                  thumbColor={config.doorControlManualMode !== false ? '#FFFFFF' : '#FFFFFF'}
+                />
+              </View>
+              
+              {config.doorControlManualMode === false && (
+                <View style={styles.inputRow}>
+                  <Text style={styles.inputLabel}>Tiempo de pulso (seg):</Text>
+                  <TextInput
+                    style={styles.textInput}
+                    value={config.doorControlPulseTime?.toString() || '1.0'}
+                    onChangeText={(value) => {
+                      const numValue = parseFloat(value) || 1.0;
+                      updateConfig('doorControlPulseTime', Math.max(0.1, Math.min(10, numValue)));
+                    }}
+                    keyboardType="decimal-pad"
+                    placeholder="1.0"
+                  />
+                </View>
+              )}
               
               <View style={styles.inputRow}>
                 <Text style={styles.inputLabel}>Resolución:</Text>

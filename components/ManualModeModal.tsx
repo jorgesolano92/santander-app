@@ -7,6 +7,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useDoorControl } from '@/hooks/useDoorControl';
 import DoorVideoStream from './DoorVideoStream';
 import { IntercomConfig } from './IntercomConfigurationModal';
+import { doorControlService } from '@/services/DoorControlService';
 
 interface DoorConfig {
   enabled: boolean;
@@ -57,6 +58,7 @@ export default function ManualModeModal({
   // Estado local para la configuración de puertas
   const [currentIntercomConfigs, setCurrentIntercomConfigs] = useState<DoorConfig[]>(intercomConfigs || []);
   const [cameraConfigs, setCameraConfigs] = useState<DoorConfig[]>([]);
+  const [sendingPulse, setSendingPulse] = useState<Set<string>>(new Set()); // Track puertas con pulso en proceso
   
   // Filter enabled doors for styling calculations
   const enabledDoors = currentIntercomConfigs.filter(door => door.enabled);
@@ -169,16 +171,81 @@ export default function ManualModeModal({
   };
 
   const handleOpenDoor = async (doorId: 'P1' | 'P2', doorName: string) => {
-    const door = getDoorStatus(doorId);
-    const action = door.isOpen ? 'close' : 'open';
-    const actionText = action === 'open' ? 'Abrir' : 'Cerrar';
-    
-    console.log(`🚪 ${actionText} ${doorName}`);
-    const success = await controlDoor(doorId, action);
-    if (success) {
-      console.log(`✅ ${doorName} - Comando ${actionText.toLowerCase()} ejecutado correctamente`);
-    } else {
-      console.error(`❌ Error ${actionText.toLowerCase()} ${doorName}`);
+    try {
+      // Obtener configuración de la puerta
+      const doorIndex = doorId === 'P1' ? 0 : 1;
+      const doorConfig = intercomConfigs[doorIndex];
+      
+      if (!doorConfig || !doorConfig.intercom) {
+        console.error(`❌ No hay configuración para ${doorName}`);
+        return;
+      }
+
+      const { 
+        doorControlPCB, 
+        doorControlSwitch, 
+        doorControlManualMode, 
+        doorControlPulseTime 
+      } = doorConfig.intercom;
+      
+      const ip = '192.168.1.155'; // IP del servidor SCATI
+      const username = 'Scati2023';
+      const password = 'Scati2023';
+
+      console.log(`🚪 ${doorName} - Modo: ${doorControlManualMode ? 'Manual' : 'Automático'}`);
+      console.log(`🔧 PCB ${doorControlPCB}, Switch ${doorControlSwitch}`);
+
+      // Si es modo MANUAL, alternar entre abrir/cerrar
+      if (doorControlManualMode) {
+        const door = getDoorStatus(doorId);
+        const action = door.isOpen ? 'close' : 'open';
+        const actionText = action === 'open' ? 'Abrir' : 'Cerrar';
+        
+        console.log(`🚪 ${actionText} ${doorName} (Manual)`);
+        const success = await controlDoor(doorId, action);
+        if (success) {
+          console.log(`✅ ${doorName} - Comando ${actionText.toLowerCase()} ejecutado`);
+        } else {
+          console.error(`❌ Error ${actionText.toLowerCase()} ${doorName}`);
+        }
+      } else {
+        // Modo AUTOMÁTICO - usar método de pulso
+        console.log(`🚪 Abriendo ${doorName} (Pulso automático)`);
+        
+        // Agregar puerta al set de puertas enviando pulso
+        setSendingPulse(prev => new Set(prev).add(doorId));
+        
+        const success = await doorControlService.openDoorWithPulse(
+          ip,
+          username,
+          password,
+          doorControlPCB,
+          doorControlSwitch,
+          false, // manualMode = false para pulso automático
+          doorControlPulseTime || 1.0
+        );
+
+        // Remover puerta del set después del pulso
+        setSendingPulse(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(doorId);
+          return newSet;
+        });
+
+        if (success) {
+          console.log(`✅ ${doorName} - Pulso ejecutado correctamente`);
+        } else {
+          console.error(`❌ Error ejecutando pulso en ${doorName}`);
+        }
+      }
+    } catch (error) {
+      console.error(`❌ Error en handleOpenDoor:`, error);
+      // Limpiar estado de pulso en caso de error
+      setSendingPulse(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(doorId);
+        return newSet;
+      });
     }
   };
 
@@ -188,6 +255,31 @@ export default function ManualModeModal({
     setTimeout(() => {
       onEmergency(); // Luego activar emergencia
     }, 100); // Pequeño delay para que se cierre suavemente
+  };
+
+  const getDoorButtonTextLocal = (doorId: 'P1' | 'P2'): string => {
+    const doorIndex = doorId === 'P1' ? 0 : 1;
+    const doorConfig = intercomConfigs[doorIndex];
+    
+    if (!doorConfig || !doorConfig.intercom) {
+      return 'ABRIR';
+    }
+
+    const { doorControlManualMode } = doorConfig.intercom;
+    
+    // Si está enviando pulso, mostrar feedback
+    if (sendingPulse.has(doorId)) {
+      return 'ENVIANDO PULSO...';
+    }
+    
+    // Modo AUTOMÁTICO - siempre muestra "ABRIR" (pulso automático)
+    if (!doorControlManualMode) {
+      return 'ABRIR PUERTA';
+    }
+    
+    // Modo MANUAL - alterna entre ABRIR/CERRAR según estado
+    const door = getDoorStatus(doorId);
+    return door.isOpen ? 'CERRAR PUERTA' : 'ABRIR PUERTA';
   };
 
   const handleMuteMicrophone = async () => {
@@ -644,7 +736,7 @@ export default function ManualModeModal({
                           (isDoorButtonDisabled(doorId) || isDoorVerifying(doorId)) && styles.doorControlButtonDisabled
                         ]}
                         onPress={() => handleOpenDoor(doorId as 'P1' | 'P2', door.name)}
-                        disabled={isDoorButtonDisabled(doorId) || isDoorVerifying(doorId)}
+                        disabled={isDoorButtonDisabled(doorId) || isDoorVerifying(doorId) || sendingPulse.has(doorId)}
                       >
                         {isDoorVerifying(doorId) ? (
                           <>
@@ -659,6 +751,19 @@ export default function ManualModeModal({
                               VERIFICANDO...
                             </Text>
                           </>
+                        ) : sendingPulse.has(doorId) ? (
+                          <>
+                            <ActivityIndicator 
+                              size="small" 
+                              color="#FFC107"
+                            />
+                            <Text style={[
+                              styles.doorControlButtonText,
+                              { color: '#FFC107' }
+                            ]}>
+                              {getDoorButtonTextLocal(doorId as 'P1' | 'P2')}
+                            </Text>
+                          </>
                         ) : (
                           <>
                             <DoorOpen 
@@ -669,7 +774,7 @@ export default function ManualModeModal({
                               styles.doorControlButtonText,
                               getDoorStatus(doorId).isOpen && styles.doorControlButtonCloseText
                             ]}>
-                              {getDoorButtonText(doorId)}
+                              {getDoorButtonTextLocal(doorId as 'P1' | 'P2')}
                             </Text>
                           </>
                         )}

@@ -140,8 +140,8 @@ export default function MainScreen() {
   const [showAxisTestModal, setShowAxisTestModal] = useState(false);
   // const [isSandboxMode, setIsSandboxMode] = useState(false); // Modo sandbox deshabilitado permanentemente
   const [systemConfig, setSystemConfig] = useState<SystemConfig | null>(null);
-  const [useServerProxyBadge, setUseServerProxyBadge] = useState<boolean>(true);
-  const [proxyBaseUrl, setProxyBaseUrl] = useState<string>('http://localhost:3001');
+  const [useServerProxyBadge, setUseServerProxyBadge] = useState<boolean>(false);
+  const [proxyBaseUrl, setProxyBaseUrl] = useState<string>('http://10.147.17.74:3001');
 
   // Actualizar fecha y hora cada segundo
   useEffect(() => {
