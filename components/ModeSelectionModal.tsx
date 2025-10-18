@@ -194,15 +194,13 @@ export default function ModeSelectionModal({ visible, onClose, onModeSelect }: M
     setSelectedMode(modeId);
     selectedModeRef.current = modeId;
     
-    // Reiniciar contador cuando cambia el modo
-    if (isModalReady) {
-      console.log('🔄 Reiniciando contador por cambio de modo');
-      startCountdown();
-    }
+    // NO reiniciar contador cuando cambia el modo - mantener el tiempo restante
+    console.log('🎯 Modo cambiado, manteniendo contador actual');
   };
 
   const handleActivate = () => {
     console.log('✅ Activación manual del modo:', selectedMode);
+    console.log('🔧 Estado del contador:', { countdown, isCountdownActive });
     clearCountdown();
     onModeSelect(selectedMode);
   };
@@ -525,7 +523,7 @@ export default function ModeSelectionModal({ visible, onClose, onModeSelect }: M
 
               {/* Activate Button */}
               <TouchableOpacity style={styles.activateButton} onPress={handleActivate}>
-                {isCountdownActive && (
+                {isCountdownActive && countdown > 0 && (
                   <View 
                     style={[
                       styles.progressBar, 

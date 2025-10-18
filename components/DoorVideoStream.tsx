@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Alert, Platform } from 'react-native';
-import { Play, Square, Camera, Wifi, WifiOff } from 'lucide-react-native';
+import { Maximize, Camera, Wifi, WifiOff } from 'lucide-react-native';
 import Video from 'react-native-video';
 import { IntercomConfig } from './IntercomConfigurationModal';
 import { getProxyBaseUrl, getUseServerProxy } from '../services/AppMode';
@@ -19,6 +19,7 @@ export default function DoorVideoStream({ intercomConfig, doorName }: DoorVideoS
   const [hlsUrl, setHlsUrl] = useState<string>('');
   const [proxyBaseUrl, setProxyBaseUrl] = useState<string>('http://localhost:3001');
   const [useServerProxy, setUseServerProxy] = useState<boolean>(true);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   useEffect(() => {
     (async () => {
       const [base, useProxy] = await Promise.all([getProxyBaseUrl(), getUseServerProxy()]);
@@ -27,7 +28,9 @@ export default function DoorVideoStream({ intercomConfig, doorName }: DoorVideoS
     })();
   }, []);
   const videoRef = useRef<any>(null);
+  const nativeVideoRef = useRef<any>(null); // Ref para el Video de react-native-video
   const hlsRef = useRef<any>(null);
+  const hasAutoStarted = useRef(false);
 
   // Verificar estado de la cámara al montar
   useEffect(() => {
@@ -39,6 +42,33 @@ export default function DoorVideoStream({ intercomConfig, doorName }: DoorVideoS
       setStreamError('No hay IP de cámara configurada');
     }
   }, [intercomConfig.cameraIP]);
+
+  // Iniciar stream automáticamente al montar y cerrar al desmontar
+  useEffect(() => {
+    let isMounted = true;
+
+    const initStream = async () => {
+      if (isMounted && intercomConfig.cameraIP && !hasAutoStarted.current) {
+        hasAutoStarted.current = true;
+        await startStream();
+      }
+    };
+
+    // Iniciar stream después de un pequeño delay para asegurar que todo esté cargado
+    const timer = setTimeout(() => {
+      initStream();
+    }, 500);
+
+    // Cleanup: detener el stream al desmontar
+    return () => {
+      isMounted = false;
+      clearTimeout(timer);
+      // Detener el stream al desmontar el componente
+      if (hasAutoStarted.current) {
+        stopStream();
+      }
+    };
+  }, []); // Solo ejecutar al montar/desmontar
 
   // Verificar periódicamente si el archivo HLS está disponible
   useEffect(() => {
@@ -375,6 +405,33 @@ export default function DoorVideoStream({ intercomConfig, doorName }: DoorVideoS
     }
   };
 
+  const toggleFullscreen = () => {
+    if (Platform.OS === 'android' && nativeVideoRef.current) {
+      // En Android, usar react-native-video para pantalla completa nativa
+      console.log('🖥️ Alternando pantalla completa en Android');
+      nativeVideoRef.current.presentFullscreenPlayer();
+    } else if (Platform.OS === 'web' && videoRef.current) {
+      // En Web, usar Fullscreen API
+      if (!document.fullscreenElement) {
+        if (videoRef.current.requestFullscreen) {
+          videoRef.current.requestFullscreen();
+        } else if (videoRef.current.webkitRequestFullscreen) {
+          videoRef.current.webkitRequestFullscreen();
+        } else if (videoRef.current.mozRequestFullScreen) {
+          videoRef.current.mozRequestFullScreen();
+        } else if (videoRef.current.msRequestFullscreen) {
+          videoRef.current.msRequestFullscreen();
+        }
+      } else {
+        if (document.exitFullscreen) {
+          document.exitFullscreen();
+        }
+      }
+    } else {
+      Alert.alert('Info', 'Pantalla completa no disponible en esta plataforma');
+    }
+  };
+
   const getRTSPUrl = () => {
     // Para RTSP, necesitamos encoding especial para caracteres especiales en password
     // No usar encodeURIComponent porque el parser RTSP lo interpreta mal
@@ -420,19 +477,21 @@ export default function DoorVideoStream({ intercomConfig, doorName }: DoorVideoS
               <video
                 ref={videoRef}
                 style={styles.videoElement as any}
-                controls
+                controls={false}
                 autoPlay
                 muted
                 playsInline
               />
             ) : !useServerProxy && Platform.OS === 'android' ? (
               <Video
+                ref={nativeVideoRef}
                 source={{ 
                   uri: getRTSPUrl(),
                   type: 'rtsp'
                 }}
                 style={styles.videoElement}
-                controls={true}
+                controls={false}
+                fullscreen={isFullscreen}
                 resizeMode="contain"
                 audioOnly={false}
                 muted={intercomConfig.hasAudio === false}
@@ -470,6 +529,14 @@ export default function DoorVideoStream({ intercomConfig, doorName }: DoorVideoS
                 onReadyForDisplay={() => {
                   console.log('📺 Video listo para mostrar');
                 }}
+                onFullscreenPlayerWillPresent={() => {
+                  console.log('🖥️ Entrando a pantalla completa');
+                  setIsFullscreen(true);
+                }}
+                onFullscreenPlayerWillDismiss={() => {
+                  console.log('🖥️ Saliendo de pantalla completa');
+                  setIsFullscreen(false);
+                }}
               />
             ) : (
               <View style={styles.loadingContainer}>
@@ -502,32 +569,25 @@ export default function DoorVideoStream({ intercomConfig, doorName }: DoorVideoS
 
       {/* Control Buttons */}
       <View style={styles.controlsContainer}>
-        {!isStreaming ? (
-          <TouchableOpacity
-            style={[styles.controlButton, styles.startButton]}
-            onPress={startStream}
-            disabled={isLoading || cameraStatus === 'offline'}
-          >
-            <Play size={16} color="#FFFFFF" />
-            <Text style={styles.controlButtonText}>
-              {isLoading ? 'INICIANDO...' : 'INICIAR STREAM'}
-            </Text>
-          </TouchableOpacity>
-        ) : (
-          <TouchableOpacity
-            style={[styles.controlButton, styles.stopButton]}
-            onPress={stopStream}
-            disabled={isLoading}
-          >
-            <Square size={16} color="#FFFFFF" />
-            <Text style={styles.controlButtonText}>
-              {isLoading ? 'DETENIENDO...' : 'DETENER STREAM'}
-            </Text>
-          </TouchableOpacity>
-        )}
+        <TouchableOpacity
+          style={[
+            styles.controlButton, 
+            styles.fullscreenButton,
+            !isStreaming && styles.controlButtonDisabled
+          ]}
+          onPress={toggleFullscreen}
+          disabled={!isStreaming}
+        >
+          <Maximize size={16} color="#FFFFFF" />
+          <Text style={styles.controlButtonText}>PANTALLA COMPLETA</Text>
+        </TouchableOpacity>
 
         <TouchableOpacity
-          style={[styles.controlButton, styles.snapshotButton]}
+          style={[
+            styles.controlButton, 
+            styles.snapshotButton,
+            cameraStatus === 'offline' && styles.controlButtonDisabled
+          ]}
           onPress={takeSnapshot}
           disabled={cameraStatus === 'offline'}
         >
@@ -679,14 +739,14 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     gap: 6,
   },
-  startButton: {
-    backgroundColor: '#28A745',
-  },
-  stopButton: {
-    backgroundColor: '#DC3545',
+  fullscreenButton: {
+    backgroundColor: '#6C757D',
   },
   snapshotButton: {
     backgroundColor: '#007BFF',
+  },
+  controlButtonDisabled: {
+    opacity: 0.5,
   },
   controlButtonText: {
     color: '#FFFFFF',

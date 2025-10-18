@@ -142,6 +142,7 @@ export default function MainScreen() {
   const [systemConfig, setSystemConfig] = useState<SystemConfig | null>(null);
   const [useServerProxyBadge, setUseServerProxyBadge] = useState<boolean>(false);
   const [proxyBaseUrl, setProxyBaseUrl] = useState<string>('http://10.147.17.74:3001');
+  const [emergencyFlashColor, setEmergencyFlashColor] = useState<string>('#F8F9FA');
 
   // Actualizar fecha y hora cada segundo
   useEffect(() => {
@@ -217,6 +218,24 @@ export default function MainScreen() {
     }
   }, [currentScheduleMode]);
 
+  // Efecto de parpadeo en emergencia
+  useEffect(() => {
+    if (isEmergencyActive) {
+      // Alternar entre rojo y blanco cada segundo
+      const flashTimer = setInterval(() => {
+        setEmergencyFlashColor(prev => prev === '#DC3545' ? '#FFFFFF' : '#DC3545');
+      }, 1000);
+
+      // Asegurar que empieza en rojo
+      setEmergencyFlashColor('#DC3545');
+
+      return () => clearInterval(flashTimer);
+    } else {
+      // Resetear al color original cuando no hay emergencia
+      setEmergencyFlashColor('#F8F9FA');
+    }
+  }, [isEmergencyActive]);
+
   // Validar dispositivo al iniciar
   useEffect(() => {
     const checkDevice = async () => {
@@ -282,6 +301,7 @@ export default function MainScreen() {
       'comercial_automatico': 'COMERCIAL AUTOMÁTICO',
       'comercial_esclusa': 'COMERCIAL ESCLUSA',
       'horario_extendido': 'HORARIO EXTENDIDO',
+      'horario_autoservicio': 'HORARIO AUTOSERVICIO',
       'horario_manual': 'HORARIO MANUAL',
       'oficina_cerrada': 'OFICINA CERRADA',
       'carga_cajero': 'CARGA DE CAJERO',
@@ -983,7 +1003,7 @@ export default function MainScreen() {
 
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: emergencyFlashColor }]}>
       {/* Header */}
       <View style={styles.header}>
         {/* Left Section */}

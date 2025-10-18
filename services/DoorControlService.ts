@@ -139,7 +139,7 @@ class DoorControlService {
   private config: ConfigurationData | null = null;
   private connectionStatus: 'online' | 'offline' = 'offline';
   private statusCheckInterval: ReturnType<typeof setInterval> | null = null;
-  private sandboxMode: boolean = false; // Modo sandbox deshabilitado permanentemente
+  private sandboxMode: boolean = true; // Modo sandbox habilitado permanentemente
   private mockSystemStatus: SystemStatus;
   private lastEventId: number = 0;
   private lastChangeTime: number = 0;
@@ -726,7 +726,9 @@ class DoorControlService {
         await new Promise(resolve => setTimeout(resolve, 1000));
         
         // Actualizar estado simulado
-        this.mockSystemStatus.mode = iniToModeNameMap[iniNumber] || mode;
+        const newMode = iniToModeNameMap[iniNumber] || mode;
+        console.log(`🔄 Actualizando modo: ${this.mockSystemStatus.mode} -> ${newMode}`);
+        this.mockSystemStatus.mode = newMode;
         this.mockSystemStatus.lastSync = new Date().toISOString();
         
         // Simular lógica específica por modo
