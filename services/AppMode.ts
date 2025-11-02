@@ -7,12 +7,14 @@ export async function getUseServerProxy(): Promise<boolean> {
 	try {
 		const val = await AsyncStorage.getItem(USE_SERVER_PROXY_KEY);
 		if (val === null) {
-			// Usar proxy por defecto en web, directo en React Native
-			return typeof window !== 'undefined'; // true en web, false en React Native
+			// FORZAR modo directo en Android para evitar problemas de red
+			console.log('🔧 Configurando modo DIRECTO por defecto en Android');
+			return false; // SIEMPRE directo en React Native/Android
 		}
 		return val === 'true';
 	} catch {
-		return typeof window !== 'undefined'; // true en web, false en React Native
+		console.log('🔧 Error leyendo configuración, usando modo DIRECTO');
+		return false; // SIEMPRE directo en React Native/Android
 	}
 }
 

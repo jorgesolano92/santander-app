@@ -32,6 +32,8 @@ export interface IntercomConfig {
   hasAudio?: boolean; // Indica si la cámara tiene audio (por defecto true)
   doorControlManualMode?: boolean; // true = control manual (permanente), false = pulso automático (temporal)
   doorControlPulseTime?: number; // Tiempo de pulso en segundos (por defecto 1.0)
+  deviceType?: 'AXIS-I8116-E' | 'SAFIRE' | 'GENERIC'; // Tipo de dispositivo para control de audio
+  supportsIntercom?: boolean; // true si soporta intercomunicación bidireccional
 }
 
 interface IntercomConfigurationModalProps {

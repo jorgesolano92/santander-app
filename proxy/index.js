@@ -1,13 +1,14 @@
 const express = require('express');
-const axios = require('axios');
-const https = require('https');
-const crypto = require('crypto');
 const { spawn } = require('child_process');
-const fs = require('fs');
 const path = require('path');
-const app = express();
+const fs = require('fs');
+const axios = require('axios');
 
-// Middleware para CORS
+const app = express();
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+
+// CORS middleware
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
@@ -20,575 +21,514 @@ app.use((req, res, next) => {
   }
 });
 
-// Middleware para parsear JSON
-app.use(express.json());
+// Estado de streams de video
+const streams = new Map();
 
-// Configuración para ignorar certificados SSL autofirmados (solo para desarrollo)
-const httpsAgent = new https.Agent({
-  rejectUnauthorized: false,
+// ===== RUTAS DE VIDEO =====
+
+// Obtener snapshot
+app.get('/camera', async (req, res) => {
+  try {
+    const { ip, username, password } = req.query;
+    
+    if (!ip) {
+      return res.status(400).json({ error: 'Falta el parámetro IP' });
+    }
+
+    const auth = Buffer.from(`${username || 'admin'}:${password || 'admin'}`).toString('base64');
+    const snapshotUrl = `http://${ip}/cgi-bin/snapshot.cgi`;
+
+    const response = await axios.get(snapshotUrl, {
+      headers: {
+        'Authorization': `Basic ${auth}`
+      },
+      responseType: 'arraybuffer',
+      timeout: 5000
+    });
+
+    res.set('Content-Type', 'image/jpeg');
+    res.send(response.data);
+
+  } catch (error) {
+    console.error('Error obteniendo snapshot:', error.message);
+    res.status(500).json({ error: 'Error obteniendo snapshot' });
+  }
 });
 
-// Crear directorio para archivos HLS
-const hlsDir = path.join(__dirname, 'hls');
-if (!fs.existsSync(hlsDir)) {
-  fs.mkdirSync(hlsDir);
-}
+// Iniciar stream RTSP a HLS
+app.get('/start-stream', (req, res) => {
+  try {
+    const { ip, username, password } = req.query;
+    
+    if (!ip) {
+      return res.status(400).json({ error: 'Falta el parámetro IP' });
+    }
 
-// Objeto para manejar múltiples procesos FFmpeg
-const ffmpegProcesses = new Map();
-const cameraConfigs = new Map();
+    const streamKey = ip.replace(/\./g, '_');
+    
+    if (streams.has(streamKey)) {
+      return res.json({ 
+        message: 'Stream ya está activo', 
+        streamUrl: `/hls/${streamKey}/stream.m3u8` 
+      });
+    }
 
-// Configuración por defecto (para compatibilidad)
-const defaultRtspUrl = 'rtsp://192.168.1.117:554/profile1';
-const defaultCameraUrl = 'http://ceroideas:12345678@192.168.1.117:80/GetSnapshot/1';
+    const rtspUrl = `rtsp://${username || 'admin'}:${password || 'admin'}@${ip}:554/Streaming/Channels/101`;
+    const hlsDir = path.join(__dirname, 'hls', streamKey);
+    
+    if (!fs.existsSync(hlsDir)) {
+      fs.mkdirSync(hlsDir, { recursive: true });
+    }
 
-// Función para iniciar la conversión RTSP a HLS para una cámara específica
-function startRTSPToHLS(cameraId, cameraConfig) {
-  console.log(`🎬 Iniciando FFmpeg para cámara ${cameraId}`);
-  
-  if (ffmpegProcesses.has(cameraId)) {
-    console.log(`⚠️ FFmpeg ya está ejecutándose para la cámara ${cameraId}`);
-    return;
-  }
-
-  // Crear directorio específico para esta cámara basado en la IP
-  const ipFolderName = cameraConfig.ip.replace(/\./g, '_');
-  const cameraHlsDir = path.join(hlsDir, ipFolderName);
-  console.log(`📁 Creando directorio: ${cameraHlsDir}`);
-  
-  if (!fs.existsSync(cameraHlsDir)) {
-    fs.mkdirSync(cameraHlsDir, { recursive: true });
-    console.log(`✅ Directorio creado: ${cameraHlsDir}`);
-  } else {
-    console.log(`📁 Directorio ya existe: ${cameraHlsDir}`);
-  }
-
-  // Construir URL RTSP correcta para cámaras Safire
-  let rtspUrl;
-  if (cameraConfig.videoProfile === 'MainStream') {
-    rtspUrl = `rtsp://${cameraConfig.username}:${cameraConfig.password}@${cameraConfig.ip}:${cameraConfig.rtspPort}/profile1`;
-  } else if (cameraConfig.videoProfile === 'SubStream') {
-    rtspUrl = `rtsp://${cameraConfig.username}:${cameraConfig.password}@${cameraConfig.ip}:${cameraConfig.rtspPort}/profile2`;
-  } else {
-    // Para compatibilidad con URLs personalizadas
-    rtspUrl = `rtsp://${cameraConfig.username}:${cameraConfig.password}@${cameraConfig.ip}:${cameraConfig.rtspPort}/${cameraConfig.videoProfile}`;
-  }
-  
-  const outputPath = path.join(cameraHlsDir, 'stream.m3u8');
-
-  console.log(`Iniciando conversión RTSP a HLS para cámara ${cameraId}...`);
-  console.log('URL RTSP:', rtspUrl);
-  console.log('Archivo de salida:', outputPath);
-
-  const ffmpegProcess = spawn('ffmpeg', [
-    '-rtsp_transport', 'tcp',  // Usar TCP para mayor estabilidad
+    const ffmpegArgs = [
+      '-rtsp_transport', 'tcp',
     '-i', rtspUrl,
-    // Mapear video y audio opcionalmente (si no hay audio, no falla)
-    '-map', '0:v:0',
-    '-map', '0:a?',
-    // Video
-    '-c:v', 'libx264',
-    '-preset', 'veryfast',     // Codificación más rápida
-    '-tune', 'zerolatency',    // Optimizado para baja latencia
-    // Audio (asegurar metadatos válidos en TS)
+      '-c:v', 'copy',
     '-c:a', 'aac',
-    '-ar', '48000',            // Frecuencia de audio consistente
-    '-ac', '1',                // Mononural (coincide con la mayoría de cámaras)
-    '-b:a', '96k',             // Bitrate de audio
-    // Muxing / HLS
     '-f', 'hls',
     '-hls_time', '2',
-    '-hls_list_size', '5',     // Mantener más segmentos
-    '-hls_flags', 'delete_segments+independent_segments',
-    '-mpegts_flags', 'resend_headers',
-    '-hls_segment_filename', path.join(cameraHlsDir, 'segment_%03d.ts'),
-    '-start_number', '1',      // Empezar desde segmento 1
-    outputPath
-  ]);
+      '-hls_list_size', '5',
+      '-hls_flags', 'delete_segments+append_list',
+      '-hls_segment_filename', path.join(hlsDir, 'segment_%03d.ts'),
+      path.join(hlsDir, 'stream.m3u8')
+    ];
 
-  ffmpegProcess.stdout.on('data', (data) => {
-    console.log(`FFmpeg stdout (${cameraId}): ${data}`);
-  });
-
-  ffmpegProcess.stderr.on('data', (data) => {
-    console.log(`FFmpeg stderr (${cameraId}): ${data}`);
-  });
-
-  ffmpegProcess.on('close', (code) => {
-    console.log(`FFmpeg proceso terminado para ${cameraId} con código ${code}`);
-    ffmpegProcesses.delete(cameraId);
-  });
-
-  ffmpegProcess.on('error', (err) => {
-    console.error(`Error al iniciar FFmpeg para ${cameraId}:`, err);
-    ffmpegProcesses.delete(cameraId);
-  });
-
-  ffmpegProcesses.set(cameraId, ffmpegProcess);
-  cameraConfigs.set(cameraId, cameraConfig);
-}
-
-// Endpoint para obtener snapshot (mantener funcionalidad existente)
-app.get('/camera', async (req, res) => {
-  const cameraUrl = 'http://ceroideas:12345678@192.168.1.117:80/GetSnapshot/1';
-
-  try {
-    const response = await axios.get(cameraUrl, {
-      responseType: 'arraybuffer',
+    const ffmpeg = spawn('ffmpeg', ffmpegArgs);
+    
+    ffmpeg.stderr.on('data', (data) => {
+      console.log(`FFmpeg stderr (${ip}): ${data}`);
     });
 
-    res.set('Access-Control-Allow-Origin', '*');
-    res.set('Content-Type', response.headers['content-type'] || 'image/jpeg');
-    res.send(response.data);
-  } catch (e) {
-    console.error('Error al obtener la imagen:', e);
-    res.status(500).send('Error al obtener la imagen');
+    ffmpeg.on('close', (code) => {
+      console.log(`FFmpeg cerrado con código ${code}`);
+      streams.delete(streamKey);
+    });
+
+    streams.set(streamKey, { ffmpeg, ip });
+
+    res.json({ 
+      message: 'Stream iniciado', 
+      streamUrl: `/hls/${streamKey}/stream.m3u8` 
+    });
+
+  } catch (error) {
+    console.error('Error iniciando stream:', error.message);
+    res.status(500).json({ error: 'Error iniciando stream' });
   }
 });
 
-// Endpoint para iniciar el stream
-app.get('/start-stream', (req, res) => {
-  startRTSPToHLS();
-  res.json({ message: 'Stream iniciado', status: 'ok' });
-});
-
-// Endpoint para detener el stream
+// Detener stream
 app.get('/stop-stream', (req, res) => {
-  if (ffmpegProcess) {
-    ffmpegProcess.kill();
-    ffmpegProcess = null;
-    res.json({ message: 'Stream detenido', status: 'ok' });
-  } else {
-    res.json({ message: 'No hay stream activo', status: 'ok' });
+  try {
+    const { ip } = req.query;
+    
+    if (!ip) {
+      return res.status(400).json({ error: 'Falta el parámetro IP' });
+    }
+
+    const streamKey = ip.replace(/\./g, '_');
+    
+    if (!streams.has(streamKey)) {
+      return res.json({ message: 'Stream no está activo' });
+    }
+
+    const stream = streams.get(streamKey);
+    stream.ffmpeg.kill('SIGTERM');
+    streams.delete(streamKey);
+
+    res.json({ message: 'Stream detenido' });
+
+  } catch (error) {
+    console.error('Error deteniendo stream:', error.message);
+    res.status(500).json({ error: 'Error deteniendo stream' });
   }
 });
 
-// Endpoint para configurar cámaras
-app.post('/configure-camera/:cameraId', (req, res) => {
-  const { cameraId } = req.params;
-  const cameraConfig = req.body;
-  
-  // Validar configuración requerida
-  if (!cameraConfig.ip || !cameraConfig.rtspPort || !cameraConfig.videoProfile) {
-    return res.status(400).json({ error: 'Configuración de cámara incompleta' });
+// Estado del stream
+app.get('/stream-status', (req, res) => {
+  try {
+    const { ip } = req.query;
+    
+    if (!ip) {
+      return res.status(400).json({ error: 'Falta el parámetro IP' });
+    }
+
+    const streamKey = ip.replace(/\./g, '_');
+    const isActive = streams.has(streamKey);
+
+    res.json({ 
+      active: isActive,
+      streamUrl: isActive ? `/hls/${streamKey}/stream.m3u8` : null
+    });
+
+  } catch (error) {
+    console.error('Error verificando estado:', error.message);
+    res.status(500).json({ error: 'Error verificando estado' });
   }
-  
-  cameraConfigs.set(cameraId, cameraConfig);
-  console.log(`Configuración de cámara ${cameraId} actualizada:`, cameraConfig);
-  
-  res.json({ 
-    message: `Configuración de cámara ${cameraId} guardada`, 
-    status: 'ok' 
-  });
 });
 
-// Endpoints dinámicos para múltiples cámaras
-app.get('/stream-status/:cameraId', (req, res) => {
-  const { cameraId } = req.params;
-  const isRunning = ffmpegProcesses.has(cameraId);
-  
-  // Obtener la configuración de la cámara para construir la URL correcta
-  const cameraConfig = cameraConfigs.get(cameraId);
-  let hlsUrl = `/hls/${cameraId}/stream.m3u8`; // Fallback
-  
-  if (cameraConfig && cameraConfig.ip) {
-    const ipFolderName = cameraConfig.ip.replace(/\./g, '_');
-    hlsUrl = `/hls/${ipFolderName}/stream.m3u8`;
-  }
-  
-  res.json({ 
-    isRunning,
-    hlsUrl: hlsUrl
-  });
-});
+// Servir archivos HLS
+app.use('/hls', express.static(path.join(__dirname, 'hls')));
 
-app.get('/start-stream/:cameraId', (req, res) => {
-  const { cameraId } = req.params;
-  console.log(`🚀 Iniciando stream para cámara: ${cameraId}`);
-  
-  // Para compatibilidad, usar configuración por defecto si no hay configuración específica
-  let cameraConfig = cameraConfigs.get(cameraId);
-  
-  if (!cameraConfig) {
-    // Si es "default" o no hay configuración, usar la configuración por defecto
-    cameraConfig = {
-      ip: '192.168.1.117',
-      rtspPort: 554,
-      videoProfile: 'profile1',
-      username: 'ceroideas',
-      password: '12345678'
+// ===== RUTAS DE VIDEO CON NOMBRE DE PUERTA =====
+
+// Configurar cámara (usado por DoorVideoStream)
+app.post('/configure-camera/:doorName', (req, res) => {
+  try {
+    const { doorName } = req.params;
+    const { ip, rtspPort, videoProfile, username, password, snapshotPath } = req.body;
+    
+    console.log(`📝 Configurando cámara para ${doorName}:`, { ip, rtspPort, videoProfile });
+    
+    // Guardar configuración en memoria para uso posterior
+    const config = {
+      ip,
+      rtspPort: rtspPort || 554,
+      videoProfile: videoProfile || 'Streaming/Channels/101',
+      username: username || 'admin',
+      password: password || 'admin',
+      snapshotPath
     };
     
-    // Guardar la configuración por defecto
-    cameraConfigs.set(cameraId, cameraConfig);
-    console.log(`⚠️ Usando configuración por defecto para cámara ${cameraId}`);
-  } else {
-    console.log(`✅ Usando configuración específica para cámara ${cameraId}:`, cameraConfig);
-  }
-  
-  startRTSPToHLS(cameraId, cameraConfig);
-  
-  // Construir URL HLS basada en la IP de la cámara
-  const ipFolderName = cameraConfig.ip.replace(/\./g, '_');
-  const hlsUrl = `/hls/${ipFolderName}/stream.m3u8`;
+    streams.set(`config_${doorName}`, config);
   
   res.json({ 
-    message: `Stream iniciado para cámara ${cameraId}`, 
-    status: 'ok',
-    hlsUrl: hlsUrl,
-    ipFolder: ipFolderName
-  });
-});
-
-app.get('/stop-stream/:cameraId', (req, res) => {
-  const { cameraId } = req.params;
-  
-  if (ffmpegProcesses.has(cameraId)) {
-    const process = ffmpegProcesses.get(cameraId);
-    process.kill('SIGINT');
-    ffmpegProcesses.delete(cameraId);
-    cameraConfigs.delete(cameraId);
-    res.json({ message: `Stream detenido para cámara ${cameraId}`, status: 'ok' });
-  } else {
-    res.json({ message: `No hay stream activo para cámara ${cameraId}`, status: 'ok' });
-  }
-});
-
-// Eliminado: endpoint antiguo de snapshot /camera/:cameraId (reemplazado por /camera/snapshot/:cameraId)
-
-// Snapshot por modelo con descarga directa
-app.get('/camera/snapshot/:cameraId', async (req, res) => {
-  const { cameraId } = req.params;
-  let cameraConfig = cameraConfigs.get(cameraId);
-
-  if (!cameraConfig) {
-    cameraConfig = {
-      ip: '192.168.1.117',
-      rtspPort: 554,
-      videoProfile: 'profile1',
-      username: 'ceroideas',
-      password: '12345678'
-    };
-    console.log(`⚠️ Usando configuración por defecto para snapshot de ${cameraId}`);
-  }
-
-  const user = cameraConfig.username || '';
-  const pass = cameraConfig.password || '';
-  const ip = cameraConfig.ip;
-  const explicitPath = cameraConfig.snapshotPath; // nueva propiedad opcional
-
-  // Generar candidatos conocidos por fabricante + genéricos
-  const httpBase = `http://${ip}`;
-  const httpsBase = `https://${ip}`;
-  const candidates = explicitPath ? [
-    `${httpBase}/${explicitPath.startsWith('/') ? explicitPath.substring(1) : explicitPath}`,
-    `${httpsBase}/${explicitPath.startsWith('/') ? explicitPath.substring(1) : explicitPath}`,
-  ] : [
-    // Hikvision / Safire
-    `${httpBase}/ISAPI/Streaming/channels/101/picture`,
-    `${httpsBase}/ISAPI/Streaming/channels/101/picture`,
-    `${httpBase}/Streaming/channels/101/picture`,
-    `${httpsBase}/Streaming/channels/101/picture`,
-    // Axis
-    `${httpBase}/axis-cgi/jpg/image.cgi`,
-    `${httpsBase}/axis-cgi/jpg/image.cgi`,
-    // Dahua
-    `${httpBase}/cgi-bin/snapshot.cgi?channel=1`,
-    `${httpsBase}/cgi-bin/snapshot.cgi?channel=1`,
-    // Genéricos
-    `${httpBase}/GetSnapshot/1`,
-    `${httpsBase}/GetSnapshot/1`,
-    `${httpBase}/snapshot.jpg`,
-    `${httpsBase}/snapshot.jpg`,
-    `${httpBase}/jpeg/snap.jpg`,
-    `${httpsBase}/jpeg/snap.jpg`,
-  ];
-
-  const authHeader = user || pass ? { 'Authorization': `Basic ${Buffer.from(`${user}:${pass}`).toString('base64')}` } : {};
-
-  for (const url of candidates) {
-    try {
-      const response = await axios.get(url, {
-        responseType: 'arraybuffer',
-        headers: {
-          ...authHeader,
-          'Accept': 'image/*',
-        },
-        httpsAgent,
-        timeout: 8000,
-        validateStatus: () => true,
-      });
-
-      if (response.status === 200 && (response.headers['content-type'] || '').includes('image')) {
-        const ts = new Date().toISOString().replace(/[:.]/g, '-');
-        const filename = `snapshot_${ip}_${ts}.jpg`;
-        res.set('Content-Type', response.headers['content-type'] || 'image/jpeg');
-        res.set('Content-Disposition', `attachment; filename="${filename}"`);
-        res.set('Cache-Control', 'no-store');
-        return res.send(Buffer.from(response.data));
-      }
-    } catch (e) {
-      // probar siguiente
-    }
-  }
-
-  res.status(502).json({ error: 'No se pudo obtener snapshot', ip });
-});
-
-// ========== PROXY PARA SDIO12 (Control de Puertas) ==========
-
-// Endpoint para hacer proxy de peticiones SDIO12 GET
-app.get('/sdio12/:ip', async (req, res) => {
-  const { ip } = req.params;
-  const auth = req.headers.authorization;
-  
-  console.log(`🔍 Proxy SDIO12 GET: ${ip}`);
-  
-  try {
-    const response = await axios.get(`https://${ip}/sdio12`, {
-      headers: {
-        'Authorization': auth,
-        'Content-Type': 'application/json',
-      },
-      httpsAgent,
-      timeout: 10000,
+      success: true,
+      message: `Cámara ${doorName} configurada`,
+      config: { ...config, password: '****' }
     });
     
+  } catch (error) {
+    console.error(`Error configurando cámara ${req.params.doorName}:`, error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Iniciar stream por nombre de puerta
+app.get('/start-stream/:doorName', (req, res) => {
+  try {
+    const { doorName } = req.params;
+    
+    // Obtener configuración guardada
+    const config = streams.get(`config_${doorName}`);
+    if (!config) {
+      return res.status(400).json({ error: `No hay configuración para ${doorName}` });
+    }
+    
+    const { ip, rtspPort, videoProfile, username, password } = config;
+    const streamKey = `${doorName.replace(/\s+/g, '_')}`;
+    
+    // Verificar si el stream ya está activo
+    if (streams.has(streamKey)) {
+      const ipFolder = ip.replace(/\./g, '_');
+      return res.json({ 
+        message: 'Stream ya está activo',
+        hlsUrl: `/hls/${ipFolder}/stream.m3u8`,
+        ipFolder: ipFolder
+      });
+    }
+
+    const rtspUrl = `rtsp://${username}:${password}@${ip}:${rtspPort}/${videoProfile}`;
+    const ipFolder = ip.replace(/\./g, '_');
+    const hlsDir = path.join(__dirname, 'hls', ipFolder);
+    
+    if (!fs.existsSync(hlsDir)) {
+      fs.mkdirSync(hlsDir, { recursive: true });
+    }
+
+    const ffmpegArgs = [
+      '-rtsp_transport', 'tcp',
+      '-i', rtspUrl,
+      '-c:v', 'copy',
+      '-c:a', 'aac',
+      '-f', 'hls',
+      '-hls_time', '2',
+      '-hls_list_size', '5',
+      '-hls_flags', 'delete_segments+append_list',
+      '-hls_segment_filename', path.join(hlsDir, 'segment_%03d.ts'),
+      path.join(hlsDir, 'stream.m3u8')
+    ];
+
+    console.log(`🎬 Iniciando FFmpeg para ${doorName} (${ip})`);
+    const ffmpeg = spawn('ffmpeg', ffmpegArgs);
+    
+    ffmpeg.stderr.on('data', (data) => {
+      console.log(`FFmpeg stderr (${doorName}): ${data}`);
+    });
+
+    ffmpeg.on('close', (code) => {
+      console.log(`FFmpeg cerrado con código ${code} para ${doorName}`);
+      streams.delete(streamKey);
+    });
+
+    streams.set(streamKey, { ffmpeg, ip, doorName });
+  
+  res.json({ 
+      message: `Stream iniciado para ${doorName}`,
+      hlsUrl: `/hls/${ipFolder}/stream.m3u8`,
+      ipFolder: ipFolder
+    });
+
+  } catch (error) {
+    console.error(`Error iniciando stream para ${req.params.doorName}:`, error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Detener stream por nombre de puerta
+app.get('/stop-stream/:doorName', (req, res) => {
+  try {
+    const { doorName } = req.params;
+    const streamKey = `${doorName.replace(/\s+/g, '_')}`;
+    
+    if (!streams.has(streamKey)) {
+      return res.json({ message: `Stream ${doorName} no está activo` });
+    }
+
+    const stream = streams.get(streamKey);
+    stream.ffmpeg.kill('SIGTERM');
+    streams.delete(streamKey);
+
+    console.log(`🛑 Stream detenido para ${doorName}`);
+    res.json({ message: `Stream detenido para ${doorName}` });
+
+  } catch (error) {
+    console.error(`Error deteniendo stream para ${req.params.doorName}:`, error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Snapshot por nombre de puerta
+app.get('/camera/snapshot/:doorName', async (req, res) => {
+  try {
+    const { doorName } = req.params;
+    
+    // Obtener configuración guardada
+    const config = streams.get(`config_${doorName}`);
+    if (!config) {
+      return res.status(400).json({ error: `No hay configuración para ${doorName}` });
+    }
+    
+    const { ip, username, password, snapshotPath } = config;
+    const auth = Buffer.from(`${username}:${password}`).toString('base64');
+    const url = snapshotPath || `/cgi-bin/snapshot.cgi`;
+    const snapshotUrl = `http://${ip}${url}`;
+
+    const response = await axios.get(snapshotUrl, {
+        headers: {
+        'Authorization': `Basic ${auth}`
+      },
+      responseType: 'arraybuffer',
+      timeout: 5000
+    });
+
+    res.set('Content-Type', 'image/jpeg');
+    res.set('Content-Disposition', `attachment; filename="${doorName}_snapshot.jpg"`);
+    res.send(response.data);
+
+  } catch (error) {
+    console.error(`Error obteniendo snapshot para ${req.params.doorName}:`, error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ===== RUTAS DE CONTROL DE PUERTAS =====
+
+// SDIO12 GET
+app.get('/sdio12/:ip', async (req, res) => {
+  try {
+  const { ip } = req.params;
+    const { username = 'Scati2023', password = 'Scati2023' } = req.query;
+  
+    console.log(`🔍 GET SDIO12 de ${ip}`);
+  
+    const auth = Buffer.from(`${username}:${password}`).toString('base64');
+    const response = await axios.get(`https://${ip}/sdio12`, {
+      headers: { 'Authorization': `Basic ${auth}` },
+      timeout: 10000,
+      httpsAgent: new (require('https')).Agent({  
+        rejectUnauthorized: false
+      })
+    });
+    
+    console.log(`✅ Estado SDIO12 obtenido:`, response.data);
     res.json(response.data);
   } catch (error) {
-    console.error('❌ Error en proxy SDIO12 GET:', error.message);
-    res.status(error.response?.status || 500).json({ 
-      error: error.message,
-      details: error.response?.data 
-    });
+    console.error(`❌ Error GET SDIO12:`, error.message);
+    res.status(500).json({ error: error.message });
   }
 });
 
-// Endpoint para hacer proxy de peticiones SDIO12 POST
+// SDIO12 POST
 app.post('/sdio12/:ip', async (req, res) => {
-  const { ip } = req.params;
-  const auth = req.headers.authorization;
-  const body = req.body;
-  
-  console.log(`🚪 Proxy SDIO12 POST: ${ip}`, JSON.stringify(body, null, 2));
-  
   try {
-    // Intentar primero con application/json
-    let response;
+  const { ip } = req.params;
+    const { tags } = req.body;
+    
+    console.log(`🚪 POST SDIO12 a ${ip}:`, JSON.stringify(req.body));
+    
+    if (!tags || !Array.isArray(tags)) {
+      return res.status(400).json({ error: 'Faltan tags en el body' });
+    }
+
+    // Extraer credenciales del header Authorization
+    let username = 'Scati2023';
+    let password = 'Scati2023';
+    
+    if (req.headers.authorization) {
+      try {
+        const authHeader = req.headers.authorization.replace('Basic ', '');
+        const decoded = Buffer.from(authHeader, 'base64').toString('utf-8');
+        const [user, pass] = decoded.split(':');
+        if (user && pass) {
+          username = user;
+          password = pass;
+        }
+      } catch (e) {
+        console.log('⚠️ Error decodificando auth, usando credenciales por defecto');
+      }
+    }
+
+    console.log(`🔑 Usando credenciales: ${username}:****`);
+    const auth = Buffer.from(`${username}:${password}`).toString('base64');
+    
+    // Construir URL completa
+    const targetUrl = `https://${ip}/sdio12`;
+    console.log(`📡 Enviando POST a: ${targetUrl}`);
+    console.log(`📦 Payload:`, JSON.stringify({ tags }));
+    
+    // Crear timeout manual para debugging
+    const controller = new (require('abort-controller'))();
+    const timeoutId = setTimeout(() => {
+      controller.abort();
+      console.error(`⏱️ TIMEOUT: La petición a ${ip} tardó más de 10 segundos`);
+    }, 10000);
+
     try {
-      console.log('📤 Intentando con Content-Type: application/json');
-      response = await axios.post(`https://${ip}/sdio12`, body, {
+      // Enviar al servidor SCATI con formato correcto
+      const response = await axios.post(targetUrl, 
+        { tags },
+        {
         headers: {
-          'Authorization': auth,
+            'Authorization': `Basic ${auth}`,
           'Content-Type': 'application/json',
         },
-        httpsAgent,
         timeout: 10000,
-      });
-    } catch (jsonError) {
-      console.log('⚠️ Falló con application/json, intentando con text/plain');
-      // Si falla, intentar con text/plain
-      const bodyString = JSON.stringify(body);
-      response = await axios.post(`https://${ip}/sdio12`, bodyString, {
-        headers: {
-          'Authorization': auth,
-          'Content-Type': 'text/plain',
-        },
-        httpsAgent,
-        timeout: 10000,
-      });
+          httpsAgent: new (require('https')).Agent({  
+            rejectUnauthorized: false // Aceptar certificados autofirmados
+          }),
+          signal: controller.signal
+        }
+      );
+
+      clearTimeout(timeoutId);
+      console.log(`✅ Respuesta SDIO12 (${response.status}):`, response.data);
+      res.json(response.data);
+      
+    } catch (axiosError) {
+      clearTimeout(timeoutId);
+      
+      if (axiosError.code === 'ECONNABORTED' || axiosError.message.includes('timeout')) {
+        console.error(`⏱️ TIMEOUT: ${ip} no respondió en 10 segundos`);
+        return res.status(504).json({ 
+          error: 'timeout',
+          message: `El servidor ${ip} no respondió en 10 segundos`,
+          details: axiosError.message
+        });
+      }
+      
+      throw axiosError;
     }
-    
-    console.log('✅ Respuesta SDIO12:', response.data);
-    res.json(response.data);
+
   } catch (error) {
-    console.error('❌ Error en proxy SDIO12 POST:', error.message);
-    if (error.response) {
-      console.error('❌ Response status:', error.response.status);
-      console.error('❌ Response data:', error.response.data);
-      console.error('❌ Response headers:', error.response.headers);
-    }
-    res.status(error.response?.status || 500).json({ 
+    console.error(`❌ Error SDIO12:`, error.message);
+    console.error(`❌ Error completo:`, error);
+    res.status(500).json({ 
       error: error.message,
-      details: error.response?.data 
+      code: error.code,
+      details: error.response?.data || 'Sin detalles'
     });
   }
 });
 
-// Servir archivos HLS estáticamente
-app.use('/hls', express.static(hlsDir));
-
-// Servir el reproductor HTML
-app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'player.html'));
-});
-
-// Endpoint para obtener el estado del stream
-app.get('/stream-status', (req, res) => {
-  res.json({ 
-    isRunning: ffmpegProcess !== null,
-    hlsUrl: '/hls/stream.m3u8'
-  });
-});
-
-// ========== PROXY PARA INTERCOMUNICADORES (AXIS E IDIS) ==========
-
-// Endpoint para hacer proxy de peticiones Axis GET
+// AXIS proxy
 app.get('/axis/:ip/*', async (req, res) => {
+  try {
   const { ip } = req.params;
   const path = req.params[0];
-  const auth = req.headers.authorization;
-  
-  console.log(`🔍 Proxy Axis GET: ${ip}/${path}`);
-  console.log(`🔑 Auth header: ${auth ? 'Presente' : 'Ausente'}`);
-  if (auth) {
-    console.log(`🔑 Auth value: ${auth.substring(0, 20)}...`);
-  }
-  
-  // 1) Si el cliente envía Authorization, probarlo primero
-  if (auth) {
-    try {
-      const directResp = await axios.get(`https://${ip}/${path}`, {
-        headers: {
-          'Authorization': auth,
-          'Content-Type': 'application/json',
-        },
-        httpsAgent,
-        timeout: 10000,
-        validateStatus: () => true,
-      });
+    const { username = 'root', password = 'pass' } = req.query;
+    
+    const auth = Buffer.from(`${username}:${password}`).toString('base64');
+    const response = await axios.get(`http://${ip}/${path}`, {
+      headers: { 'Authorization': `Basic ${auth}` },
+      timeout: 10000 // Aumentado a 10 segundos
+    });
 
-      if (directResp.status >= 200 && directResp.status < 300) {
-        console.log(`✅ Axis GET con credenciales provistas - Status: ${directResp.status}`);
-        res.set('Content-Type', 'text/plain');
-        return res.send(directResp.data);
-      } else {
-        console.log(`⚠️ Credenciales provistas no válidas: ${directResp.status} ${directResp.statusText}`);
-      }
-    } catch (e) {
-      console.log(`❌ Error usando credenciales provistas: ${e.message}`);
-      // Continuar con fallback
-    }
-  }
-  
-  // Probar diferentes combinaciones de credenciales para Axis
-  const credentials = [
-    { user: 'admin', pass: 'Santander25' }, // Específico
-    { user: 'root', pass: 'pass' },          // Axis por defecto
-    { user: 'admin', pass: 'admin' },       // Común
-    { user: 'admin', pass: '' },             // Sin contraseña
-    { user: 'root', pass: '' },              // Root sin contraseña
-  ];
-  
-  for (const cred of credentials) {
-    try {
-      console.log(`🔑 Probando credenciales: ${cred.user}:${cred.pass || '(vacío)'}`);
-      
-      const testAuth = `Basic ${Buffer.from(`${cred.user}:${cred.pass}`).toString('base64')}`;
-      
-      const response = await axios.get(`https://${ip}/${path}`, {
-        headers: {
-          'Authorization': testAuth,
-          'Content-Type': 'application/json',
-        },
-        httpsAgent,
-        timeout: 10000,
-      });
-      
-      console.log(`✅ Axis GET exitoso con ${cred.user}:${cred.pass || '(vacío)'} - Status: ${response.status}`);
-      res.set('Content-Type', 'text/plain');
-      res.send(response.data);
-      return; // Salir si funciona
-      
+    res.json(response.data);
     } catch (error) {
-      console.log(`❌ Falló con ${cred.user}:${cred.pass || '(vacío)'} - ${error.response?.status || 'Error'}`);
-      // Continuar con la siguiente credencial
-    }
+    res.status(500).json({ error: error.message });
   }
-  
-  // Si llegamos aquí, ninguna credencial funcionó
-  console.error(`❌ Todas las credenciales fallaron para ${ip}/${path}`);
-  res.status(401).json({
-    error: 'Error en proxy Axis GET',
-    details: 'Todas las credenciales probadas fallaron',
-    status: 401,
-    credentials_tested: credentials.map(c => `${c.user}:${c.pass || '(vacío)'}`)
-  });
 });
 
-// Endpoint para hacer proxy de peticiones IDIS GET
+// IDIS proxy
 app.get('/idis/:ip/*', async (req, res) => {
+  try {
   const { ip } = req.params;
-  const path = req.params[0]; // Captura todo después de /axis/ip/
-  const auth = req.headers.authorization;
-  
-  console.log(`🔍 Proxy IDIS GET: ${ip}/${path}`);
-  console.log(`🔑 Auth header: ${auth ? 'Presente' : 'Ausente'}`);
-  if (auth) {
-    console.log(`🔑 Auth value: ${auth.substring(0, 20)}...`);
-  }
-  
-  // Probar diferentes combinaciones de credenciales para IDIS
-  const credentials = [
-    { user: 'admin', pass: 'Santander25' }, // IDIS DC-I6212WRX
-    { user: 'admin', pass: 'admin' },       // Común IDIS
-    { user: 'admin', pass: '12345' },       // IDIS por defecto
-    { user: 'admin', pass: 'password' },    // Password común
-    { user: 'admin', pass: '1234' },        // IDIS común
-    { user: 'admin', pass: '' },             // Sin contraseña
-    { user: 'root', pass: 'pass' },          // Por defecto
-    { user: 'root', pass: '12345' },         // Root IDIS
-    { user: 'root', pass: '' },              // Root sin contraseña
-    { user: 'user', pass: 'user' },          // Usuario común
-    { user: 'guest', pass: 'guest' },        // Invitado
-  ];
-  
-  for (const cred of credentials) {
-    try {
-      console.log(`🔑 Probando credenciales: ${cred.user}:${cred.pass || '(vacío)'}`);
-      
-      const testAuth = `Basic ${Buffer.from(`${cred.user}:${cred.pass}`).toString('base64')}`;
-      
-      const response = await axios.get(`https://${ip}/${path}`, {
-        headers: {
-          'Authorization': testAuth,
-          'Content-Type': 'application/json',
-        },
-        httpsAgent,
-        timeout: 10000,
-      });
-      
-      console.log(`✅ IDIS GET exitoso con ${cred.user}:${cred.pass || '(vacío)'} - Status: ${response.status}`);
-      res.set('Content-Type', 'text/plain');
-      res.send(response.data);
-      return; // Salir si funciona
-      
+    const path = req.params[0];
+    const { username = 'admin', password = 'admin' } = req.query;
+    
+    const auth = Buffer.from(`${username}:${password}`).toString('base64');
+    const response = await axios.get(`http://${ip}/${path}`, {
+      headers: { 'Authorization': `Basic ${auth}` },
+      timeout: 10000 // Aumentado a 10 segundos
+    });
+
+    res.json(response.data);
     } catch (error) {
-      console.log(`❌ Falló con ${cred.user}:${cred.pass || '(vacío)'} - ${error.response?.status || 'Error'}`);
-      // Continuar con la siguiente credencial
-    }
+    res.status(500).json({ error: error.message });
   }
-  
-  // Si llegamos aquí, ninguna credencial funcionó
-  console.error(`❌ Todas las credenciales fallaron para ${ip}/${path}`);
-  res.status(401).json({
-    error: 'Error en proxy IDIS GET',
-    details: 'Todas las credenciales probadas fallaron',
-    status: 401,
-    credentials_tested: credentials.map(c => `${c.user}:${c.pass || '(vacío)'}`)
+});
+
+// ===== SALUD DEL SERVIDOR =====
+
+app.get('/health', (req, res) => {
+  res.json({
+    status: 'OK',
+    message: 'Servidor proxy funcionando',
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    activeStreams: streams.size
   });
 });
 
-app.listen(3001, '0.0.0.0',() => {
+// Iniciar servidor
+app.listen(3001, '0.0.0.0', () => {
   console.log('Proxy escuchando en http://localhost:3001');
   console.log('Endpoints disponibles:');
+  console.log('');
+  console.log('VIDEO:');
   console.log('- GET /camera - Obtener snapshot');
   console.log('- GET /start-stream - Iniciar stream RTSP a HLS');
   console.log('- GET /stop-stream - Detener stream');
   console.log('- GET /stream-status - Estado del stream');
-  console.log('- GET /hls/stream.m3u8 - Stream HLS');
-  console.log('- GET /sdio12/:ip - Proxy SDIO12 GET (estado)');
-  console.log('- POST /sdio12/:ip - Proxy SDIO12 POST (control)');
-  console.log('- GET /axis/:ip/* - Proxy Axis Intercomunicador GET');
-  console.log('- GET /idis/:ip/* - Proxy IDIS Intercomunicador GET');
+  console.log('- GET /hls/:streamKey/stream.m3u8 - Stream HLS');
+  console.log('');
+  console.log('VIDEO POR PUERTA:');
+  console.log('- POST /configure-camera/:doorName - Configurar cámara');
+  console.log('- GET /start-stream/:doorName - Iniciar stream');
+  console.log('- GET /stop-stream/:doorName - Detener stream');
+  console.log('- GET /camera/snapshot/:doorName - Snapshot');
+  console.log('');
+  console.log('CONTROL DE PUERTAS:');
+  console.log('- GET /sdio12/:ip - Estado SDIO12');
+  console.log('- POST /sdio12/:ip - Control SDIO12');
+  console.log('- GET /axis/:ip/* - Proxy AXIS');
+  console.log('- GET /idis/:ip/* - Proxy IDIS');
+  console.log('');
+  console.log('SISTEMA:');
+  console.log('- GET /health - Salud del servidor');
+  console.log('');
+  console.log('✅ Audio via SIP (jssip) - Sin endpoints HTTP');
+  console.log('⏱️  Timeout aumentado a 10 segundos para todos los endpoints');
 });
+

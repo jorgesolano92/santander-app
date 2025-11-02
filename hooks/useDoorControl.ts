@@ -468,23 +468,24 @@ export function useDoorControl(): UseDoorControlReturn {
   }, [updateSystemStatus]);
 
   // Auto-refresh system status periodically when connected
+  // TEMPORALMENTE DESHABILITADO para evitar interferencia con streams de video
   useEffect(() => {
-    let interval: NodeJS.Timeout;
+    // let interval: NodeJS.Timeout;
     
-    if (connectionStatus === 'connected') {
-      console.log('🔄 Iniciando intervalo de actualización cada 5 segundos');
-      interval = setInterval(() => {
-        console.log('⏰ Ejecutando actualización periódica del sistema');
-        updateSystemStatus(false); // NO mostrar loader en actualizaciones periódicas
-      }, 5000); // Refresh every 5 seconds
-    }
+    // if (connectionStatus === 'connected') {
+    //   console.log('🔄 Iniciando intervalo de actualización cada 5 segundos');
+    //   interval = setInterval(() => {
+    //     // console.log('⏰ Ejecutando actualización periódica del sistema');
+    //     updateSystemStatus(false); // NO mostrar loader en actualizaciones periódicas
+    //   }, 5000); // Refresh every 5 seconds
+    // }
     
-    return () => {
-      if (interval) {
-        console.log('🛑 Deteniendo intervalo de actualización');
-        clearInterval(interval);
-      }
-    };
+    // return () => {
+    //   if (interval) {
+    //     console.log('🛑 Deteniendo intervalo de actualización');
+    //     clearInterval(interval);
+    //   }
+    // };
   }, [connectionStatus, updateSystemStatus]);
 
   const isDoorVerifying = useCallback((doorId: string): boolean => {

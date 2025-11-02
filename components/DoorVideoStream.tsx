@@ -54,10 +54,12 @@ export default function DoorVideoStream({ intercomConfig, doorName }: DoorVideoS
       }
     };
 
-    // Iniciar stream después de un pequeño delay para asegurar que todo esté cargado
+    // Iniciar stream después de un pequeño delay
+    const delay = doorName === 'Calle (P1)' ? 100 : 200; // P1 después de 100ms, P2 después de 200ms
+    console.log(`⏳ Esperando ${delay}ms antes de iniciar ${doorName}...`);
     const timer = setTimeout(() => {
       initStream();
-    }, 500);
+    }, delay);
 
     // Cleanup: detener el stream al desmontar
     return () => {
@@ -198,10 +200,11 @@ export default function DoorVideoStream({ intercomConfig, doorName }: DoorVideoS
 
   const startStream = async () => {
     if (!intercomConfig.cameraIP) {
-      Alert.alert('Error', 'No hay IP de cámara configurada');
+      console.log('❌ No hay IP de cámara configurada');
       return;
     }
 
+    console.log(`🎬 Iniciando stream para ${doorName}...`);
     setIsLoading(true);
     setStreamError(null);
 
@@ -214,22 +217,35 @@ export default function DoorVideoStream({ intercomConfig, doorName }: DoorVideoS
         username: intercomConfig.onvifUsername,
       });
 
-      if (!useServerProxy) {
+      console.log(`🔍 DEBUG: useServerProxy = ${useServerProxy}, Platform.OS = ${Platform.OS}`);
+      
+      // FORZAR modo directo temporalmente
+      if (true) { // !useServerProxy
         // RTSP nativo en Android: construir URL RTSP y abrir en reproductor nativo
         if (Platform.OS === 'android') {
-          const user = encodeURIComponent(intercomConfig.onvifUsername || '');
-          const pass = encodeURIComponent(intercomConfig.onvifPassword || '');
-          const auth = user && pass ? `${user}:${pass}@` : '';
-          const host = intercomConfig.cameraIP;
-          const port = intercomConfig.rtspPort || 554;
-          const path = intercomConfig.rtspPath || 'Streaming/Channels/101';
-          // Formatos comunes: Axis/IDIS pueden variar; permitir ruta personalizada en config
-          const rtspUrl = `rtsp://${auth}${host}:${port}/${path}`;
-          setHlsUrl(rtspUrl);
-          setIsStreaming(true);
-          setStreamError(null);
-          setIsLoading(false);
-          return;
+          try {
+            console.log(`📱 Modo directo Android - construyendo URL RTSP...`);
+            const user = encodeURIComponent(intercomConfig.onvifUsername || '');
+            const pass = encodeURIComponent(intercomConfig.onvifPassword || '');
+            const auth = user && pass ? `${user}:${pass}@` : '';
+            const host = intercomConfig.cameraIP;
+            const port = intercomConfig.rtspPort || 554;
+            const path = intercomConfig.rtspPath || 'Streaming/Channels/101';
+            // Formatos comunes: Axis/IDIS pueden variar; permitir ruta personalizada en config
+            const rtspUrl = `rtsp://${auth}${host}:${port}/${path}`;
+            console.log(`🎬 URL RTSP construida: ${rtspUrl}`);
+            setHlsUrl(rtspUrl);
+            setIsStreaming(true);
+            setStreamError(null);
+            setIsLoading(false);
+            return;
+          } catch (error) {
+            console.error('❌ Error construyendo URL RTSP:', error);
+            setStreamError(`Error RTSP: ${error.message || error}`);
+            setCameraStatus('offline');
+            setIsLoading(false);
+            return;
+          }
         } else {
           setStreamError('Modo directo soportado solo en Android');
           setIsLoading(false);
@@ -238,6 +254,7 @@ export default function DoorVideoStream({ intercomConfig, doorName }: DoorVideoS
       }
 
       // Primero configurar la cámara en el backend
+      console.log(`🔧 Configurando cámara ${doorName}...`);
       const configResponse = await fetch(`${proxyBaseUrl}/configure-camera/${doorName}`, {
         method: 'POST',
         headers: {
@@ -261,10 +278,12 @@ export default function DoorVideoStream({ intercomConfig, doorName }: DoorVideoS
 
       console.log(`✅ Cámara ${doorName} configurada correctamente`);
 
-      // Esperar un momento para que la configuración se procese
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Esperar más tiempo para que la configuración se procese completamente
+      console.log(`⏳ Esperando procesamiento de configuración...`);
+      await new Promise(resolve => setTimeout(resolve, 2000));
 
       // Luego iniciar el stream RTSP a HLS
+      console.log(`🎬 Iniciando stream HLS para ${doorName}...`);
       const streamResponse = await fetch(`${proxyBaseUrl}/start-stream/${doorName}`, {
         method: 'GET',
       });
@@ -285,6 +304,10 @@ export default function DoorVideoStream({ intercomConfig, doorName }: DoorVideoS
         
         console.log(`⏳ FFmpeg está iniciando, esperando generación de archivos HLS...`);
         console.log(`📁 Los archivos se crearán en: proxy/hls/${streamData.ipFolder}/`);
+        
+        // Esperar un momento adicional para que FFmpeg se estabilice
+        console.log(`⏳ Esperando estabilización del stream...`);
+        await new Promise(resolve => setTimeout(resolve, 1500));
       } else {
         const errorText = await streamResponse.text();
         console.error('❌ Error iniciando stream:', errorText);
@@ -294,7 +317,23 @@ export default function DoorVideoStream({ intercomConfig, doorName }: DoorVideoS
       console.error('❌ Error iniciando stream:', error);
       setStreamError(`Error: ${error.message || error}`);
       setCameraStatus('offline');
-      Alert.alert('Error', `No se pudo iniciar el stream de video: ${error.message || error}`);
+      
+      // No mostrar Alert que puede causar crash, solo log
+      console.log(`⚠️ Stream falló para ${doorName}: ${error.message || error}`);
+      
+      // Intentar modo de fallback si es Android
+      if (Platform.OS === 'android' && !useServerProxy) {
+        console.log(`🔄 Intentando modo de fallback para ${doorName}...`);
+        try {
+          const fallbackUrl = `rtsp://${intercomConfig.cameraIP}:${intercomConfig.rtspPort || 554}/`;
+          setHlsUrl(fallbackUrl);
+          setIsStreaming(true);
+          setStreamError(null);
+          console.log(`✅ Modo fallback activado para ${doorName}`);
+        } catch (fallbackError) {
+          console.error('❌ Error en modo fallback:', fallbackError);
+        }
+      }
     } finally {
       setIsLoading(false);
     }

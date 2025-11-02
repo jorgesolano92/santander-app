@@ -6,8 +6,10 @@ import { useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useDoorControl } from '@/hooks/useDoorControl';
 import DoorVideoStream from './DoorVideoStream';
+import AxisAudioControl from './AxisAudioControl';
 import { IntercomConfig } from './IntercomConfigurationModal';
 import { doorControlService } from '@/services/DoorControlService';
+import { detectDeviceType, supportsIntercom, enrichIntercomConfig } from '@/utils/deviceDetector';
 
 interface DoorConfig {
   enabled: boolean;
@@ -671,10 +673,32 @@ export default function ManualModeModal({
                   <Text style={styles.doorControlTitle}>{door.name.toUpperCase()}</Text>
                   <View style={styles.doorControlCard}>
                     {door.intercom ? (
-                      <DoorVideoStream 
-                        intercomConfig={door.intercom} 
-                        doorName={door.name}
-                      />
+                      <>
+                        <DoorVideoStream 
+                          intercomConfig={door.intercom} 
+                          doorName={door.name}
+                        />
+                        {/* Detectar tipo de dispositivo y mostrar control de audio apropiado */}
+                        {(() => {
+                          const deviceType = detectDeviceType(door.intercom.cameraIP);
+                          const hasIntercom = supportsIntercom(deviceType);
+                          
+                          // console.log(`🔍 Puerta ${door.name}: IP=${door.intercom.cameraIP}, Tipo=${deviceType}, Intercom=${hasIntercom}`);
+                          
+                          if (deviceType === 'AXIS-I8116-E') {
+                            // AXIS I8116-E - Audio bidireccional completo
+                            return (
+                              <AxisAudioControl 
+                                intercomConfig={door.intercom} 
+                                doorName={door.name}
+                              />
+                            );
+                          } else {
+                            // Safire o Genérico - NO mostrar control de audio (solo visualización)
+                            return null;
+                          }
+                        })()}
+                      </>
                     ) : (
                       <View style={styles.doorControlImagePlaceholder}>
                         <View style={styles.cameraIcon}>
@@ -684,50 +708,7 @@ export default function ManualModeModal({
                     )}
                     
                     <View style={styles.doorControlButtons}>
-                      <TouchableOpacity 
-                        style={getCallButtonStyle(doorId)}
-                        onPress={() => handleCommunicate(doorId, door.name)}
-                      >
-                        <PhoneCall size={16} color={activeSipCallDoorId === doorId && sipCallState?.isActive ? "#FFFFFF" : "#495057"} />
-                        <Text style={getCallButtonTextStyle(doorId)}>
-                          {getCallButtonText(doorId)}
-                        </Text>
-                      </TouchableOpacity>
-                      
-                      {/* Call controls - only show when connected */}
-                      {activeSipCallDoorId === doorId && sipCallState?.isConnected && (
-                        <View style={styles.callControlsContainer}>
-                          <TouchableOpacity 
-                            style={[
-                              styles.callControlButton,
-                              sipCallState.isMuted && styles.callControlButtonActive
-                            ]}
-                            onPress={handleMuteMicrophone}
-                          >
-                            {sipCallState.isMuted ? (
-                              <MicOff size={12} color="#FFFFFF" />
-                            ) : (
-                              <Mic size={12} color="#FFFFFF" />
-                            )}
-                            <Text style={styles.callControlButtonText}>
-                              {sipCallState.isMuted ? 'MUTE' : 'MIC'}
-                            </Text>
-                          </TouchableOpacity>
-                          
-                          <TouchableOpacity 
-                            style={[
-                              styles.callControlButton,
-                              sipCallState.isSpeakerOn && styles.callControlButtonActive
-                            ]}
-                            onPress={handleToggleSpeaker}
-                          >
-                            <Volume2 size={12} color="#FFFFFF" />
-                            <Text style={styles.callControlButtonText}>
-                              {sipCallState.isSpeakerOn ? 'SPK' : 'EAR'}
-                            </Text>
-                          </TouchableOpacity>
-                        </View>
-                      )}
+                      {/* Botón "LLAMAR" oculto - ahora se usa AxisAudioControl */}
                       
                       <TouchableOpacity 
                         style={[
