@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, Modal, ScrollView, Switch } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, Modal, ScrollView, Switch, Platform } from 'react-native';
 import { useState, useEffect } from 'react';
 import { ArrowLeft, Save, X, Camera, Phone } from 'lucide-react-native';
 import { Picker } from '@react-native-picker/picker';
@@ -14,6 +14,8 @@ export interface IntercomConfig {
   videoProfile: 'MainStream' | 'SubStream' | 'Auto';
   rtspPath?: string; // Ruta RTSP personalizada (p.ej. axis-media/media.amp?...)
   snapshotPath?: string; // Ruta HTTP(S) de snapshot por modelo
+  videoConnectionMode?: 'sdk' | 'proxy'; // Android siempre usa SDK; web puede elegir
+  proxyUrl?: string; // URL base del proxy para pruebas web
   sipUri: string;
   sipUsername: string;
   sipPassword: string;
@@ -53,6 +55,8 @@ const defaultIntercomConfig: IntercomConfig = {
   videoProfile: 'MainStream',
   rtspPath: '',
   snapshotPath: '',
+  videoConnectionMode: 'sdk',
+  proxyUrl: 'http://localhost:3001',
   sipUri: '',
   sipUsername: '',
   sipPassword: '',
@@ -427,12 +431,41 @@ export default function IntercomConfigurationModal({
                   style={styles.textInput}
                   value={config.rtspPath || ''}
                   onChangeText={(text) => updateConfig('rtspPath', text)}
-                  placeholder="axis-media/media.amp?videocodec=h264&audio=1"
+                  placeholder="profile1"
                   autoCapitalize="none"
                 />
               </View>
 
               {/* Ruta Snapshot oculta - no se usa */}
+
+              {Platform.OS === 'web' && (
+                <>
+                  <View style={styles.inputRow}>
+                    <Text style={styles.inputLabel}>Modo Video (web):</Text>
+                    <View style={styles.pickerContainer}>
+                      <Picker
+                        selectedValue={config.videoConnectionMode || 'proxy'}
+                        onValueChange={(value) => updateConfig('videoConnectionMode', value)}
+                        style={styles.picker}
+                      >
+                        <Picker.Item label="Proxy (PC pruebas rápidas)" value="proxy" />
+                        <Picker.Item label="SDK/Directo (solo Android)" value="sdk" />
+                      </Picker>
+                    </View>
+                  </View>
+
+                  <View style={styles.inputRow}>
+                    <Text style={styles.inputLabel}>URL Proxy:</Text>
+                    <TextInput
+                      style={styles.textInput}
+                      value={config.proxyUrl || ''}
+                      onChangeText={(text) => updateConfig('proxyUrl', text)}
+                      placeholder="http://localhost:3001"
+                      autoCapitalize="none"
+                    />
+                  </View>
+                </>
+              )}
 
               {/* Ayuda contextual y botones rápidos */}
               <View style={{ marginTop: 6 }}>
@@ -460,7 +493,7 @@ export default function IntercomConfigurationModal({
                   </TouchableOpacity>
                 </View>
                 <Text style={{ marginTop: 10, fontSize: 11, color: '#6C757D' }}>
-                  Vídeo e intercomunicación por SDK nativo de cámara (sin proxy ni pruebas ISAPI en app).
+                  Android usa SDK nativo. En web puedes usar modo proxy para validar video/audio ambiente desde el PC.
                 </Text>
               </View>
 

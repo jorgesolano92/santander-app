@@ -283,7 +283,7 @@ export default function NewConfigurationModal({
     },
     modes: {
       automatico: { rule_key: 'horario_automatico', action: 'set_rule', enabled: true },
-      esclusa: { rule_key: 'horaio_esclusa', action: 'set_rule', enabled: true },
+      esclusa: { rule_key: 'horario_esclusa', action: 'set_rule', enabled: true },
       extendido: { rule_key: 'horario_extendido', action: 'set_rule', enabled: true },
       autoservicio: { rule_key: 'horario_autoservicio', action: 'set_rule', enabled: true },
       oficinaCerrada: { rule_key: 'horario_cerrado', action: 'set_rule', enabled: true },
