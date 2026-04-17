@@ -6,10 +6,7 @@ import { useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useDoorControl } from '@/hooks/useDoorControl';
 import DoorVideoStream from './DoorVideoStream';
-import AxisAudioControl from './AxisAudioControl';
 import { IntercomConfig } from './IntercomConfigurationModal';
-import { doorControlService } from '@/services/DoorControlService';
-import { detectDeviceType, supportsIntercom, enrichIntercomConfig } from '@/utils/deviceDetector';
 
 interface DoorConfig {
   enabled: boolean;
@@ -174,71 +171,33 @@ export default function ManualModeModal({
 
   const handleOpenDoor = async (doorId: 'P1' | 'P2', doorName: string) => {
     try {
-      // Obtener configuración de la puerta
-      const doorIndex = doorId === 'P1' ? 0 : 1;
-      const doorConfig = intercomConfigs[doorIndex];
+      console.log(`🚪 Abriendo ${doorName} (enviando pulso)`);
       
-      if (!doorConfig || !doorConfig.intercom) {
-        console.error(`❌ No hay configuración para ${doorName}`);
-        return;
-      }
-
-      const { 
-        doorControlPCB, 
-        doorControlSwitch, 
-        doorControlManualMode, 
-        doorControlPulseTime 
-      } = doorConfig.intercom;
+      // Agregar puerta al set de puertas enviando pulso para mostrar feedback
+      setSendingPulse(prev => new Set(prev).add(doorId));
       
-      const ip = '192.168.1.155'; // IP del servidor SCATI
-      const username = 'Scati2023';
-      const password = 'Scati2023';
+      // Usar el método controlDoor que ahora usa la API global (API2/settags)
+      const success = await controlDoor(doorId, 'open');
 
-      console.log(`🚪 ${doorName} - Modo: ${doorControlManualMode ? 'Manual' : 'Automático'}`);
-      console.log(`🔧 PCB ${doorControlPCB}, Switch ${doorControlSwitch}`);
-
-      // Si es modo MANUAL, alternar entre abrir/cerrar
-      if (doorControlManualMode) {
-        const door = getDoorStatus(doorId);
-        const action = door.isOpen ? 'close' : 'open';
-        const actionText = action === 'open' ? 'Abrir' : 'Cerrar';
-        
-        console.log(`🚪 ${actionText} ${doorName} (Manual)`);
-        const success = await controlDoor(doorId, action);
-        if (success) {
-          console.log(`✅ ${doorName} - Comando ${actionText.toLowerCase()} ejecutado`);
-        } else {
-          console.error(`❌ Error ${actionText.toLowerCase()} ${doorName}`);
-        }
-      } else {
-        // Modo AUTOMÁTICO - usar método de pulso
-        console.log(`🚪 Abriendo ${doorName} (Pulso automático)`);
-        
-        // Agregar puerta al set de puertas enviando pulso
-        setSendingPulse(prev => new Set(prev).add(doorId));
-        
-        const success = await doorControlService.openDoorWithPulse(
-          ip,
-          username,
-          password,
-          doorControlPCB,
-          doorControlSwitch,
-          false, // manualMode = false para pulso automático
-          doorControlPulseTime || 1.0
-        );
-
-        // Remover puerta del set después del pulso
+      // Remover puerta del set después de un delay (para mostrar feedback visual)
+      setTimeout(() => {
         setSendingPulse(prev => {
           const newSet = new Set(prev);
           newSet.delete(doorId);
           return newSet;
         });
+      }, 1000);
 
-        if (success) {
-          console.log(`✅ ${doorName} - Pulso ejecutado correctamente`);
-        } else {
-          console.error(`❌ Error ejecutando pulso en ${doorName}`);
-        }
+      if (success) {
+        console.log(`✅ ${doorName} - Pulso enviado correctamente`);
+      } else {
+        console.error(`❌ Error enviando pulso en ${doorName}`);
+        // Remover inmediatamente en caso de error
+        setSendingPulse(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(doorId);
+          return newSet;
+        });
       }
     } catch (error) {
       console.error(`❌ Error en handleOpenDoor:`, error);
@@ -267,21 +226,13 @@ export default function ManualModeModal({
       return 'ABRIR';
     }
 
-    const { doorControlManualMode } = doorConfig.intercom;
-    
     // Si está enviando pulso, mostrar feedback
     if (sendingPulse.has(doorId)) {
       return 'ENVIANDO PULSO...';
     }
     
-    // Modo AUTOMÁTICO - siempre muestra "ABRIR" (pulso automático)
-    if (!doorControlManualMode) {
-      return 'ABRIR PUERTA';
-    }
-    
-    // Modo MANUAL - alterna entre ABRIR/CERRAR según estado
-    const door = getDoorStatus(doorId);
-    return door.isOpen ? 'CERRAR PUERTA' : 'ABRIR PUERTA';
+    // Siempre mostrar "ABRIR PUERTA" (siempre se envía como pulso)
+    return 'ABRIR PUERTA';
   };
 
   const handleMuteMicrophone = async () => {
@@ -678,26 +629,7 @@ export default function ManualModeModal({
                           intercomConfig={door.intercom} 
                           doorName={door.name}
                         />
-                        {/* Detectar tipo de dispositivo y mostrar control de audio apropiado */}
-                        {(() => {
-                          const deviceType = detectDeviceType(door.intercom.cameraIP);
-                          const hasIntercom = supportsIntercom(deviceType);
-                          
-                          // console.log(`🔍 Puerta ${door.name}: IP=${door.intercom.cameraIP}, Tipo=${deviceType}, Intercom=${hasIntercom}`);
-                          
-                          if (deviceType === 'AXIS-I8116-E') {
-                            // AXIS I8116-E - Audio bidireccional completo
-                            return (
-                              <AxisAudioControl 
-                                intercomConfig={door.intercom} 
-                                doorName={door.name}
-                              />
-                            );
-                          } else {
-                            // Safire o Genérico - NO mostrar control de audio (solo visualización)
-                            return null;
-                          }
-                        })()}
+                        {/* Migración SDK: el audio/intercom se manejará desde el módulo nativo DVR */}
                       </>
                     ) : (
                       <View style={styles.doorControlImagePlaceholder}>
@@ -708,7 +640,7 @@ export default function ManualModeModal({
                     )}
                     
                     <View style={styles.doorControlButtons}>
-                      {/* Botón "LLAMAR" oculto - ahora se usa AxisAudioControl */}
+                      {/* Intercom voz: SDK nativo de cámara (pendiente en UI) */}
                       
                       <TouchableOpacity 
                         style={[

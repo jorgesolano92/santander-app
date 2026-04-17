@@ -11,6 +11,7 @@ interface ModeSelectionModalProps {
   visible: boolean;
   onClose: () => void;
   onModeSelect: (mode: string) => void;
+  currentMode?: string | null;
 }
 
 interface ModeOption {
@@ -83,7 +84,7 @@ const categoryDisplayNames = {
   'INDIVIDUAL': '', // Sin título para los modos individuales
 };
 
-export default function ModeSelectionModal({ visible, onClose, onModeSelect }: ModeSelectionModalProps) {
+export default function ModeSelectionModal({ visible, onClose, onModeSelect, currentMode }: ModeSelectionModalProps) {
   const { width = 0 } = useWindowDimensions();
   const isSmallTablet = width < 900;
   const isLargeTablet = width >= 1200;
@@ -98,6 +99,41 @@ export default function ModeSelectionModal({ visible, onClose, onModeSelect }: M
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const isMountedRef = useRef<boolean>(false);
   const selectedModeRef = useRef<string>('comercial_automatico');
+
+  const normalizeCurrentModeToModeId = useCallback((mode: string | null | undefined): string | null => {
+    if (!mode) return null;
+    const raw = String(mode).trim();
+    const lower = raw.toLowerCase();
+
+    // Si ya viene como rule_key/id de la UI.
+    const directIds = new Set([
+      'comercial_automatico',
+      'comercial_esclusa',
+      'horario_extendido',
+      'horario_autoservicio',
+      'oficina_cerrada',
+      'horario_cerrado',
+      'carga_cajero',
+      'manual',
+    ]);
+    if (directIds.has(lower)) {
+      if (lower === 'horario_cerrado') return 'oficina_cerrada';
+      return lower;
+    }
+
+    // Si viene como etiqueta humana.
+    const labelToIdMap: Record<string, string> = {
+      'comercial automático': 'comercial_automatico',
+      'comercial automatico': 'comercial_automatico',
+      'comercial esclusa': 'comercial_esclusa',
+      'horario extendido': 'horario_extendido',
+      'horario autoservicio': 'horario_autoservicio',
+      'oficina cerrada': 'oficina_cerrada',
+      'carga de cajero': 'carga_cajero',
+      'manual': 'manual',
+    };
+    return labelToIdMap[lower] || null;
+  }, []);
 
   // Actualizar la referencia cuando cambie el modo seleccionado
   useEffect(() => {
@@ -170,6 +206,11 @@ export default function ModeSelectionModal({ visible, onClose, onModeSelect }: M
       console.log('📱 Modal abierto - iniciando configuración');
       isMountedRef.current = true;
       loadConfiguration();
+      const preselectedMode = normalizeCurrentModeToModeId(currentMode);
+      if (preselectedMode) {
+        setSelectedMode(preselectedMode);
+        selectedModeRef.current = preselectedMode;
+      }
       setIsModalReady(true);
     } else if (!visible && isModalReady) {
       console.log('❌ Modal cerrado - limpiando contador');
@@ -177,7 +218,7 @@ export default function ModeSelectionModal({ visible, onClose, onModeSelect }: M
       isMountedRef.current = false;
       setIsModalReady(false);
     }
-  }, [visible, isModalReady]);
+  }, [visible, isModalReady, currentMode, normalizeCurrentModeToModeId]);
 
   // Efecto separado para el contador
   useEffect(() => {
@@ -198,11 +239,24 @@ export default function ModeSelectionModal({ visible, onClose, onModeSelect }: M
     console.log('🎯 Modo cambiado, manteniendo contador actual');
   };
 
+  // Mapeo de IDs de modo a nombres completos para el servicio
+  const modeIdToNameMap: { [key: string]: string } = {
+    'comercial_automatico': 'COMERCIAL AUTOMÁTICO',
+    'comercial_esclusa': 'COMERCIAL ESCLUSA',
+    'horario_extendido': 'HORARIO EXTENDIDO',
+    'horario_autoservicio': 'HORARIO AUTOSERVICIO',
+    'oficina_cerrada': 'OFICINA CERRADA',
+    'carga_cajero': 'CARGA DE CAJERO',
+    'manual': 'MANUAL',
+  };
+
   const handleActivate = () => {
     console.log('✅ Activación manual del modo:', selectedMode);
     console.log('🔧 Estado del contador:', { countdown, isCountdownActive });
     clearCountdown();
-    onModeSelect(selectedMode);
+    // Convertir el ID del modo al nombre completo
+    const modeName = modeIdToNameMap[selectedMode] || selectedMode;
+    onModeSelect(modeName);
   };
 
   const handleClose = () => {
@@ -432,15 +486,11 @@ export default function ModeSelectionModal({ visible, onClose, onModeSelect }: M
   });
 
   // Agrupar modos por categoría
+  // Los 7 modos siempre se muestran (según especificación)
+  // CARGA DE CAJERO se muestra siempre, pero puede estar deshabilitado en la configuración
   const getFilteredModes = () => {
-    let filteredModes = [...modeOptions];
-    
-    // Filtrar CARGA CAJERO si no está habilitado
-    if (!showCargaCajero) {
-      filteredModes = filteredModes.filter(mode => mode.id !== 'carga_cajero');
-    }
-    
-    return filteredModes;
+    // Todos los modos siempre visibles
+    return modeOptions;
   };
 
   const filteredModes = getFilteredModes();

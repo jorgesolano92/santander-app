@@ -1,0 +1,9 @@
+此demo 用于jenkins打包
+app\src\main\jni\nvr_ndk，此目录下的源码可以不提交。编译的时候需要自己从TVTDevSDK/branches/SDK-N9000/NetSdk/DVR_NET_SDK 和 TVTDevSDK/branches/SDK-N9000/NetSdk/include
+目录下更新过来
+jenkins打包时会自动从服务器中拉取最新代码进行打包，所以本地此目录下的c++源码不需要提交，只是为了方便自己本地调试
+更新nvrsdk的jni接口之后记得更新此demo的dvrsdk_20181101.jar包
+
+20181101更改：
+支持v7 v8架构、加入ssl加密库
+ssl加密库地址：http://xxxip/svn/APP_Shared_Lib/Shared_Lib/feedback/lib/openssl

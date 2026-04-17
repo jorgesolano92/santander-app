@@ -17,7 +17,7 @@ const KNOWN_DEVICES: Map<string, DeviceType> = new Map([
   // AXIS I8116-E - Intercomunicador con audio bidireccional
   ['192.168.1.130', 'AXIS-I8116-E'],
   
-  // Safire SF-VI131-IPW-MF - Cámara con audio de un sentido
+  // Ejemplo: cámara Hik/Safire u otro modelo con audio (intercom vía SDK nativo)
   ['192.168.1.117', 'SAFIRE'],
   
   // Añade más dispositivos aquí según sea necesario
@@ -47,7 +47,7 @@ export function supportsIntercom(deviceType: DeviceType): boolean {
     case 'AXIS-I8116-E':
       return true; // AXIS soporta audio bidireccional
     case 'SAFIRE':
-      return false; // Safire solo audio de un sentido
+      return true; // Depende del SDK/dispositivo; mantener true si la puerta usa intercom
     case 'GENERIC':
       return false; // Por defecto, no soporta
     default:
@@ -79,10 +79,10 @@ export function getDeviceInfo(deviceType: DeviceType): {
     
     case 'SAFIRE':
       return {
-        name: 'Safire SF-VI131-IPW-MF',
-        manufacturer: 'Safire',
-        audioCapabilities: 'Audio de un sentido (escuchar desde cámara)',
-        intercomSupport: false,
+        name: 'Cámara compatible (Hik/Safire u OEM)',
+        manufacturer: 'Variable',
+        audioCapabilities: 'Audio bidireccional vía SDK nativo (cuando esté integrado)',
+        intercomSupport: true,
         recommendedCodec: 'PCMU',
         sampleRate: 8000,
       };

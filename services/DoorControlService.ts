@@ -1,7 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 import axios from 'axios';
-import { getUseServerProxy, getProxyBaseUrl } from './AppMode';
 import { emergencyService, EmergencyConfig } from './EmergencyService';
 
 // Importar RNFetchBlob solo en React Native (no en web)
@@ -106,7 +105,23 @@ export interface ConfigurationData {
   deviceId: string;
 }
 
-// Mapeo de nombres de modo a números INI según especificación del cliente
+// Mapeo de nombres de modo a claves de configuración
+const modeNameToConfigKeyMap: { [key: string]: string } = {
+  'COMERCIAL AUTOMATICO': 'automatico',
+  'COMERCIAL AUTOMÁTICO': 'automatico',      // Variante con acento
+  'COMERCIAL ESCLUSA': 'esclusa',            // Exclusa
+  'HORARIO EXTENDIDO': 'extendido',          // Extendido
+  'HORARIO AUTOSERVICIO': 'autoservicio',    // Autoservicio
+  'OFICINA CERRADA': 'oficinaCerrada',       // Oficina Cerrada
+  'CARGA DE CAJERO': 'cargaCajero',          // Carga Cajero
+  'CARGA CAJERO': 'cargaCajero',             // Variante sin "DE"
+  'MANUAL': 'manual',                        // Manual
+  'EMERGENCIA': 'emergencia',                // Emergencia (no se configura aquí)
+};
+
+const TABLET_BEARER_TOKEN_KEY = 'tablet_bearer_token';
+
+// Mapeo de nombres de modo a números INI según especificación del cliente (para compatibilidad)
 const modeNameToIniMap: { [key: string]: number } = {
   'COMERCIAL AUTOMATICO': 1,      // INI1 = Automático
   'COMERCIAL AUTOMÁTICO': 1,      // Variante con acento
@@ -132,6 +147,49 @@ const iniToModeNameMap: { [key: number]: string } = {
   8: 'EMERGENCIA',
 };
 
+// Mapeo de valores de modo (texto de API) a nombres de modo internos
+const apiModeValueToModeNameMap: { [key: string]: string } = {
+  'Automatico': 'COMERCIAL AUTOMÁTICO',
+  'Automático': 'COMERCIAL AUTOMÁTICO',
+  'Esclusa': 'COMERCIAL ESCLUSA',
+  'Extendido': 'HORARIO EXTENDIDO',
+  'Autoservicio': 'HORARIO AUTOSERVICIO',
+  'Cerrado': 'OFICINA CERRADA',
+  'Carga': 'CARGA DE CAJERO',
+  'Carga Cajero': 'CARGA DE CAJERO',
+  'Carga de Cajero': 'CARGA DE CAJERO',
+  'Manual': 'MANUAL',
+  'Emergencia': 'EMERGENCIA',
+};
+
+// Mapeo inverso: nombres de modo a valores de API
+const modeNameToApiValueMap: { [key: string]: string } = {
+  'COMERCIAL AUTOMÁTICO': 'Automatico',
+  'COMERCIAL AUTOMATICO': 'Automatico',
+  'COMERCIAL ESCLUSA': 'Esclusa',
+  'HORARIO EXTENDIDO': 'Extendido',
+  'HORARIO AUTOSERVICIO': 'Autoservicio',
+  'OFICINA CERRADA': 'Cerrado',
+  'CARGA DE CAJERO': 'Carga',
+  'CARGA CAJERO': 'Carga',
+  'MANUAL': 'Manual',
+  'EMERGENCIA': 'Emergencia',
+};
+
+// Mapeo de nombres de modo a valores numéricos para el tag Srv_Horario_2
+const modeNameToNumericValueMap: { [key: string]: string } = {
+  'COMERCIAL AUTOMÁTICO': '1',
+  'COMERCIAL AUTOMATICO': '1',
+  'COMERCIAL ESCLUSA': '2',
+  'HORARIO EXTENDIDO': '3',
+  'HORARIO AUTOSERVICIO': '4',
+  'OFICINA CERRADA': '5',
+  'CARGA DE CAJERO': '6',
+  'CARGA CAJERO': '6',
+  'MANUAL': '7',
+  'EMERGENCIA': '8',
+};
+
 class DoorControlService {
   private baseURL: string = '';
   private apiUsername: string = '';
@@ -139,12 +197,13 @@ class DoorControlService {
   private config: ConfigurationData | null = null;
   private connectionStatus: 'online' | 'offline' = 'offline';
   private statusCheckInterval: ReturnType<typeof setInterval> | null = null;
-  private sandboxMode: boolean = true; // Modo sandbox habilitado permanentemente
+  private sandboxMode: boolean = false; // Modo sandbox deshabilitado - conexión real al servidor
   private mockSystemStatus: SystemStatus;
   private lastEventId: number = 0;
   private lastChangeTime: number = 0;
   private statusChangeCallback: (() => void) | null = null;
   private verifyingDoors: Set<string> = new Set();
+  private bearerToken: string | null = null;
 
   constructor() {
     // Estado inicial simulado
@@ -257,6 +316,8 @@ class DoorControlService {
       this.baseURL = `https://${config.serverIP}:${config.apiPort}`;
       this.apiUsername = config.apiUsername;
       this.apiPassword = config.apiPassword;
+      // Fuerza regenerar token con la nueva configuración API.
+      await this.clearBearerToken();
       
       // Guardar configuración localmente
       await this.saveConfiguration(config);
@@ -280,6 +341,137 @@ class DoorControlService {
     return `Basic ${encoded}`;
   }
 
+  private normalizeApiPath(path: string): string {
+    const p = String(path || '').trim();
+    if (!p) return '';
+    return p.startsWith('/') ? p : `/${p}`;
+  }
+
+  private buildBackendBaseUrl(consoleIP: string, port: number): string {
+    const host = String(consoleIP || '').trim();
+    const p = Number(port || 8000);
+    // Para backend FastAPI local normalmente HTTP.
+    return `http://${host}:${p}`;
+  }
+
+  private async getSavedAppConfig(): Promise<any | null> {
+    try {
+      const savedConfig = await AsyncStorage.getItem('new_door_config');
+      return savedConfig ? JSON.parse(savedConfig) : null;
+    } catch (error) {
+      console.error('❌ Error leyendo configuración guardada:', error);
+      return null;
+    }
+  }
+
+  private async getBearerToken(): Promise<string | null> {
+    if (this.bearerToken) return this.bearerToken;
+    try {
+      const token = await AsyncStorage.getItem(TABLET_BEARER_TOKEN_KEY);
+      this.bearerToken = token || null;
+      return this.bearerToken;
+    } catch (error) {
+      console.error('❌ Error leyendo bearer token:', error);
+      return null;
+    }
+  }
+
+  private async saveBearerToken(token: string): Promise<void> {
+    this.bearerToken = token;
+    await AsyncStorage.setItem(TABLET_BEARER_TOKEN_KEY, token);
+  }
+
+  private async clearBearerToken(): Promise<void> {
+    this.bearerToken = null;
+    await AsyncStorage.removeItem(TABLET_BEARER_TOKEN_KEY);
+  }
+
+  private async authenticateWithConfiguredCredentials(config: any): Promise<string | null> {
+    try {
+      const consoleIP = config?.network?.consoleIP;
+      const port = Number(config?.api?.port || 8000);
+      const username = String(config?.api?.username || '').trim();
+      const password = String(config?.api?.password || '').trim();
+      const tokenPath = this.normalizeApiPath(config?.api?.urlToken || '/api/v1/auth/token');
+
+      if (!consoleIP || !username || !password) {
+        console.warn('⚠️ No se puede obtener token: falta IP/usuario/contraseña en configuración');
+        return null;
+      }
+
+      const baseUrl = this.buildBackendBaseUrl(consoleIP, port);
+      const body = new URLSearchParams();
+      body.append('username', username);
+      body.append('password', password);
+
+      const response = await fetch(`${baseUrl}${tokenPath}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: body.toString(),
+      });
+
+      if (!response.ok) {
+        const errText = await response.text().catch(() => '');
+        console.error(`❌ Error obteniendo token (${response.status}): ${errText}`);
+        return null;
+      }
+
+      const data = await response.json();
+      const token = data?.access_token;
+      if (!token) {
+        console.error('❌ Respuesta de token sin access_token');
+        return null;
+      }
+      await this.saveBearerToken(token);
+      console.log('✅ Bearer token obtenido y guardado');
+      return token;
+    } catch (error) {
+      console.error('❌ Error autenticando contra backend:', error);
+      return null;
+    }
+  }
+
+  private async authenticatedRequest(
+    config: any,
+    method: 'GET' | 'POST',
+    endpointPath: string,
+    jsonBody?: any
+  ): Promise<Response | null> {
+    const baseUrl = this.buildBackendBaseUrl(config?.network?.consoleIP, Number(config?.api?.port || 8000));
+    const endpoint = this.normalizeApiPath(endpointPath);
+
+    let token = await this.getBearerToken();
+    if (!token) {
+      token = await this.authenticateWithConfiguredCredentials(config);
+      if (!token) return null;
+    }
+
+    const makeCall = async (bearer: string) => {
+      const headers: Record<string, string> = {
+        Authorization: `Bearer ${bearer}`,
+      };
+      if (jsonBody !== undefined) {
+        headers['Content-Type'] = 'application/json';
+      }
+      return fetch(`${baseUrl}${endpoint}`, {
+        method,
+        headers,
+        ...(jsonBody !== undefined ? { body: JSON.stringify(jsonBody) } : {}),
+      });
+    };
+
+    let response = await makeCall(token);
+    if (response.status === 401) {
+      await this.clearBearerToken();
+      const renewed = await this.authenticateWithConfiguredCredentials(config);
+      if (!renewed) return null;
+      response = await makeCall(renewed);
+    }
+    return response;
+  }
+
   // Registrar callback para notificar cambios de estado
   onStatusChange(callback: () => void) {
     this.statusChangeCallback = callback;
@@ -298,107 +490,121 @@ class DoorControlService {
   }
 
   /**
-   * Consultar el estado inicial de todas las puertas configuradas
-   * Hace UNA SOLA petición GET que trae todos los tags
+   * Consultar el estado inicial del sistema
+   * Obtiene el modo actual usando API2/gettags (ya no usa SDIO12)
    */
   async refreshAllDoorsStatus(): Promise<boolean> {
     try {
-      console.log('🔄 Consultando estado inicial de todas las puertas...');
+      console.log('🔄 Consultando estado inicial del sistema...');
       
-      // Cargar la configuración de puertas desde AsyncStorage
+      // Cargar la configuración desde AsyncStorage
       const savedConfig = await AsyncStorage.getItem('new_door_config');
       if (!savedConfig) {
-        console.warn('⚠️ No hay configuración de puertas guardada');
+        console.warn('⚠️ No hay configuración guardada');
         return false;
       }
 
       const config = JSON.parse(savedConfig);
-      if (!config.doors) {
-        console.warn('⚠️ Configuración de puertas no válida');
-        return false;
-      }
-
-      // Buscar solo puertas habilitadas
-      const enabledDoors = config.doors.filter((door: any) => door.enabled);
       
-      if (enabledDoors.length === 0) {
-        console.warn('⚠️ No hay puertas habilitadas');
+      // Verificar que tenemos la configuración de API
+      if (!config.network?.consoleIP || !config.api?.port || !config.api?.username || !config.api?.password) {
+        console.error('❌ Configuración de API incompleta');
         return false;
       }
-
-      console.log(`📋 Consultando estado de ${enabledDoors.length} puertas habilitadas`);
-
-      // Usar la configuración de la primera puerta para hacer UNA SOLA petición
-      const firstDoor = enabledDoors[0];
-      
-      if (!firstDoor.ipExterior || 
-          !firstDoor.intercom?.doorControlUsername || 
-          !firstDoor.intercom?.doorControlPassword) {
-        console.warn('⚠️ Configuración SDIO12 incompleta en primera puerta');
-        return false;
-      }
-
-      const { doorControlUsername, doorControlPassword } = firstDoor.intercom;
-      const controllerIP = firstDoor.ipExterior;
-
-      // Hacer UNA SOLA petición GET que trae TODOS los tags
-      const sdioResponse = await this.getSDIO12Status(
-        controllerIP,
-        doorControlUsername,
-        doorControlPassword
-      );
-
-      if (!sdioResponse) {
-        console.error('❌ No se pudo obtener el estado SDIO12');
-        return false;
-      }
-
-      console.log(`📊 Respuesta SDIO12: ${sdioResponse.nModulos} módulos, ${sdioResponse.tags.length} tags`);
-
-      // Filtrar solo los tags de salidas digitales (smcse_do)
-      const doorTags = sdioResponse.tags.filter(tag => tag.tag.startsWith('smcse_do_'));
-      console.log(`🚪 Tags de puertas encontrados: ${doorTags.length}`);
-
-      // Actualizar el estado de cada puerta habilitada
-      let updatedCount = 0;
-      enabledDoors.forEach((door: any, index: number) => {
-        const doorId = `P${index + 1}` as 'P1' | 'P2' | 'P3' | 'P4';
-        
-        if (!door.intercom?.doorControlPCB || !door.intercom?.doorControlSwitch) {
-          console.warn(`⚠️ ${doorId}: PCB/Switch no configurados`);
-          return;
-        }
-
-        const { doorControlPCB, doorControlSwitch } = door.intercom;
-        const tag = this.buildSDIO12Tag(doorControlPCB, doorControlSwitch);
-        
-        // Buscar el tag correspondiente en la respuesta
-        const switchTag = doorTags.find(t => t.tag === tag);
-        
-        if (switchTag) {
-          const doorStatus = this.mockSystemStatus.doors[doorId];
-          if (doorStatus) {
-            const isOpen = switchTag.St === 1 || switchTag.v === '1';
-            doorStatus.status = isOpen ? 'open' : 'closed';
-            doorStatus.locked = !isOpen;
-            doorStatus.lastUpdate = new Date().toISOString();
-            
-            console.log(`✅ ${doorId} (${tag}): ${doorStatus.status} (St=${switchTag.St}, v=${switchTag.v})`);
-            updatedCount++;
-          }
-        } else {
-          console.warn(`⚠️ ${doorId}: Tag ${tag} no encontrado en respuesta`);
-        }
-      });
 
       this.mockSystemStatus.lastSync = new Date().toISOString();
+      
+      // Obtener el modo actual usando API2/gettags (la única petición necesaria)
+      const currentMode = await this.getCurrentModeFromAPI2();
+      if (currentMode) {
+        this.mockSystemStatus.mode = currentMode;
+        console.log(`✅ Modo actual actualizado desde API2: ${currentMode}`);
+      } else {
+        console.warn('⚠️ No se pudo obtener el modo desde API2, manteniendo modo actual');
+      }
+      
       this.notifyStatusChange(); // Notificar para actualizar UI
       
-      console.log(`✅ Estado actualizado para ${updatedCount}/${enabledDoors.length} puertas`);
+      console.log(`✅ Estado del sistema actualizado`);
       return true;
     } catch (error) {
-      console.error('❌ Error refrescando estado de puertas:', error);
+      console.error('❌ Error refrescando estado del sistema:', error);
       return false;
+    }
+  }
+
+  /**
+   * Detectar el modo actual del sistema desde una respuesta SDIO12 ya obtenida
+   * (para evitar hacer una segunda petición)
+   */
+  private detectCurrentModeFromResponse(sdioResponse: SDIO12Response): void {
+    try {
+      console.log('🔍 Detectando modo actual desde respuesta SDIO12...');
+      
+      // Mapeo de tags a modos
+      const modeTagsMap: { [key: string]: string } = {
+        'smcse_di_01_01_01': 'COMERCIAL AUTOMÁTICO',  // Modo 1
+        'smcse_di_01_01_02': 'COMERCIAL ESCLUSA',      // Modo 2
+        'smcse_di_01_01_03': 'HORARIO EXTENDIDO',      // Modo 3
+        'smcse_di_01_01_04': 'HORARIO AUTOSERVICIO',   // Modo 4
+        'smcse_di_01_01_05': 'OFICINA CERRADA',        // Modo 5
+        'smcse_di_01_01_06': 'CARGA DE CAJERO',        // Modo 6
+        'smcse_di_01_01_07': 'MANUAL',                 // Modo 7
+      };
+
+      // Buscar los tags de modo (entradas digitales)
+      const modeTags = Object.keys(modeTagsMap);
+      let activeMode: string | null = null;
+      
+      for (const tag of modeTags) {
+        const tagData = sdioResponse.tags.find(t => t.tag === tag);
+        if (tagData) {
+          // Para entradas digitales, verificar si v === '1' (activo)
+          const isActive = tagData.v === '1';
+          console.log(`🔍 ${tag}: v=${tagData.v}, St=${tagData.St}, activo=${isActive}`);
+          
+          if (isActive) {
+            activeMode = modeTagsMap[tag];
+            console.log(`✅ Modo detectado: ${activeMode} (${tag})`);
+            break; // Solo un modo puede estar activo a la vez
+          }
+        } else {
+          console.warn(`⚠️ Tag ${tag} no encontrado en respuesta SDIO12`);
+        }
+      }
+
+      // Actualizar el modo en el estado del sistema
+      if (activeMode) {
+        this.mockSystemStatus.mode = activeMode;
+        console.log(`✅ Modo actual actualizado: ${activeMode}`);
+      } else {
+        console.warn('⚠️ No se detectó ningún modo activo, manteniendo modo actual:', this.mockSystemStatus.mode);
+      }
+    } catch (error) {
+      console.error('❌ Error detectando modo actual:', error);
+    }
+  }
+
+  /**
+   * Detectar el modo actual del sistema leyendo los relés smcse_di_01_01_01 a smcse_di_01_01_07
+   * desde el servidor SCATI (hace una petición nueva)
+   */
+  async detectCurrentMode(ip: string, username: string, password: string, port?: number): Promise<void> {
+    try {
+      console.log('🔍 Detectando modo actual desde servidor SCATI...');
+      
+      // Obtener estado SDIO12
+      const sdioResponse = await this.getSDIO12Status(ip, username, password, port);
+      
+      if (!sdioResponse) {
+        console.warn('⚠️ No se pudo obtener estado SDIO12 para detectar modo');
+        return;
+      }
+
+      // Usar el método que procesa la respuesta
+      this.detectCurrentModeFromResponse(sdioResponse);
+    } catch (error) {
+      console.error('❌ Error detectando modo actual:', error);
     }
   }
 
@@ -424,12 +630,8 @@ class DoorControlService {
       // Primero probar sin autenticación para ver si el dispositivo responde
       console.log(`🌐 Probando conectividad básica...`);
       try {
-        const useProxy = await getUseServerProxy();
-        const proxyBase = await getProxyBaseUrl();
-        const basicUrl = useProxy 
-          ? `${proxyBase}/${deviceType}/${ip}/`
-          : `https://${ip}/`;
-        
+        const basicUrl = `https://${ip}/`;
+
         const basicResponse = await fetch(basicUrl, {
           method: 'GET',
           headers: {
@@ -472,12 +674,8 @@ class DoorControlService {
       
       for (const endpoint of testEndpoints) {
         try {
-          const useProxy = await getUseServerProxy();
-          const proxyBase = await getProxyBaseUrl();
-          const url = useProxy 
-            ? `${proxyBase}/${deviceType}/${ip}${endpoint}`
-            : `https://${ip}${endpoint}`;
-          
+          const url = `https://${ip}${endpoint}`;
+
           console.log(`📡 Probando: ${url}`);
           
           const response = await fetch(url, {
@@ -707,92 +905,139 @@ class DoorControlService {
   //   }
   // }
 
-  // Cambiar modo de operación
-  async changeMode(mode: string): Promise<boolean> {
+  /**
+   * Obtener modo actual desde backend Python (`GET /api/v1/get_mode`).
+   * Mapea `current_mode` (rule_key) al nombre de modo de la app.
+   */
+  async getCurrentModeFromAPI2(): Promise<string | null> {
     try {
-      // Obtener el número INI correspondiente al modo
-      const iniNumber = modeNameToIniMap[mode.toUpperCase()];
-      
-      if (iniNumber === undefined) {
-        console.error(`❌ Modo no válido: ${mode}. Modos disponibles:`, Object.keys(modeNameToIniMap));
-        return false;
-      }
-      
-      // Modo sandbox: simular cambio de modo
-      if (this.sandboxMode) {
-        console.log(`🔧 SANDBOX MODE: Changing mode to ${mode} (INI${iniNumber})`);
-        
-        // Simular delay de red
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        
-        // Actualizar estado simulado
-        const newMode = iniToModeNameMap[iniNumber] || mode;
-        console.log(`🔄 Actualizando modo: ${this.mockSystemStatus.mode} -> ${newMode}`);
-        this.mockSystemStatus.mode = newMode;
-        this.mockSystemStatus.lastSync = new Date().toISOString();
-        
-        // Simular lógica específica por modo
-        if (iniNumber === 8) { // INI8 = EMERGENCIA
-          this.mockSystemStatus.emergencyActive = true;
-          this.mockSystemStatus.doors.P1.locked = false;
-          this.mockSystemStatus.doors.P2.locked = false;
-          this.mockSystemStatus.doors.P1.status = 'open';
-          this.mockSystemStatus.doors.P2.status = 'open';
-        } else if (iniNumber === 5) { // INI5 = OFICINA CERRADA
-          this.mockSystemStatus.doors.P1.locked = true;
-          this.mockSystemStatus.doors.P2.locked = true;
-          this.mockSystemStatus.doors.P1.status = 'closed';
-          this.mockSystemStatus.doors.P2.status = 'closed';
-        } else if (iniNumber === 6) { // INI6 = CARGA CAJERO
-          this.mockSystemStatus.doors.P1.locked = true;
-          this.mockSystemStatus.doors.P1.status = 'closed';
-          this.mockSystemStatus.doors.P2.locked = false;
-          this.mockSystemStatus.doors.P2.status = 'open';
-        } else {
-          // Restablecer emergencia para otros modos
-          this.mockSystemStatus.emergencyActive = false;
-        }
-        
-        console.log(`✅ SANDBOX: Mode changed successfully to ${mode} (INI${iniNumber})`);
-        return true;
+      const config = await this.getSavedAppConfig();
+      if (!config) {
+        console.error('❌ No hay configuración guardada');
+        return null;
       }
 
-      if (!this.baseURL) {
-        console.warn('BaseURL not configured, cannot change mode');
+      const endpoint = config?.api?.urlGet || '/api/v1/get_mode';
+      const response = await this.authenticatedRequest(config, 'GET', endpoint);
+      if (!response) return null;
+      if (!response.ok) {
+        const t = await response.text().catch(() => '');
+        console.error(`❌ Error obteniendo modo (${response.status}): ${t}`);
+        return null;
+      }
+
+      const data = await response.json();
+      const currentRuleKey = data?.current_mode;
+      if (!currentRuleKey || typeof currentRuleKey !== 'string') {
+        return null;
+      }
+
+      const configuredModes = config?.modes || {};
+      const modeEntry = Object.entries(configuredModes).find(
+        ([, v]: any) => v?.rule_key === currentRuleKey
+      );
+      if (modeEntry) {
+        const configKey = modeEntry[0];
+        const configKeyToModeName: Record<string, string> = {
+          automatico: 'COMERCIAL AUTOMÁTICO',
+          esclusa: 'COMERCIAL ESCLUSA',
+          extendido: 'HORARIO EXTENDIDO',
+          autoservicio: 'HORARIO AUTOSERVICIO',
+          oficinaCerrada: 'OFICINA CERRADA',
+          cargaCajero: 'CARGA DE CAJERO',
+          manual: 'MANUAL',
+        };
+        return configKeyToModeName[configKey] || currentRuleKey;
+      }
+      return currentRuleKey;
+    } catch (error) {
+      console.error('❌ Error obteniendo modo actual:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Generar header de autenticación BASIC para la API
+   */
+  private getBasicAuthHeaderForAPI(username: string, password: string): string {
+    const credentials = `${username}:${password}`;
+    
+    // React Native compatible base64 encoding
+    let encoded: string;
+    try {
+      // Intentar con btoa si está disponible (web)
+      if (typeof btoa !== 'undefined') {
+        encoded = btoa(credentials);
+      } else {
+        // Fallback para React Native: usar Buffer
+        encoded = Buffer.from(credentials, 'utf-8').toString('base64');
+      }
+    } catch (error) {
+      console.error('❌ Error encoding credentials:', error);
+      // Fallback manual si todo falla
+      encoded = this.base64Encode(credentials);
+    }
+    
+    return `Basic ${encoded}`;
+  }
+
+  /**
+   * Cambiar modo usando backend Python (`POST /api/v1/set_mode`).
+   * Payload:
+   * { action: "set_rule", rule_key: "...", active: true }
+   */
+  async changeModeWithAPI2(mode: string): Promise<boolean> {
+    try {
+      const config = await this.getSavedAppConfig();
+      if (!config) {
+        console.error('❌ No hay configuración guardada');
         return false;
       }
 
-      const modeRequest: ModeChangeRequest = {
-        mode: iniNumber,
-        timestamp: new Date().toISOString(),
-        operator: 'tablet-app',
+      const configKey = modeNameToConfigKeyMap[mode.toUpperCase()];
+      if (!configKey) {
+        console.error(`❌ Modo no reconocido: ${mode}`);
+        return false;
+      }
+      const modeConfig = config?.modes?.[configKey];
+      if (!modeConfig || modeConfig.enabled === false) {
+        console.error(`❌ Configuración de modo inválida o deshabilitada para ${mode}`);
+        return false;
+      }
+
+      const endpoint = config?.api?.urlPost || '/api/v1/set_mode';
+      const payload = {
+        action: modeConfig.action || 'set_rule',
+        rule_key: modeConfig.rule_key,
+        active: true,
       };
 
-      const response = await fetch(`${this.baseURL}/api/modo`, {
-        method: 'POST',
-        headers: {
-          'Authorization': this.getBasicAuthHeader(),
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(modeRequest),
-      });
-
+      const response = await this.authenticatedRequest(config, 'POST', endpoint, payload);
+      if (!response) return false;
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        const t = await response.text().catch(() => '');
+        console.error(`❌ Error cambiando modo (${response.status}): ${t}`);
+        return false;
       }
 
-      const result = await response.json();
-      console.log('Mode change result:', result);
-      
-      // Verificar que el cambio se aplicó correctamente
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      const status = await this.getSystemStatus();
-      
-      return status?.mode === iniToModeNameMap[iniNumber];
+      await new Promise(resolve => setTimeout(resolve, 300));
+      const currentMode = await this.getCurrentModeFromAPI2();
+      if (currentMode) {
+        this.mockSystemStatus.mode = currentMode;
+      }
+      this.mockSystemStatus.lastSync = new Date().toISOString();
+      this.notifyStatusChange();
+      return true;
     } catch (error) {
-      console.error('Error changing mode:', error);
+      console.error('❌ Error cambiando modo:', error);
       return false;
     }
+  }
+
+  // Cambiar modo de operación (ahora usa API2/settags)
+  async changeMode(mode: string): Promise<boolean> {
+    // Usar el nuevo método con API2
+    return await this.changeModeWithAPI2(mode);
   }
 
   // Activar/Desactivar modo emergencia
@@ -865,55 +1110,26 @@ class DoorControlService {
     }
   }
 
-  // Control manual de puertas usando SDIO12
+  // Control de puertas usando API2/settags (configuración global)
   async controlDoor(doorId: 'P1' | 'P2' | 'P3' | 'P4', action: 'open' | 'close'): Promise<boolean> {
     try {
       console.log(`🚪 Intentando ${action === 'open' ? 'abrir' : 'cerrar'} ${doorId}`);
-      
-      // Modo sandbox: simular control de puerta
-      if (this.sandboxMode) {
-        console.log(`🔧 SANDBOX MODE: ${action}ing door ${doorId}`);
-        
-        // Simular delay de operación mecánica
-        await new Promise(resolve => setTimeout(resolve, 800));
-        
-        // Actualizar estado de la puerta específica
-        const door = this.mockSystemStatus.doors[doorId];
-        if (door) {
-          if (action === 'open') {
-            door.status = 'opening';
-            door.locked = false;
-            
-            // Simular apertura completa después de un delay
-            setTimeout(() => {
-              door.status = 'open';
-              door.lastUpdate = new Date().toISOString();
-            }, 2000);
-          } else {
-            door.status = 'closing';
-            
-            // Simular cierre completo después de un delay
-            setTimeout(() => {
-              door.status = 'closed';
-              door.locked = true;
-              door.lastUpdate = new Date().toISOString();
-            }, 2000);
-          }
-        }
-        
-        this.mockSystemStatus.lastSync = new Date().toISOString();
-        console.log(`✅ SANDBOX: Door ${doorId} ${action} command executed`);
-        return true;
-      }
 
-      // Cargar la configuración de puertas desde AsyncStorage
+      // Cargar la configuración desde AsyncStorage
       const savedConfig = await AsyncStorage.getItem('new_door_config');
       if (!savedConfig) {
-        console.error('❌ No hay configuración de puertas guardada');
+        console.error('❌ No hay configuración guardada');
         return false;
       }
 
       const config = JSON.parse(savedConfig);
+      
+      // Verificar configuración de API global
+      if (!config.network?.consoleIP || !config.api?.port || !config.api?.username || !config.api?.password) {
+        console.error('❌ Configuración de API global incompleta');
+        return false;
+      }
+
       if (!config.doors) {
         console.error('❌ Configuración de puertas no válida');
         return false;
@@ -931,79 +1147,104 @@ class DoorControlService {
         return false;
       }
 
-      // Verificar que tenga configuración SDIO12
-      if (!doorConfig.ipExterior || 
-          !doorConfig.intercom?.doorControlUsername || 
-          !doorConfig.intercom?.doorControlPassword) {
-        console.error(`❌ Configuración SDIO12 incompleta para ${doorId}`);
+      // Verificar que tenga configuración de PCB y Switch
+      if (!doorConfig.intercom?.doorControlPCB || !doorConfig.intercom?.doorControlSwitch) {
+        console.error(`❌ Configuración de PCB/Switch incompleta para ${doorId}`);
         return false;
       }
 
-      const { doorControlUsername, doorControlPassword, doorControlPCB, doorControlSwitch } = doorConfig.intercom;
-      const controllerIP = doorConfig.ipExterior; // Usar la IP Exterior de la puerta
+      const { doorControlPCB, doorControlSwitch } = doorConfig.intercom;
+      const modeTag = config.api.modeTag || 'Srv_Horario_2';
+      const apiUrlPost = config.api.urlPost || 'API2/settags';
+      const consoleIP = config.network.consoleIP;
+      const port = config.api.port;
+      const username = config.api.username;
+      const password = config.api.password;
 
-      console.log(`🔧 Usando configuración SDIO12:`, {
-        ip: controllerIP,
+      // Construir tag de entrada digital (smcse_di_XX_XX_XX) usando PCB y Switch
+      const diTag = this.buildSDIO12Tag(doorControlPCB, doorControlSwitch, true);
+
+      // Construir payload: AMBOS tags (igual que en cambio de modo)
+      // Primer tag: modeTag global (Srv_Horario_2)
+      // Segundo tag: tag de la puerta (smcse_di_XX_XX_XX)
+      const payload = {
+        tags: [
+          {
+            tag: modeTag,
+            Tip: 1,
+            v: action === 'open' ? '1001' : '1000',
+            St: action === 'open' ? 1001 : 1000
+          },
+          {
+            tag: diTag,
+            Tip: 1,
+            v: action === 'open' ? '1001' : '1000',
+            St: action === 'open' ? 1001 : 1000
+          }
+        ]
+      };
+
+      console.log(`🔧 Control de puerta ${doorId} usando API2/settags:`, {
+        consoleIP,
+        port,
+        modeTag,
+        diTag,
         pcb: doorControlPCB,
         switch: doorControlSwitch,
-        tag: this.buildSDIO12Tag(doorControlPCB, doorControlSwitch)
+        payload
       });
 
-      // Llamar al método SDIO12
-      const success = await this.controlSDIO12Switch(
-        controllerIP,
-        doorControlUsername,
-        doorControlPassword,
-        doorControlPCB,
-        doorControlSwitch,
-        action
-      );
+      const authHeader = this.getBasicAuthHeaderForAPI(username, password);
 
-      if (success) {
-        console.log(`✅ Puerta ${doorId} ${action === 'open' ? 'abierta' : 'cerrada'} exitosamente`);
-        
-        // Marcar que se está verificando el estado
-        this.verifyingDoors.add(doorId);
-        this.notifyStatusChange(); // Notificar para mostrar loader
-        
-        // Consultar el estado real desde SDIO12 después de 1 segundo
-        setTimeout(async () => {
-          try {
-            const realStatus = await this.getSDIO12SwitchStatus(
-              controllerIP,
-              doorControlUsername,
-              doorControlPassword,
-              doorControlPCB,
-              doorControlSwitch
-            );
-            
-            if (realStatus) {
-              const door = this.mockSystemStatus.doors[doorId];
-              if (door) {
-                door.status = realStatus.isOpen ? 'open' : 'closed';
-                door.locked = !realStatus.isOpen;
-                door.lastUpdate = new Date().toISOString();
-                this.mockSystemStatus.lastSync = new Date().toISOString();
-                
-                console.log(`🔄 Estado real actualizado para ${doorId}:`, {
-                  status: door.status,
-                  locked: door.locked,
-                  St: realStatus.St,
-                  v: realStatus.v
-                });
-              }
-            }
-          } catch (error) {
-            console.error(`❌ Error consultando estado real de ${doorId}:`, error);
-          } finally {
-            // Remover de la lista de verificación
-            this.verifyingDoors.delete(doorId);
-            this.notifyStatusChange(); // Notificar para ocultar loader
-          }
-        }, 1000);
+      let result: any;
+
+      const directUrl = `https://${consoleIP}:${port}/${apiUrlPost}`;
+      console.log(`📡 Enviando POST: ${directUrl}`);
+
+      if (Platform.OS !== 'web' && RNFetchBlob && RNFetchBlob.config) {
+        console.log(`📱 Usando RNFetchBlob (React Native)`);
+
+        const response = await RNFetchBlob.config({
+          trusty: true,
+          timeout: 10000
+        }).fetch('POST', directUrl, {
+          'Authorization': authHeader,
+          'Content-Type': 'application/json',
+        }, JSON.stringify(payload));
+
+        const status = response.info().status;
+        if (status >= 200 && status < 300) {
+          const responseText = response.text();
+          result = JSON.parse(responseText);
+          console.log(`✅ Puerta ${doorId} ${action === 'open' ? 'abierta' : 'cerrada'} exitosamente:`, result);
+        } else {
+          console.error(`❌ Error HTTP ${status} controlando puerta`);
+          return false;
+        }
+      } else {
+        const response = await fetch(directUrl, {
+          method: 'POST',
+          headers: {
+            'Authorization': authHeader,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(payload),
+        });
+
+        if (!response.ok) {
+          console.error(`❌ Error HTTP ${response.status} controlando puerta`);
+          const errorText = await response.text();
+          console.error(`❌ Error respuesta: ${errorText}`);
+          return false;
+        }
+
+        result = await response.json();
+        console.log(`✅ Puerta ${doorId} ${action === 'open' ? 'abierta' : 'cerrada'} exitosamente:`, result);
       }
 
-      return success;
+      // Siempre es un pulso, así que no necesitamos verificar estado después
+      this.notifyStatusChange();
+      return true;
     } catch (error) {
       console.error(`❌ Error controlando puerta ${doorId}:`, error);
       return false;
@@ -1014,12 +1255,16 @@ class DoorControlService {
   
   /**
    * Construir el tag SDIO12 basado en PCB y Switch
-   * Formato: smcse_do_01_{PCB}_{SWITCH}
+   * Formato: smcse_do_01_{PCB}_{SWITCH} o smcse_di_01_{PCB}_{SWITCH}
+   * @param pcb Número de placa
+   * @param switchNum Número de switch/relé
+   * @param useDI Si es true, usa "di" (entradas digitales), si es false usa "do" (salidas digitales)
    */
-  private buildSDIO12Tag(pcb: number, switchNum: number): string {
+  private buildSDIO12Tag(pcb: number, switchNum: number, useDI: boolean = false): string {
     const pcbStr = pcb.toString().padStart(2, '0');
     const switchStr = switchNum.toString().padStart(2, '0');
-    return `smcse_do_01_${pcbStr}_${switchStr}`;
+    const type = useDI ? 'di' : 'do';
+    return `smcse_${type}_01_${pcbStr}_${switchStr}`;
   }
 
   /**
@@ -1074,9 +1319,15 @@ class DoorControlService {
 
   /**
    * Probar diferentes configuraciones de conexión para SCATI
+   * @param ip Puede ser "ip" o "ip:port"
    */
   private async tryDirectConnection(ip: string, username: string, password: string, isPost: boolean = false, body?: any): Promise<any> {
-    const url = `https://${ip}/sdio12`;
+    // Si la IP ya incluye el puerto (formato ip:port), usarla directamente
+    // Si no, usar puerto por defecto 4436 (puerto del servidor SCATI)
+    // Agregar parámetro para deshabilitar Sentry
+    const url = ip.includes(':') 
+      ? `https://${ip}/sdio12?sentry=0`
+      : `https://${ip}:4436/sdio12?sentry=0`;
     
     try {
       console.log(`🔍 Conectando directamente a: ${url}`);
@@ -1090,21 +1341,30 @@ class DoorControlService {
       if (Platform.OS !== 'web' && RNFetchBlob && RNFetchBlob.config) {
         console.log(`📱 Usando RNFetchBlob (React Native)`);
         
+        // Headers para evitar bloqueo de Sentry/Cloudflare
+        const browserHeaders = {
+          'Authorization': this.getSDIO12AuthHeader(username, password),
+          'Content-Type': 'application/json',
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'Accept': 'application/json, text/plain, */*',
+          'Accept-Language': 'es-ES,es;q=0.9,en;q=0.8',
+          'Referer': url.replace('/sdio12', '/'),
+          'Origin': url.replace('/sdio12', ''),
+          'Connection': 'keep-alive',
+          'Cache-Control': 'no-cache',
+          'X-Disable-Sentry': '1',
+          'X-Sentry-Enabled': '0'
+        };
+
+        // Configuración para aceptar certificados SSL no confiables (autofirmados)
+        const rnFetchConfig = {
+          trusty: true, // Acepta certificados SSL autofirmados/no confiables
+          timeout: 10000
+        };
+
         const response = isPost 
-          ? await RNFetchBlob.config({
-              trusty: true, // Acepta certificados SSL autofirmados
-              timeout: 10000
-            }).fetch('POST', url, {
-              'Authorization': this.getSDIO12AuthHeader(username, password),
-              'Content-Type': 'application/json',
-            }, JSON.stringify(body))
-          : await RNFetchBlob.config({
-              trusty: true, // Acepta certificados SSL autofirmados
-              timeout: 10000
-            }).fetch('GET', url, {
-              'Authorization': this.getSDIO12AuthHeader(username, password),
-              'Content-Type': 'application/json',
-            });
+          ? await RNFetchBlob.config(rnFetchConfig).fetch('POST', url, browserHeaders, JSON.stringify(body))
+          : await RNFetchBlob.config(rnFetchConfig).fetch('GET', url, browserHeaders);
 
         const status = response.info().status;
         console.log(`📊 Respuesta directa: ${status}`);
@@ -1137,9 +1397,17 @@ class DoorControlService {
           throw new Error(`HTTP ${status}: ${errorText}`);
         }
       } else {
-        // Fallback para web o cuando RNFetchBlob no está disponible
-        console.log(`🌐 RNFetchBlob no disponible, usando modo proxy`);
-        throw new Error('RNFetchBlob no disponible en este entorno');
+        // En web, el modo directo no es posible debido a restricciones de seguridad del navegador
+        // que bloquean certificados SSL no confiables. Debe usarse el proxy.
+        if (Platform.OS === 'web') {
+          console.error(`🌐 ERROR: En web, el modo directo no es compatible con certificados SSL no confiables.`);
+          console.error(`💡 SOLUCIÓN: Habilita el modo proxy en la configuración de la aplicación.`);
+          throw new Error('En web, el modo directo no es compatible. Por favor, habilita el modo proxy en la configuración para usar servidores con certificados SSL no confiables.');
+        } else {
+          // Para otras plataformas (iOS, etc.)
+          console.log(`🌐 RNFetchBlob no disponible en este entorno`);
+          throw new Error('RNFetchBlob no disponible en este entorno');
+        }
       }
     } catch (error) {
       console.log(`❌ Conexión directa falló: ${url}`);
@@ -1150,6 +1418,14 @@ class DoorControlService {
         if ('code' in error) {
           console.log(`❌ Código de error: ${(error as any).code}`);
         }
+        
+        // Detectar errores de certificado SSL específicamente
+        const errorMessage = error.message.toLowerCase();
+        if (errorMessage.includes('cert') || errorMessage.includes('ssl') || errorMessage.includes('tls') || 
+            errorMessage.includes('err_cert_authority_invalid') || errorMessage.includes('handshake')) {
+          console.error(`🔒 Error de certificado SSL detectado. Verifica el certificado del servidor SCATI o RNFetchBlob (trusty).`);
+          console.error(`💡 Solución: Verifica que RNFetchBlob esté correctamente configurado con trusty:true`);
+        }
       }
       throw error;
     }
@@ -1157,55 +1433,23 @@ class DoorControlService {
 
   /**
    * Obtener el estado actual de todos los switches SDIO12
-   * GET https://{ip}/sdio12
+   * GET https://{ip}:{port}/sdio12
+   * @param port Puerto opcional (por defecto 443 para HTTPS o se infiere de la URL)
    */
-  async getSDIO12Status(ip: string, username: string, password: string): Promise<SDIO12Response | null> {
+  async getSDIO12Status(ip: string, username: string, password: string, port?: number): Promise<SDIO12Response | null> {
     try {
-      const useProxy = await getUseServerProxy();
-      const proxyBase = await getProxyBaseUrl();
-      
-      if (useProxy) {
-        const url = `${proxyBase}/sdio12/${ip}`;
-        console.log(`🔍 Consultando estado SDIO12 (proxy): ${url}`);
-      } else {
-        console.log(`🔍 Consultando estado SDIO12 (directo): ${ip}`);
-      }
-      
-      if (useProxy) {
-        // Usar proxy
-        const url = `${proxyBase}/sdio12/${ip}`;
-        console.log('📡 Haciendo petición GET a:', url);
-        
-        const response = await axios.get(url, {
-          headers: {
-            'Authorization': this.getSDIO12AuthHeader(username, password),
-            'Content-Type': 'application/json',
-          },
-          timeout: 10000,
-          validateStatus: () => true,
-        });
-        
-        console.log('📥 Respuesta recibida:', response.status);
+      const portSuffix = port ? `:${port}` : '';
+      console.log(`🔍 Consultando estado SDIO12: ${ip}${portSuffix}`);
 
-        if (response.status < 200 || response.status >= 300) {
-          console.error(`❌ Error HTTP ${response.status}:`, response.data);
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
+      const directIP = port ? `${ip}:${port}` : ip;
+      const { response, endpoint } = await this.tryDirectConnection(directIP, username, password, false);
 
-        const data: SDIO12Response = response.data;
-        console.log(`✅ Estado SDIO12 obtenido: ${data.nModulos} módulos, ${data.tags.length} tags`);
-        return data;
-      } else {
-        // Modo directo: conexión directa con RNFetchBlob
-        const { response, endpoint } = await this.tryDirectConnection(ip, username, password, false);
-        
-        console.log('📥 Respuesta recibida:', response.status);
-        console.log(`✅ Endpoint funcional: ${endpoint}`);
+      console.log('📥 Respuesta recibida:', response.status);
+      console.log(`✅ Endpoint funcional: ${endpoint}`);
 
-        const data: SDIO12Response = response.data;
-        console.log(`✅ Estado SDIO12 obtenido: ${data.nModulos} módulos, ${data.tags.length} tags`);
-        return data;
-      }
+      const data: SDIO12Response = response.data;
+      console.log(`✅ Estado SDIO12 obtenido: ${data.nModulos} módulos, ${data.tags.length} tags`);
+      return data;
     } catch (error) {
       console.error('❌ Error obteniendo estado SDIO12:', error);
       return null;
@@ -1221,10 +1465,11 @@ class DoorControlService {
     username: string, 
     password: string,
     pcb: number, 
-    switchNum: number
+    switchNum: number,
+    port?: number
   ): Promise<{ St: number; v: string; isOpen: boolean } | null> {
     try {
-      const data = await this.getSDIO12Status(ip, username, password);
+      const data = await this.getSDIO12Status(ip, username, password, port);
       if (!data) return null;
 
       const tag = this.buildSDIO12Tag(pcb, switchNum);
@@ -1251,9 +1496,11 @@ class DoorControlService {
   }
 
   /**
-   * Controlar un switch SDIO12 específico (abrir/cerrar puerta)
-   * POST https://{ip}/sdio12
+   * Controlar un switch SDIO12 específico (abrir/cerrar puerta o cambiar modo)
+   * POST https://{ip}:{port}/sdio12
    * St: 1001 = activar (abrir), 1000 = desactivar (cerrar)
+   * @param useDI Si es true, usa "di" (entradas digitales) para modos, si es false usa "do" (salidas digitales) para puertas/emergencia
+   * @param port Puerto opcional (por defecto 443 para HTTPS o se infiere de la URL)
    */
   async controlSDIO12Switch(
     ip: string,
@@ -1261,16 +1508,15 @@ class DoorControlService {
     password: string,
     pcb: number,
     switchNum: number,
-    action: 'open' | 'close'
+    action: 'open' | 'close',
+    useDI: boolean = false,
+    port?: number
   ): Promise<boolean> {
     try {
-      const useProxy = await getUseServerProxy();
-      const proxyBase = await getProxyBaseUrl();
-      const url = useProxy 
-        ? `${proxyBase}/sdio12/${ip}` 
-        : `https://${ip}/sdio12`;
+      const portSuffix = port ? `:${port}` : '';
+      const url = `https://${ip}${portSuffix}/sdio12?sentry=0`;
       
-      const tag = this.buildSDIO12Tag(pcb, switchNum);
+      const tag = this.buildSDIO12Tag(pcb, switchNum, useDI);
       const St = action === 'open' ? 1001 : 1000;
       const v = action === 'open' ? '1' : '0';
 
@@ -1286,52 +1532,31 @@ class DoorControlService {
 
       const bodyString = JSON.stringify(requestBody);
       
-      console.log(`🚪 ${action === 'open' ? 'Abriendo' : 'Cerrando'} puerta:`, {
+      const actionType = useDI ? 'modo' : 'puerta';
+      console.log(`🚪 ${action === 'open' ? 'Activando' : 'Desactivando'} ${actionType}:`, {
         url,
         tag,
         St,
         v,
-        body: bodyString
+        body: bodyString,
+        type: useDI ? 'DI (entradas)' : 'DO (salidas)'
       });
 
-      console.log('📡 Haciendo petición POST a:', url);
+      console.log('📡 [controlSDIO12Switch] Puerto recibido:', port);
+      console.log('📡 [controlSDIO12Switch] IP recibida:', ip);
+      console.log('📡 [controlSDIO12Switch] URL construida:', url);
       console.log('🔑 Authorization:', this.getSDIO12AuthHeader(username, password).substring(0, 30) + '...');
       console.log('📦 Body:', bodyString);
-      
-      if (useProxy) {
-        // Usar proxy
-        console.log('📡 Haciendo petición POST a:', url);
-        
-        const response = await axios.post(url, requestBody, {
-          headers: {
-            'Authorization': this.getSDIO12AuthHeader(username, password),
-            'Content-Type': 'application/json',
-          },
-          timeout: 10000,
-          validateStatus: () => true,
-        });
-        
-        console.log('📥 Respuesta POST recibida:', response.status);
 
-        if (response.status < 200 || response.status >= 300) {
-          console.error(`❌ Error HTTP ${response.status}:`, response.data);
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
+      const directIP = port ? `${ip}:${port}` : ip;
+      const { response, endpoint } = await this.tryDirectConnection(directIP, username, password, true, requestBody);
 
-        const result = response.data;
-        console.log(`✅ Comando SDIO12 ejecutado exitosamente:`, result);
-        return true;
-      } else {
-        // Modo directo: conexión directa con RNFetchBlob
-        const { response, endpoint } = await this.tryDirectConnection(ip, username, password, true, requestBody);
-        
-        console.log('📥 Respuesta POST recibida:', response.status);
-        console.log(`✅ Endpoint funcional: ${endpoint}`);
+      console.log('📥 Respuesta POST recibida:', response.status);
+      console.log(`✅ Endpoint funcional: ${endpoint}`);
 
-        const result = response.data;
-        console.log(`✅ Comando SDIO12 ejecutado exitosamente:`, result);
-        return true;
-      }
+      const result = response.data;
+      console.log(`✅ Comando SDIO12 ejecutado exitosamente:`, result);
+      return true;
     } catch (error) {
       console.error('❌ Error controlando switch SDIO12:', error);
       return false;
@@ -1551,17 +1776,20 @@ class DoorControlService {
     pcb: number,
     switchNum: number,
     manualMode: boolean = false,
-    pulseTime: number = 1.0
+    pulseTime: number = 1.0,
+    port?: number
   ): Promise<boolean> {
     try {
       console.log(`🚪 Control de puerta - Modo: ${manualMode ? 'Manual (permanente)' : 'Automático (pulso)'}`);
-      console.log(`🔧 PCB: ${pcb}, Switch: ${switchNum}, Tiempo: ${pulseTime}s`);
+      console.log(`🔧 PCB: ${pcb}, Switch: ${switchNum}, Tiempo: ${pulseTime}s, Puerto: ${port || 'default'}`);
 
       // Enviar comando de apertura (activar relé)
       console.log('🔓 Enviando comando de apertura (St: 1001)...');
       const openSuccess = await this.controlSDIO12Switch(
         ip, username, password,
-        pcb, switchNum, 'open'
+        pcb, switchNum, 'open',
+        false, // Usar "do" (salidas digitales) para control de puertas
+        port // Puerto específico
       );
 
       if (!openSuccess) {
@@ -1583,7 +1811,9 @@ class DoorControlService {
         // Enviar comando de cierre (desactivar relé)
         const closeSuccess = await this.controlSDIO12Switch(
           ip, username, password,
-          pcb, switchNum, 'close'
+          pcb, switchNum, 'close',
+          false, // Usar "do" (salidas digitales) para control de puertas
+          port // Puerto específico
         );
 
         if (closeSuccess) {
@@ -1608,6 +1838,27 @@ class DoorControlService {
    * ===== MÉTODOS DE EMERGENCIA =====
    */
 
+  private async getEmergencyConnectionConfig(): Promise<{
+    ip: string;
+    port: number;
+    username: string;
+    password: string;
+  } | null> {
+    try {
+      const savedConfig = await AsyncStorage.getItem('new_door_config');
+      if (!savedConfig) return null;
+      const cfg = JSON.parse(savedConfig);
+      const ip = cfg?.network?.consoleIP;
+      const port = Number(cfg?.api?.port || 4436);
+      const username = cfg?.api?.username;
+      const password = cfg?.api?.password;
+      if (!ip || !username || !password) return null;
+      return { ip, port, username, password };
+    } catch {
+      return null;
+    }
+  }
+
   /**
    * Activar sistema de emergencia
    * Envía comando permanente a las salidas configuradas
@@ -1626,11 +1877,16 @@ class DoorControlService {
         return false;
       }
 
-      const ip = '192.168.1.155'; // IP del servidor SCATI
-      const username = 'Scati2023';
-      const password = 'Scati2023';
+      const conn = await this.getEmergencyConnectionConfig();
+      if (!conn) {
+        console.error('❌ No hay configuración de conexión para emergencia (network/api)');
+        return false;
+      }
+      const { ip, port, username, password } = conn;
 
       console.log('🔧 Configuración de emergencia:', {
+        ip,
+        port,
         pcb1: config.pcb1,
         switch1: config.switch1,
         pcb2: config.pcb2,
@@ -1642,7 +1898,9 @@ class DoorControlService {
         console.log(`🔌 Activando salida 1: PCB ${config.pcb1}, Switch ${config.switch1}`);
         const success1 = await this.controlSDIO12Switch(
           ip, username, password,
-          config.pcb1, config.switch1, 'open'
+          config.pcb1, config.switch1, 'open',
+          false, // Usar "do" (salidas digitales) para emergencia
+          port // Puerto específico
         );
         console.log(`${success1 ? '✅' : '❌'} Salida 1: ${success1 ? 'Activada' : 'Falló'}`);
 
@@ -1650,7 +1908,9 @@ class DoorControlService {
         console.log(`🔌 Activando salida 2: PCB ${config.pcb2}, Switch ${config.switch2}`);
         const success2 = await this.controlSDIO12Switch(
           ip, username, password,
-          config.pcb2, config.switch2, 'open'
+          config.pcb2, config.switch2, 'open',
+          false, // Usar "do" (salidas digitales) para emergencia
+          port // Puerto específico
         );
         console.log(`${success2 ? '✅' : '❌'} Salida 2: ${success2 ? 'Activada' : 'Falló'}`);
 
@@ -1693,20 +1953,27 @@ class DoorControlService {
         return false;
       }
 
-      const ip = '192.168.1.155'; // IP del servidor SCATI
-      const username = 'Scati2023';
-      const password = 'Scati2023';
+      const conn = await this.getEmergencyConnectionConfig();
+      if (!conn) {
+        console.error('❌ No hay configuración de conexión para emergencia (network/api)');
+        return false;
+      }
+      const { ip, port, username, password } = conn;
 
       // Desactivar salida 1 (Placa 1)
       const success1 = await this.controlSDIO12Switch(
         ip, username, password,
-        config.pcb1, config.switch1, 'close'
+        config.pcb1, config.switch1, 'close',
+        false, // Usar "do" (salidas digitales) para emergencia
+        port // Puerto específico
       );
 
       // Desactivar salida 2 (Placa 2)
       const success2 = await this.controlSDIO12Switch(
         ip, username, password,
-        config.pcb2, config.switch2, 'close'
+        config.pcb2, config.switch2, 'close',
+        false, // Usar "do" (salidas digitales) para emergencia
+        port // Puerto específico
       );
 
       if (success1 && success2) {
@@ -1734,12 +2001,12 @@ class DoorControlService {
         return false;
       }
 
-      const ip = '192.168.1.155';
-      const username = 'Scati2023';
-      const password = 'Scati2023';
+      const conn = await this.getEmergencyConnectionConfig();
+      if (!conn) return false;
+      const { ip, port, username, password } = conn;
 
       // Obtener estado de todas las salidas
-      const status = await this.getSDIO12Status(ip, username, password);
+      const status = await this.getSDIO12Status(ip, username, password, port);
       if (!status) {
         console.log('⚠️ No se pudo obtener estado SDIO12 para verificar emergencia');
         return false;
@@ -1794,11 +2061,20 @@ class DoorControlService {
         };
       }
 
-      const ip = '192.168.1.155';
-      const username = 'Scati2023';
-      const password = 'Scati2023';
+      const conn = await this.getEmergencyConnectionConfig();
+      if (!conn) {
+        return {
+          isConfigured: true,
+          isActive: false,
+          switchesStatus: {
+            switch1: { active: false, tag: this.buildSDIO12Tag(config!.pcb1, config!.switch1) },
+            switch2: { active: false, tag: this.buildSDIO12Tag(config!.pcb2, config!.switch2) }
+          }
+        };
+      }
+      const { ip, port, username, password } = conn;
 
-      const status = await this.getSDIO12Status(ip, username, password);
+      const status = await this.getSDIO12Status(ip, username, password, port);
       if (!status) {
         return {
           isConfigured: true,

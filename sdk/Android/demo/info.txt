@@ -1,0 +1,16 @@
+{"name":"US112","defaultVersionName":"1.3.1","time":"20180116.1632"}
+{"name":"CA23","defaultVersionName":"1.3.1","time":"20180116.1632"}
+{"name":"TW01","defaultVersionName":"1.3.1","time":"20180116.1632"}
+{"name":"IL03","defaultVersionName":"1.3.1","time":"20180116.1632"}
+{"name":"USE09","defaultVersionName":"1.3.1","time":"20180116.1632"}
+{"name":"SuperLivePlus","defaultVersionName":"1.3.1","time":"20180116.1632"}
+{"name":"PL18","defaultVersionName":"1.3.1","time":"20180116.1632"}
+{"name":"US02","defaultVersionName":"1.3.1","time":"20180116.1632"}
+{"name":"BR27","defaultVersionName":"1.3.1","time":"20180116.1632"}
+{"name":"US108","defaultVersionName":"1.3.1","time":"20180116.1632"}
+{"name":"US81","defaultVersionName":"1.3.1","time":"20180116.1632"}
+{"name":"USE114","defaultVersionName":"1.3.1","time":"20180116.1632"}
+{"name":"SmartEyesPlus","defaultVersionName":"1.3.1","time":"20180116.1632"}
+{"name":"ES15","defaultVersionName":"1.3.1","time":"20180116.1632"}
+{"name":"USE99","defaultVersionName":"1.3.1","time":"20180116.1632"}
+{"name":"SuperCamPlus","defaultVersionName":"1.3.1","time":"20180116.1632"}

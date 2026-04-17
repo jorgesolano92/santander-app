@@ -1,0 +1,187 @@
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/container"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/white">
+
+    <TextView
+        android:id="@+id/login_type_text_tip"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginLeft="40dp"
+        android:layout_marginTop="100dp"
+        android:text="Select connect type"
+        android:textColor="@color/text_tip_color"
+        android:textSize="17sp" />
+
+    <RadioGroup
+        android:id="@+id/login_type_radiogroup"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_below="@id/login_type_text_tip"
+        android:layout_marginLeft="45dp"
+        android:layout_marginTop="5dp"
+        android:orientation="vertical">
+
+        <RadioButton
+            android:id="@+id/login_type_device"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:checked="true"
+            android:text="Login Device"
+            android:textColor="@color/text_normal_color"
+            android:textSize="17sp" />
+
+        <RadioButton
+            android:id="@+id/login_type_service"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Register to Control Center"
+            android:textColor="@color/text_normal_color"
+            android:textSize="17sp" />
+    </RadioGroup>
+
+    <TableLayout
+        android:id="@+id/register_form"
+        android:layout_width="315dp"
+        android:layout_height="200dp"
+        android:layout_below="@id/login_type_radiogroup"
+        android:layout_centerHorizontal="true"
+        android:layout_marginTop="10dp"
+        android:stretchColumns="1">
+
+        <TableRow
+            android:layout_width="match_parent"
+            android:layout_height="match_parent">
+
+            <TextView
+                android:id="@+id/register_port_l"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Port"
+                android:textColor="@color/text_tip_color"
+                android:textSize="17sp" />
+
+            <EditText
+                android:id="@+id/register_port"
+                android:layout_width="wrap_content"
+                android:layout_height="38dp"
+                android:background="@drawable/edit_bg"
+                android:inputType="text"
+                android:paddingLeft="10dp"
+                android:paddingRight="10dp"
+                android:text="2009" />
+        </TableRow>
+
+        <TableRow
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:layout_marginTop="10dp">
+
+            <TextView
+                android:id="@+id/register_username_l"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="User"
+                android:textColor="@color/text_tip_color"
+                android:textSize="17sp" />
+
+            <EditText
+                android:id="@+id/register_username"
+                android:layout_width="wrap_content"
+                android:layout_height="38dp"
+                android:background="@drawable/edit_bg"
+                android:inputType="text"
+                android:paddingLeft="10dp"
+                android:paddingRight="10dp"
+                android:text="admin"
+                android:textColor="@color/text_normal_color" />
+        </TableRow>
+
+        <TableRow
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:layout_marginTop="10dp">
+
+            <TextView
+                android:id="@+id/register_pass_l"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Password"
+                android:textColor="@color/text_tip_color"
+                android:textSize="17sp" />
+
+            <EditText
+                android:id="@+id/register_pass"
+                android:layout_width="wrap_content"
+                android:layout_height="38dp"
+                android:background="@drawable/edit_bg"
+                android:inputType="textPassword"
+                android:paddingLeft="10dp"
+                android:paddingRight="10dp"
+                android:textColor="@color/text_normal_color" />
+        </TableRow>
+
+        <TableRow
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:layout_marginTop="10dp">
+
+            <TextView
+                android:id="@+id/register_device_id_l"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Device Id"
+                android:textColor="@color/text_tip_color"
+                android:textSize="17sp" />
+
+            <EditText
+                android:id="@+id/register_device_id"
+                android:layout_width="wrap_content"
+                android:layout_height="38dp"
+                android:background="@drawable/edit_bg"
+                android:inputType="text"
+                android:paddingLeft="10dp"
+                android:paddingRight="10dp"
+                android:textColor="@color/text_normal_color" />
+        </TableRow>
+    </TableLayout>
+
+    <Button
+        android:id="@+id/login_type_next"
+        android:layout_width="250dp"
+        android:layout_height="38dp"
+        android:layout_below="@id/register_form"
+        android:layout_centerHorizontal="true"
+        android:layout_marginLeft="20dp"
+        android:layout_marginTop="30dp"
+        android:layout_marginRight="20dp"
+        android:background="@drawable/button_bg"
+        android:gravity="center_horizontal|center_vertical"
+        android:text="Next"
+        android:textColor="@color/white"
+        android:textSize="17sp" />
+    <!--  <Button
+         android:id="@+id/login_type_logout"
+         android:layout_width="320dp"
+         android:layout_height="38dp"
+         android:layout_below="@id/login_type_next"
+         android:layout_centerHorizontal="true"
+         android:layout_marginLeft="20dp"
+         android:layout_marginRight="20dp"
+         android:layout_marginTop="50dp"
+         android:background="@drawable/button_bg"
+         android:gravity="center_horizontal|center_vertical"
+         android:text="Logout"
+         android:textColor="@color/white"
+         android:textSize="17sp" /> -->
+    <TextView
+        android:id="@+id/tvCpuArch"
+        android:layout_width="200dp"
+        android:layout_height="60dp"
+        android:layout_alignParentRight="true"
+        android:layout_alignParentBottom="true"
+        android:textSize="16sp" />
+</RelativeLayout>
+

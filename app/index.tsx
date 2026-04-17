@@ -11,9 +11,7 @@ import ModeSelectionModal from '@/components/ModeSelectionModal';
 import TechnicianModal from '@/components/TechnicianModal';
 import ManualModeModal from '@/components/ManualModeModal';
 import EmergencyConfirmationModal from '@/components/EmergencyConfirmationModal';
-import AxisTestModal from '@/components/AxisTestModal';
 import { useDoorControl } from '@/hooks/useDoorControl';
-import { getUseServerProxy, getProxyBaseUrl } from '@/services/AppMode';
 import { doorControlService } from '@/services/DoorControlService';
 // (Eliminar) import * as FileSystem from 'expo-file-system';
 
@@ -137,11 +135,8 @@ export default function MainScreen() {
   const [showEmergencyConfirmModal, setShowEmergencyConfirmModal] = useState(false);
   const [currentDateTime, setCurrentDateTime] = useState(new Date());
   const [communicatingDoors, setCommunicatingDoors] = useState<Set<string>>(new Set());
-  const [showAxisTestModal, setShowAxisTestModal] = useState(false);
   // const [isSandboxMode, setIsSandboxMode] = useState(false); // Modo sandbox deshabilitado permanentemente
   const [systemConfig, setSystemConfig] = useState<SystemConfig | null>(null);
-  const [useServerProxyBadge, setUseServerProxyBadge] = useState<boolean>(false);
-  const [proxyBaseUrl, setProxyBaseUrl] = useState<string>('http://10.147.17.74:3001');
   const [emergencyFlashColor, setEmergencyFlashColor] = useState<string>('#F8F9FA');
 
   // Actualizar fecha y hora cada segundo
@@ -169,9 +164,6 @@ export default function MainScreen() {
           setSystemConfig(parsedConfig);
           console.log('📋 Configuración del sistema cargada:', parsedConfig);
         }
-        const [useProxy, base] = await Promise.all([getUseServerProxy(), getProxyBaseUrl()]);
-        setUseServerProxyBadge(useProxy);
-        setProxyBaseUrl(base);
       } catch (error) {
         console.error('❌ Error cargando configuración del sistema:', error);
       }
@@ -260,10 +252,10 @@ export default function MainScreen() {
     
     // Configurar el servicio con los datos de la nueva configuración
     const configData = {
-      serverIP: config.network?.consoleIP || '192.168.1.25',
+      serverIP: config.network?.consoleIP || '',
       apiPort: config.api?.port || 443,
-      apiUsername: config.api?.username || 'Scati2023',
-      apiPassword: config.api?.password || 'Scati2023',
+      apiUsername: config.api?.username || 'inviasistemas',
+      apiPassword: config.api?.password || 'zASB66vDm6y7u6T4pIoN',
       username: 'admin', // Usuario de la app
       updateServerURL: 'http://192.168.1.200/updates',
       deviceId: 'device_id_placeholder',
@@ -279,15 +271,7 @@ export default function MainScreen() {
     // Recargar la configuración del sistema después de guardar
     await reloadSystemConfig();
     
-    // Actualizar el badge de modo proxy
-    try {
-      const [useProxy, base] = await Promise.all([getUseServerProxy(), getProxyBaseUrl()]);
-      setUseServerProxyBadge(useProxy);
-      setProxyBaseUrl(base);
-      console.log('🔄 Badge actualizado:', useProxy ? 'PROXY' : 'DIRECTO');
-    } catch (error) {
-      console.error('❌ Error actualizando badge:', error);
-    }
+    // Migración SDK: sin modo proxy/directo legado.
   };
 
   const handleLoginSuccess = () => {
@@ -310,7 +294,7 @@ export default function MainScreen() {
     };
     
     const targetMode = modeMap[mode] || mode;
-    console.log('🔄 Cambiando a modo (Sandbox):', targetMode);
+    console.log('🔄 Cambiando a modo:', targetMode);
     
     const success = await changeMode(targetMode);
     if (success) {
@@ -1038,7 +1022,7 @@ export default function MainScreen() {
         <View style={styles.rightHeaderSection}>
           <View style={styles.modeBadge}>
             <Text style={styles.modeBadgeText}>
-              {useServerProxyBadge ? 'MODO: PROXY' : 'MODO: DIRECTO'}
+              MODO: SDK CÁMARAS
             </Text>
           </View>
           <View style={styles.connectionIndicator}>
@@ -1231,6 +1215,7 @@ export default function MainScreen() {
         visible={showModeModal}
         onClose={() => setShowModeModal(false)}
         onModeSelect={handleModeSelect}
+        currentMode={currentMode}
       />
 
       <ManualModeModal
@@ -1256,11 +1241,6 @@ export default function MainScreen() {
         onClose={() => setShowEmergencyConfirmModal(false)}
         onConfirm={handleEmergencyConfirm}
         isDeactivating={isEmergencyActive}
-      />
-
-      <AxisTestModal
-        visible={showAxisTestModal}
-        onClose={() => setShowAxisTestModal(false)}
       />
     </View>
   );

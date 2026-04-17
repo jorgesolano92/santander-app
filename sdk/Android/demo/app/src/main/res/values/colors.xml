@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>  
+<resources>
+    
+     <color name="white">#FFFFFF</color>
+     <color name="yellow">#FFFF00</color>
+     <color name="gold">#FFD700</color>
+     <color name="red">#FF0000</color>
+     <color name="blue">#0000FF</color>
+     <color name="black">#000000</color>
+     <color name="green">#008000</color>
+     <color name="cyan">#00FFFF</color>
+     <color name="tea">#D2B48C</color>
+     <color name="gray">#808080</color>
+     <color name="tangpant">#00000000</color>
+     <color name="graywhite">#F5F5F5</color>
+     <color name="tpblack">#6A000000</color>
+     <color name="title_bg_color">#62b0e3</color>
+     <color name="tp_title_bg_color">#6A62b0e3</color>
+     <color name="hintText_color">#adb1b4</color>
+     <color name="toast_bg_color">#6a000000</color>
+     <color name="activity_bg_color">#f0eff5</color>
+     <color name="divider_line">#c7c8cc</color>
+     <color name="login_btn_color">#adb1b4</color>
+     <color name="button_click_normal">#549cee</color>
+     <color name="button_click_press">#3c8ce5</color>
+     <color name="text_normal_color">#171717</color>
+     <color name="text_tip_color">#8e8d92</color>
+     <color name="line_press_color">#d9d9d9</color>
+     <color name="tab_delete_text_press_color" >#4c94e6</color>
+     <color name="tab_foot_press_color" >#b9b9b9</color>  
+     <color name="title_press_bg_color">#4ebcd3</color>
+     
+</resources>

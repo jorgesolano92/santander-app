@@ -42,6 +42,9 @@
       "router": {},
       "eas": {
         "projectId": "3f60f9af-7441-4e9b-a0ce-742eef3ae6c8"
+      },
+      "sentry": {
+        "enabled": false
       }
     },
     "android": {

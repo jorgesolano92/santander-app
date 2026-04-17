@@ -1,10 +1,9 @@
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, Modal, ScrollView, Switch, Platform } from 'react-native';
-import { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, Modal, ScrollView, Switch, Platform, Alert } from 'react-native';
+import { useState, useEffect, useRef } from 'react';
 import { ArrowLeft, Save, X, Wifi, RefreshCw, Settings } from 'lucide-react-native';
 import { useWindowDimensions } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { doorControlService, ApiResponse } from '@/services/DoorControlService';
-import { getUseServerProxy, setUseServerProxy, getProxyBaseUrl, setProxyBaseUrl } from '@/services/AppMode';
 import ApiResponseDisplayModal from './ApiResponseDisplayModal';
 import IntercomConfigurationModal, { IntercomConfig } from './IntercomConfigurationModal';
 import { Picker } from '@react-native-picker/picker';
@@ -39,6 +38,22 @@ interface EmergencyConfig {
   switch2: number;
 }
 
+interface ModeConfig {
+  rule_key: string;
+  action: 'set_rule';
+  enabled: boolean;
+}
+
+interface ModesConfig {
+  automatico: ModeConfig;
+  esclusa: ModeConfig;
+  extendido: ModeConfig;
+  autoservicio: ModeConfig;
+  oficinaCerrada: ModeConfig;
+  cargaCajero: ModeConfig;
+  manual: ModeConfig;
+}
+
 interface ConfigurationData {
   doors: DoorConfig[];
   network: {
@@ -50,6 +65,10 @@ interface ConfigurationData {
     port: number;
     username: string;
     password: string;
+    urlToken: string; // URL para token (ej: /api/v1/auth/token)
+    urlGet: string;   // URL para GET (ej: /api/v1/get_mode)
+    urlPost: string;  // URL para POST (ej: /api/v1/set_mode)
+    urlModes: string; // URL para listar modos (ej: /api/v1/modes)
   };
   schedules: {
     comercial: ScheduleConfig;
@@ -59,6 +78,7 @@ interface ConfigurationData {
   };
   officeWithATM: boolean;
   emergency: EmergencyConfig;
+  modes: ModesConfig;
 }
 
 export default function NewConfigurationModal({ 
@@ -77,15 +97,15 @@ export default function NewConfigurationModal({
       {
         enabled: true,
         name: 'Calle (P1)',
-        ipExterior: '192.168.1.155',
+        ipExterior: '127.0.0.1',
         ipInterior: '',
         intercom: {
           name: 'Intercomunicador Calle (P1)',
-          cameraIP: '192.168.1.117',
+          cameraIP: '192.168.1.120',
           httpPort: 80,
           httpsPort: 443,
           onvifUsername: 'ceroideas',
-          onvifPassword: '12345678',
+          onvifPassword: 'Cero21264712-',
           rtspPort: 554,
           videoProfile: 'MainStream',
           snapshotPath: 'ISAPI/Streaming/channels/101/picture',
@@ -111,7 +131,7 @@ export default function NewConfigurationModal({
       {
         enabled: true,
         name: 'Oficina (P2)',
-        ipExterior: '192.168.1.155',
+        ipExterior: '127.0.0.1',
         ipInterior: '',
         intercom: {
           name: 'Intercomunicador Oficina (P2)',
@@ -119,7 +139,7 @@ export default function NewConfigurationModal({
           httpPort: 80,
           httpsPort: 443,
           onvifUsername: 'ceroideas',
-          onvifPassword: '12345678',
+          onvifPassword: 'Cero21264712-',
           rtspPort: 554,
           videoProfile: 'MainStream',
           snapshotPath: 'axis-cgi/jpg/image.cgi',
@@ -145,7 +165,7 @@ export default function NewConfigurationModal({
       {
         enabled: false,
         name: 'Puerta 3',
-        ipExterior: '192.16.1.155',
+        ipExterior: '127.0.0.1',
         ipInterior: '',
         intercom: {
           name: 'Intercomunicador Puerta 3',
@@ -153,7 +173,7 @@ export default function NewConfigurationModal({
           httpPort: 80,
           httpsPort: 443,
           onvifUsername: 'ceroideas',
-          onvifPassword: 'Jk21264712',
+          onvifPassword: 'Cero21264712-',
           rtspPort: 554,
           videoProfile: 'MainStream',
           snapshotPath: 'cgi-bin/snapshot.cgi?channel=1',
@@ -184,8 +204,8 @@ export default function NewConfigurationModal({
           cameraIP: '',
           httpPort: 80,
           httpsPort: 443,
-          onvifUsername: 'admin',
-          onvifPassword: '',
+          onvifUsername: 'ceroideas',
+          onvifPassword: 'Cero21264712-',
           rtspPort: 554,
           videoProfile: 'MainStream',
           sipUri: '',
@@ -213,8 +233,8 @@ export default function NewConfigurationModal({
           cameraIP: '',
           httpPort: 80,
           httpsPort: 443,
-          onvifUsername: 'admin',
-          onvifPassword: '',
+          onvifUsername: 'ceroideas',
+          onvifPassword: 'Cero21264712-',
           rtspPort: 554,
           videoProfile: 'MainStream',
           sipUri: '',
@@ -234,14 +254,18 @@ export default function NewConfigurationModal({
       }
     ],
     network: {
-      consoleIP: '192.168.1.25',
+      consoleIP: '127.0.0.1',
       netmask: '255.255.255.0',
-      gateway: '192.168.1.1',
+      gateway: '0.0.0.0',
     },
     api: {
-      port: 443,
-      username: 'Scati2023',
-      password: 'Scati2023',
+      port: 8000,
+      username: '',
+      password: '',
+      urlToken: '/api/v1/auth/token',
+      urlGet: '/api/v1/get_mode',
+      urlPost: '/api/v1/set_mode',
+      urlModes: '/api/v1/modes',
     },
     schedules: {
       comercial: { ini1: '08:00', ini2: '14:00' },
@@ -257,6 +281,15 @@ export default function NewConfigurationModal({
       pcb2: 3,
       switch2: 1,
     },
+    modes: {
+      automatico: { rule_key: 'horario_automatico', action: 'set_rule', enabled: true },
+      esclusa: { rule_key: 'horaio_esclusa', action: 'set_rule', enabled: true },
+      extendido: { rule_key: 'horario_extendido', action: 'set_rule', enabled: true },
+      autoservicio: { rule_key: 'horario_autoservicio', action: 'set_rule', enabled: true },
+      oficinaCerrada: { rule_key: 'horario_cerrado', action: 'set_rule', enabled: true },
+      cargaCajero: { rule_key: 'carga_cajero', action: 'set_rule', enabled: true },
+      manual: { rule_key: 'manual', action: 'set_rule', enabled: true },
+    },
   });
 
   const [connectionStatus, setConnectionStatus] = useState<{ [key: string]: 'testing' | 'success' | 'error' | null }>({});
@@ -265,17 +298,17 @@ export default function NewConfigurationModal({
   const [isTestingApi, setIsTestingApi] = useState(false);
   const [showIntercomModal, setShowIntercomModal] = useState(false);
   const [selectedDoorIndex, setSelectedDoorIndex] = useState<number>(0);
-  const [useServerProxyState, setUseServerProxyState] = useState<boolean>(true);
-  const [proxyBaseUrlState, setProxyBaseUrlState] = useState<string>('http://localhost:3001');
+  const defaultConfigRef = useRef<ConfigurationData | null>(null);
+
+  useEffect(() => {
+    if (!defaultConfigRef.current) {
+      defaultConfigRef.current = JSON.parse(JSON.stringify(config));
+    }
+  }, []);
 
   useEffect(() => {
     if (visible) {
       loadSavedConfiguration();
-      (async () => {
-        const [useProxy, base] = await Promise.all([getUseServerProxy(), getProxyBaseUrl()]);
-        setUseServerProxyState(useProxy);
-        setProxyBaseUrlState(base);
-      })();
     }
   }, [visible]);
 
@@ -311,6 +344,57 @@ export default function NewConfigurationModal({
         if (emergencyConfig) {
           parsedConfig.emergency = emergencyConfig;
           console.log('✅ Configuración de emergencia cargada:', emergencyConfig);
+        }
+        
+        // Migrar configuración de modos si no existe
+        if (!parsedConfig.modes) {
+          parsedConfig.modes = {
+            automatico: { rule_key: 'horario_automatico', action: 'set_rule', enabled: true },
+            esclusa: { rule_key: 'horario_esclusa', action: 'set_rule', enabled: true },
+            extendido: { rule_key: 'horario_extendido', action: 'set_rule', enabled: true },
+            autoservicio: { rule_key: 'horario_autoservicio', action: 'set_rule', enabled: true },
+            oficinaCerrada: { rule_key: 'horario_cerrado', action: 'set_rule', enabled: true },
+            cargaCajero: { rule_key: 'carga_cajero', action: 'set_rule', enabled: true },
+            manual: { rule_key: 'manual', action: 'set_rule', enabled: true },
+          };
+          console.log('✅ Configuración de modos inicializada con valores por defecto');
+        }
+        // Migrar estructura antigua de modos (pcb/relay) a nueva (rule_key/action).
+        for (const [k, v] of Object.entries(parsedConfig.modes || {})) {
+          if (v && typeof v === 'object' && !('rule_key' in v)) {
+            const defaultRuleKeyMap: Record<string, string> = {
+              automatico: 'horario_automatico',
+              esclusa: 'horario_esclusa',
+              extendido: 'horario_extendido',
+              autoservicio: 'horario_autoservicio',
+              oficinaCerrada: 'horario_cerrado',
+              cargaCajero: 'carga_cajero',
+              manual: 'manual',
+            };
+            parsedConfig.modes[k] = {
+              rule_key: defaultRuleKeyMap[k] || k,
+              action: 'set_rule',
+              enabled: (v as any).enabled !== false,
+            };
+          } else if (v && typeof v === 'object' && !('action' in v)) {
+            parsedConfig.modes[k] = { ...v, action: 'set_rule' };
+          }
+        }
+        
+        // Migrar configuración de API si no tiene los nuevos campos
+        if (parsedConfig.api) {
+          if (!parsedConfig.api.urlToken) {
+            parsedConfig.api.urlToken = '/api/v1/auth/token';
+          }
+          if (!parsedConfig.api.urlGet) {
+            parsedConfig.api.urlGet = '/api/v1/get_mode';
+          }
+          if (!parsedConfig.api.urlPost) {
+            parsedConfig.api.urlPost = '/api/v1/set_mode';
+          }
+          if (!parsedConfig.api.urlModes) {
+            parsedConfig.api.urlModes = '/api/v1/modes';
+          }
         }
         
         // Solo cargar configuración si no tiene IPs antiguas
@@ -373,6 +457,34 @@ export default function NewConfigurationModal({
     } catch (error) {
       console.error('❌ Error en handleSave:', error);
     }
+  };
+
+  const handleResetConfiguration = () => {
+    Alert.alert(
+      'Restablecer configuración',
+      'Se eliminarán los datos guardados en la tablet y se cargarán los valores por defecto de la app. ¿Continuar?',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Restablecer',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await AsyncStorage.removeItem('new_door_config');
+              await AsyncStorage.removeItem('detailed_door_config');
+              if (defaultConfigRef.current) {
+                const resetConfig = JSON.parse(JSON.stringify(defaultConfigRef.current));
+                setConfig(resetConfig);
+                await emergencyService.setEmergencyConfig(resetConfig.emergency);
+              }
+              console.log('✅ Configuración restablecida a valores por defecto');
+            } catch (error) {
+              console.error('❌ Error restableciendo configuración:', error);
+            }
+          },
+        },
+      ]
+    );
   };
 
   // Función de prueba de API deshabilitada (no usa gettags)
@@ -868,6 +980,67 @@ export default function NewConfigurationModal({
       fontStyle: 'italic',
       marginTop: isSmallTablet ? 8 : isLargeTablet ? 12 : 10,
     },
+    modeGrid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      justifyContent: 'space-between',
+      rowGap: isSmallTablet ? 8 : isLargeTablet ? 12 : 10,
+    },
+    modeGridItem: {
+      width: isSmallTablet ? '48%' : '32%',
+      backgroundColor: '#F8F9FA',
+      borderRadius: 8,
+      padding: isSmallTablet ? 8 : isLargeTablet ? 12 : 10,
+      borderWidth: 1,
+      borderColor: '#E9ECEF',
+    },
+    modeGridItemLast: {
+      alignSelf: 'center',
+    },
+    modeTitleRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginBottom: 6,
+    },
+    modeFieldBlock: {
+      marginTop: 4,
+      marginBottom: 6,
+    },
+    modeFieldLabel: {
+      fontSize: isSmallTablet ? 10 : isLargeTablet ? 12 : 11,
+      fontWeight: '600',
+      color: '#495057',
+      marginBottom: 4,
+    },
+    modeTextInput: {
+      width: '100%',
+      backgroundColor: '#FFFFFF',
+      borderWidth: 1,
+      borderColor: '#CED4DA',
+      borderRadius: 4,
+      paddingHorizontal: isSmallTablet ? 8 : isLargeTablet ? 12 : 10,
+      paddingVertical: isSmallTablet ? 6 : isLargeTablet ? 8 : 7,
+      fontSize: isSmallTablet ? 11 : isLargeTablet ? 13 : 12,
+      color: '#495057',
+      minHeight: 36,
+    },
+    modePickerContainer: {
+      width: '100%',
+      height: 36,
+      backgroundColor: '#FFFFFF',
+      borderWidth: 1,
+      borderColor: '#CED4DA',
+      borderRadius: 4,
+      overflow: 'hidden',
+      justifyContent: 'center',
+    },
+    modePicker: {
+      width: '100%',
+      height: 36,
+      color: '#495057',
+      backgroundColor: 'transparent',
+    },
     bottomButtons: {
       flexDirection: 'row',
       gap: isSmallTablet ? 8 : isLargeTablet ? 16 : 12,
@@ -912,6 +1085,28 @@ export default function NewConfigurationModal({
       elevation: 4,
     },
     saveButtonText: {
+      fontSize: isSmallTablet ? 12 : isLargeTablet ? 14 : 13,
+      fontWeight: '700',
+      color: '#FFFFFF',
+      letterSpacing: 0.5,
+    },
+    resetButton: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: '#DC3545',
+      paddingHorizontal: isSmallTablet ? 16 : isLargeTablet ? 24 : 20,
+      paddingVertical: isSmallTablet ? 10 : isLargeTablet ? 14 : 12,
+      borderRadius: 8,
+      gap: isSmallTablet ? 4 : isLargeTablet ? 8 : 6,
+      shadowColor: '#DC3545',
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.2,
+      shadowRadius: 8,
+      elevation: 4,
+    },
+    resetButtonText: {
       fontSize: isSmallTablet ? 12 : isLargeTablet ? 14 : 13,
       fontWeight: '700',
       color: '#FFFFFF',
@@ -996,31 +1191,7 @@ export default function NewConfigurationModal({
           {/* Configuración de Puertas */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>CONFIGURACIÓN DE PUERTAS</Text>
-          
-          {/* Proxy settings */}
-          <View style={styles.networkCard}>
-            <View style={styles.networkRow}>
-              <Text style={styles.networkLabel}>USAR PROXY DE SERVIDOR</Text>
-              <Switch
-                value={useServerProxyState}
-                onValueChange={async (v) => { setUseServerProxyState(v); await setUseServerProxy(v); }}
-                trackColor={{ false: '#CED4DA', true: '#28A745' }}
-                thumbColor={useServerProxyState ? '#FFFFFF' : '#FFFFFF'}
-              />
-            </View>
-            <View style={styles.networkRow}>
-              <Text style={styles.networkLabel}>URL DEL PROXY</Text>
-              <TextInput
-                style={styles.networkInput}
-                value={proxyBaseUrlState}
-                onChangeText={setProxyBaseUrlState}
-                onBlur={async () => { await setProxyBaseUrl(proxyBaseUrlState); }}
-                autoCapitalize="none"
-                placeholder="http://192.168.1.x:3001"
-              />
-            </View>
-          </View>
-            
+
             <View style={styles.doorsGrid}>
               {config.doors.map((door, index) => (
                 <View key={index} style={styles.doorCard}>
@@ -1049,7 +1220,7 @@ export default function NewConfigurationModal({
                             style={styles.ipInput}
                             value={door.ipExterior}
                             onChangeText={(text) => updateDoor(index, 'ipExterior', text)}
-                            placeholder="192.168.1.x"
+                            placeholder="0.0.0.0"
                           />
                           <TouchableOpacity
                             style={getConnectionButtonStyle(connectionStatus[`exterior_${door.ipExterior}`])}
@@ -1066,7 +1237,7 @@ export default function NewConfigurationModal({
                             style={styles.ipInput}
                             value={door.ipInterior}
                             onChangeText={(text) => updateDoor(index, 'ipInterior', text)}
-                            placeholder="192.168.1.x"
+                            placeholder="0.0.0.0"
                           />
                           <TouchableOpacity
                             style={getConnectionButtonStyle(connectionStatus[`interior_${door.ipInterior}`])}
@@ -1103,7 +1274,7 @@ export default function NewConfigurationModal({
                     style={styles.networkInput}
                     value={config.network.consoleIP}
                     onChangeText={(text) => updateNetwork('consoleIP', text)}
-                    placeholder="192.168.1.25"
+                    placeholder="127.0.0.1"
                   />
                 </View>
                 
@@ -1155,7 +1326,7 @@ export default function NewConfigurationModal({
                     style={styles.networkInput}
                     value={config.api.username}
                     onChangeText={(text) => updateApi('username', text)}
-                    placeholder="Scati2023"
+                    placeholder="username"
                     autoCapitalize="none"
                   />
                 </View>
@@ -1166,9 +1337,53 @@ export default function NewConfigurationModal({
                     style={styles.networkInput}
                     value={config.api.password}
                     onChangeText={(text) => updateApi('password', text)}
-                    placeholder="Scati2023"
+                    placeholder="••••••••"
                     autoCapitalize="none"
                     secureTextEntry={true}
+                  />
+                </View>
+                
+                <View style={styles.networkRow}>
+                  <Text style={styles.networkLabel}>URL TOKEN:</Text>
+                  <TextInput
+                    style={styles.networkInput}
+                    value={config.api.urlToken}
+                    onChangeText={(text) => updateApi('urlToken', text)}
+                    placeholder="/api/v1/auth/token"
+                    autoCapitalize="none"
+                  />
+                </View>
+
+                <View style={styles.networkRow}>
+                  <Text style={styles.networkLabel}>URL GET:</Text>
+                  <TextInput
+                    style={styles.networkInput}
+                    value={config.api.urlGet}
+                    onChangeText={(text) => updateApi('urlGet', text)}
+                    placeholder="/api/v1/get_mode"
+                    autoCapitalize="none"
+                  />
+                </View>
+                
+                <View style={styles.networkRow}>
+                  <Text style={styles.networkLabel}>URL POST:</Text>
+                  <TextInput
+                    style={styles.networkInput}
+                    value={config.api.urlPost}
+                    onChangeText={(text) => updateApi('urlPost', text)}
+                    placeholder="/api/v1/set_mode"
+                    autoCapitalize="none"
+                  />
+                </View>
+                
+                <View style={styles.networkRow}>
+                  <Text style={styles.networkLabel}>URL MODES:</Text>
+                  <TextInput
+                    style={styles.networkInput}
+                    value={config.api.urlModes}
+                    onChangeText={(text) => updateApi('urlModes', text)}
+                    placeholder="/api/v1/modes"
+                    autoCapitalize="none"
                   />
                 </View>
                 
@@ -1233,6 +1448,98 @@ export default function NewConfigurationModal({
                   thumbColor={config.officeWithATM ? '#FFFFFF' : '#FFFFFF'}
                 />
               </View>
+            </View>
+          </View>
+
+          {/* SECCIÓN DE CONFIGURACIÓN DE MODOS */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>CONFIGURACIÓN DE MODOS DE OPERACIÓN</Text>
+            <View style={styles.emergencyCard}>
+              <Text style={styles.emergencySubtitle}>
+                Configure cada modo con su <Text style={{ fontWeight: '700' }}>rule_key</Text> del backend y la acción a ejecutar.
+              </Text>
+              
+              <View style={styles.modeGrid}>
+                {Object.entries({
+                  automatico: 'AUTOMÁTICO',
+                  esclusa: 'ESCLUSA',
+                  extendido: 'EXTENDIDO',
+                  autoservicio: 'AUTOSERVICIO',
+                  oficinaCerrada: 'OFICINA CERRADA',
+                  cargaCajero: 'CARGA DE CAJERO',
+                  manual: 'MANUAL',
+                }).map(([key, label], idx, arr) => (
+                  <View
+                    key={key}
+                    style={[
+                      styles.modeGridItem,
+                      idx === arr.length - 1 ? styles.modeGridItemLast : null,
+                    ]}
+                  >
+                    <View style={styles.modeTitleRow}>
+                      <Text style={styles.emergencyInputLabel}>{label}</Text>
+                      <Switch
+                        value={config.modes[key as keyof ModesConfig].enabled}
+                        onValueChange={(value) => setConfig(prev => ({
+                          ...prev,
+                          modes: {
+                            ...prev.modes,
+                            [key]: { ...prev.modes[key as keyof ModesConfig], enabled: value }
+                          }
+                        }))}
+                        trackColor={{ false: '#CED4DA', true: '#28A745' }}
+                        thumbColor={config.modes[key as keyof ModesConfig].enabled ? '#FFFFFF' : '#FFFFFF'}
+                      />
+                    </View>
+                    {config.modes[key as keyof ModesConfig].enabled && (
+                      <View style={styles.modeFieldBlock}>
+                        <Text style={styles.modeFieldLabel}>rule_key:</Text>
+                        <TextInput
+                          style={styles.modeTextInput}
+                          value={config.modes[key as keyof ModesConfig].rule_key}
+                          onChangeText={(value) =>
+                            setConfig(prev => ({
+                              ...prev,
+                              modes: {
+                                ...prev.modes,
+                                [key]: { ...prev.modes[key as keyof ModesConfig], rule_key: value }
+                              }
+                            }))
+                          }
+                          placeholder="ej: horario_automatico"
+                          autoCapitalize="none"
+                        />
+                      </View>
+                    )}
+                    {config.modes[key as keyof ModesConfig].enabled && (
+                      <View style={styles.modeFieldBlock}>
+                        <Text style={styles.modeFieldLabel}>action:</Text>
+                        <View style={styles.modePickerContainer}>
+                          <Picker
+                            selectedValue={config.modes[key as keyof ModesConfig].action}
+                            onValueChange={(value) => setConfig(prev => ({
+                              ...prev,
+                              modes: {
+                                ...prev.modes,
+                                [key]: { ...prev.modes[key as keyof ModesConfig], action: value }
+                              }
+                            }))}
+                            style={styles.modePicker}
+                            mode="dropdown"
+                            dropdownIconColor="#495057"
+                          >
+                            <Picker.Item label="set_rule" value="set_rule" />
+                          </Picker>
+                        </View>
+                      </View>
+                    )}
+                  </View>
+                ))}
+              </View>
+              
+              <Text style={styles.emergencyNote}>
+                ⚠️ `set_mode` enviará: {"{"}"action":"set_rule","rule_key":"...","active":true{"}"}.
+              </Text>
             </View>
           </View>
 
@@ -1350,6 +1657,11 @@ export default function NewConfigurationModal({
             <TouchableOpacity style={styles.backButton} onPress={onClose}>
               <ArrowLeft size={20} color="#FFFFFF" />
               <Text style={styles.backButtonText}>VOLVER</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.resetButton} onPress={handleResetConfiguration}>
+              <RefreshCw size={20} color="#FFFFFF" />
+              <Text style={styles.resetButtonText}>RESET</Text>
             </TouchableOpacity>
 
             <TouchableOpacity style={styles.saveButton} onPress={handleSave}>

@@ -1,0 +1,172 @@
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/container"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/activity_bg_color" >
+
+	<RadioGroup 
+	    android:id="@+id/record_radiogroup" 
+	    android:layout_width="match_parent" 
+	    android:layout_height="wrap_content"
+	    android:layout_marginTop="20dp"
+	    android:gravity="center_horizontal"
+	    android:orientation="horizontal"> 
+	    <RadioButton 
+	        android:id="@+id/record_find_file" 
+	        android:layout_width="wrap_content" 
+	        android:layout_height="wrap_content" 
+	        android:text="File"
+	        android:checked="true"
+	        android:textColor="@color/text_normal_color"
+        	android:textSize = "15sp"/> 
+	    <RadioButton 
+	        android:id="@+id/record_find_event" 
+	        android:layout_width="wrap_content" 
+	        android:layout_height="wrap_content" 
+	        android:layout_marginLeft="10dp"
+	        android:text="Event"
+	        android:textColor="@color/text_normal_color"
+        	android:textSize = "15sp" /> 
+        <RadioButton 
+	        android:id="@+id/record_find_time" 
+	        android:layout_width="wrap_content" 
+	        android:layout_height="wrap_content" 
+	        android:layout_marginLeft="10dp"
+	        android:text="Time"
+	        android:textColor="@color/text_normal_color"
+        	android:textSize = "15sp" />
+        <RadioButton 
+	        android:id="@+id/record_find_date" 
+	        android:layout_width="wrap_content" 
+	        android:layout_height="wrap_content" 
+	        android:layout_marginLeft="10dp"
+	        android:text="Date"
+	        android:textColor="@color/text_normal_color"
+        	android:textSize = "15sp" />
+      </RadioGroup>
+      
+      <LinearLayout 
+          android:id = "@+id/record_search_contairt"
+          android:layout_width="match_parent"
+          android:layout_height="wrap_content"
+          android:orientation="horizontal"
+          android:layout_below="@id/record_radiogroup"
+          android:gravity="center_horizontal">
+          <EditText
+              android:id="@+id/record_date_edit"
+              android:layout_width="160dp"
+              android:layout_height="wrap_content" 
+              android:text="2015-03-03"
+              android:textSize = "16sp"/>
+          <Button
+              android:id="@+id/record_find_search"
+              android:layout_width="wrap_content"
+              android:layout_height="wrap_content"
+              android:text = "Search"
+              android:textSize="16sp"/>
+      </LinearLayout>
+      
+      <RelativeLayout 
+          android:id = "@+id/record_play_containt"
+          android:layout_width="match_parent"
+          android:layout_height="wrap_content"
+          android:layout_marginTop="20dp"
+          android:layout_below="@id/record_search_contairt">
+          <TextView 
+              android:id = "@+id/record_paly_file_find"
+              android:layout_width="match_parent"
+              android:layout_height="30dp"
+              android:text="12345"
+              android:gravity="center"
+              android:textSize="16sp"
+              android:textColor="@color/black"
+              android:background="@color/gray"/>
+           <Button
+              android:id="@+id/record_play_player"
+              android:layout_width="wrap_content"
+              android:layout_height="wrap_content"
+              android:layout_below="@id/record_paly_file_find"
+              android:layout_marginTop="10dp"
+              android:layout_marginLeft="20dp"
+              android:text = "play"
+              android:textSize="16sp"/>
+          <Button
+              android:id="@+id/record_play_download"
+              android:layout_width="wrap_content"
+              android:layout_height="wrap_content"
+              android:layout_below="@id/record_paly_file_find"
+              android:layout_toRightOf="@id/record_play_player"
+              android:layout_marginTop="10dp"
+              android:layout_marginLeft="20dp"
+              android:text = "download start"
+              android:textSize="16sp"/>
+          <ProgressBar
+              android:id="@+id/record_play_download_progress"
+              style="?android:attr/progressBarStyleHorizontal"
+              android:layout_width="fill_parent"
+              android:layout_height="wrap_content"
+              android:layout_gravity="center_vertical"
+              android:layout_below="@id/record_play_player"
+              android:padding="15dp"
+              android:max="100"
+              android:progress="0"/>
+           <TextView 
+              android:id = "@+id/record_paly_file_info"
+              android:layout_width="match_parent"
+              android:layout_height="30dp"
+              android:text="2015-05-06 18:25:33"
+              android:gravity="center"
+              android:textSize="25sp"
+              android:layout_marginTop="70dp"
+              android:layout_below="@id/record_play_player"
+              android:textColor="@color/black"/>
+          <SeekBar
+               android:id="@+id/record_paly_seekbar"
+               android:layout_width="match_parent"
+               android:layout_height="wrap_content"
+               android:layout_marginTop="20dp"
+               android:layout_marginLeft="25dp"
+               android:layout_marginRight="25dp"
+               android:max = "100"
+               android:layout_below="@+id/record_paly_file_info" />
+           <LinearLayout 
+               android:id = "@+id/record_play_control"
+               android:layout_width="match_parent"
+               android:layout_height="wrap_content"
+               android:gravity="center"
+               android:layout_marginTop="20dp"
+               android:layout_below="@id/record_paly_seekbar"
+               android:orientation="horizontal">
+               <Button
+	              android:id="@+id/record_play_front"
+	              android:layout_width="wrap_content"
+	              android:layout_height="wrap_content"
+	              android:layout_marginLeft="15dp"
+	              android:text = "front"
+	              android:textSize="16sp"/>
+               <Button
+	              android:id="@+id/record_play_pause"
+	              android:layout_width="wrap_content"
+	              android:layout_height="wrap_content"
+	              android:layout_marginLeft="15dp"
+	              android:text = "pause"
+	              android:textSize="16sp"/>
+               <Button
+	              android:id="@+id/record_play_next"
+	              android:layout_width="wrap_content"
+	              android:layout_height="wrap_content"
+	              android:layout_marginLeft="15dp"
+	              android:text = " next "
+	              android:textSize="16sp"/>
+               <Button
+	              android:id="@+id/record_play_data_save"
+	              android:layout_width="wrap_content"
+	              android:layout_height="wrap_content"
+	              android:layout_marginLeft="15dp"
+	              android:text = " save "
+	              android:textSize="16sp"/>
+           </LinearLayout>
+      </RelativeLayout>
+</RelativeLayout>
+

@@ -1,0 +1,9 @@
+.idea
+.gradle
+app/build
+app/.cxx
+dvrsdk_jar/build
+dvrsdk_videoplayer_jar/build
+*/build
+build
+*/.cxx

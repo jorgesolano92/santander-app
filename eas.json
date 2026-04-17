@@ -12,7 +12,11 @@
       "distribution": "internal"
     },
     "production": {
-      "autoIncrement": true
+      "autoIncrement": true,
+      "env": {
+        "SENTRY_DISABLE_AUTO_UPLOAD": "true",
+        "DISABLE_SENTRY": "true"
+      }
     },
     "minimal": {
       "android": {
@@ -40,7 +44,9 @@
         "gradleCommand": ":app:assembleRelease"
       },
       "env": {
-        "EXPO_NO_TELEMETRY": "1"
+        "EXPO_NO_TELEMETRY": "1",
+        "SENTRY_DISABLE_AUTO_UPLOAD": "true",
+        "DISABLE_SENTRY": "true"
       }
     },
     "hls-only": {

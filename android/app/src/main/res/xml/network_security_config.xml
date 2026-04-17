@@ -9,6 +9,11 @@
         <domain includeSubdomains="true">192.168.1.25</domain>
         <domain includeSubdomains="true">localhost</domain>
         <domain includeSubdomains="true">127.0.0.1</domain>
+        <!-- Include trust anchors for HTTPS connections -->
+        <trust-anchors>
+            <certificates src="system" />
+            <certificates src="user" />
+        </trust-anchors>
     </domain-config>
     <!-- Allow all traffic for debugging (development only) -->
     <base-config cleartextTrafficPermitted="true">

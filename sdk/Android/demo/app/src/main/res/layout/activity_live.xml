@@ -1,0 +1,311 @@
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/container"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/activity_bg_color" >
+
+    <Button 
+        android:id = "@+id/live_live_button"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="40dp"
+        android:layout_centerHorizontal="true"
+        android:text="2015-05-20 15:23:23"
+        android:textSize="23sp"
+        android:background="@null"/>
+    
+    <Button 
+        android:id = "@+id/live_save_button"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="40dp"
+        android:layout_below="@id/live_live_button"
+        android:layout_centerHorizontal="true"
+        android:text="save live"
+        android:textSize="17sp"/>
+    <Button 
+        android:id = "@+id/live_trace_button"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="40dp"
+        android:layout_below="@id/live_live_button"
+        android:layout_toLeftOf="@id/live_save_button"
+        android:layout_marginRight="5dp"
+        android:text="trace start"
+        android:textSize="17sp"/>
+    <Button 
+        android:id = "@+id/live_trace_record_button"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="40dp"
+        android:layout_marginLeft="5dp"
+        android:layout_below="@id/live_live_button"
+        android:layout_toRightOf="@id/live_save_button"    
+        android:text="record start"
+        android:textSize="17sp"/>
+    
+    <LinearLayout 
+        android:id = "@+id/live_color_bright"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingLeft="15dp"
+        android:paddingRight="15dp"
+        android:layout_below="@id/live_trace_record_button"
+        android:orientation="horizontal">
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text = "bright    "
+			android:layout_gravity="center_vertical"
+            android:textColor = "@color/black"/>
+        <SeekBar
+             android:id="@+id/live_color_bright_seekbar"
+             android:layout_width="0dp"
+             android:layout_weight="1"
+             android:layout_height="wrap_content"
+             android:max="255"/>
+        <TextView
+            android:id = "@+id/live_color_bright_value"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text = "0"
+            android:layout_marginLeft="3dp"
+            android:layout_gravity="center_vertical"
+            android:textColor = "@color/black"/>
+    </LinearLayout>
+    <LinearLayout 
+        android:id = "@+id/live_color_contrast"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingLeft="15dp"
+        android:paddingRight="15dp"
+        android:layout_below="@id/live_color_bright"
+        android:orientation="horizontal">
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text = "contrast"
+            android:layout_gravity="center_vertical"
+            android:textColor = "@color/black"/>
+        <SeekBar
+            android:id="@+id/live_color_contrast_seekbar"
+            android:layout_width="0dp"
+            android:layout_weight="1"
+            android:layout_height="wrap_content" 
+            android:max="255"/>
+        <TextView
+            android:id = "@+id/live_color_contrast_value"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text = "0"
+            android:layout_marginLeft="3dp"
+            android:layout_gravity="center_vertical"
+            android:textColor = "@color/black"/>
+    </LinearLayout>
+    <LinearLayout 
+        android:id = "@+id/live_color_saturation"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingLeft="15dp"
+        android:paddingRight="15dp"
+        android:layout_below="@id/live_color_contrast"
+        android:orientation="horizontal">
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text = "saturat  "
+            android:layout_gravity="center_vertical"
+            android:textColor = "@color/black"/>
+        <SeekBar
+            android:id="@+id/live_color_saturation_seekbar"
+            android:layout_width="0dp"
+            android:layout_weight="1"
+            android:layout_height="wrap_content"
+            android:max="255" />
+        <TextView
+            android:id = "@+id/live_color_saturation_value"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text = "0"
+            android:layout_marginLeft="3dp"
+            android:layout_gravity="center_vertical"
+            android:textColor = "@color/black"/>
+    </LinearLayout>
+    <LinearLayout 
+        android:id = "@+id/live_color_hue"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingLeft="15dp"
+        android:paddingRight="15dp"
+        android:layout_below="@id/live_color_saturation"
+        android:orientation="horizontal">
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text = "hue        "
+            android:layout_gravity="center_vertical"
+            android:textColor = "@color/black"/>
+        <SeekBar
+             android:id="@+id/live_color_hue_seekbar"
+             android:layout_width="0dp"
+             android:layout_weight="1"
+             android:layout_height="wrap_content"
+             android:max="255" />
+        <TextView
+            android:id = "@+id/live_color_hue_value"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text = "0"
+            android:layout_marginLeft="3dp"
+            android:layout_gravity="center_vertical"
+            android:textColor = "@color/black"/>
+    </LinearLayout>
+
+    <RelativeLayout 
+        android:id = "@+id/live_cloud_direction"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_alignParentBottom="true"
+        android:layout_marginBottom="60dp">
+        <TextView 
+            android:id = "@+id/live_cloud_direction_up"
+            android:layout_width="30dp"
+            android:layout_height="30dp"
+            android:layout_marginLeft="60dp"
+            android:background="@drawable/cloud_direction_up"/>
+        <TextView 
+            android:id = "@+id/live_cloud_direction_center"
+            android:layout_width="30dp"
+            android:layout_height="30dp"
+            android:layout_marginLeft="60dp"
+            android:layout_below="@id/live_cloud_direction_up"
+            android:background="@drawable/cloud_direction_center"/>
+        <TextView 
+            android:id = "@+id/live_cloud_direction_down"
+            android:layout_width="30dp"
+            android:layout_height="30dp"
+            android:layout_marginLeft="60dp"
+            android:layout_below="@id/live_cloud_direction_center"
+            android:background="@drawable/cloud_direction_down"/>
+        <TextView 
+            android:id = "@+id/live_cloud_direction_left_up"
+            android:layout_width="30dp"
+            android:layout_height="30dp"
+            android:layout_marginLeft="30dp"
+            android:background="@drawable/cloud_direction_left_up"/>
+        <TextView 
+            android:id = "@+id/live_cloud_direction_left"
+            android:layout_width="30dp"
+            android:layout_height="30dp"
+            android:layout_marginLeft="30dp"
+            android:layout_below="@id/live_cloud_direction_left_up"
+            android:background="@drawable/cloud_direction_left"/>
+        <TextView 
+            android:id = "@+id/live_cloud_direction_left_down"
+            android:layout_width="30dp"
+            android:layout_height="30dp"
+            android:layout_marginLeft="30dp"
+            android:layout_below="@id/live_cloud_direction_left"
+            android:background="@drawable/cloud_direction_left_down"/>
+        <TextView 
+            android:id = "@+id/live_cloud_direction_right_up"
+            android:layout_width="30dp"
+            android:layout_height="30dp"
+            android:layout_marginLeft="90dp"
+            android:background="@drawable/cloud_direction_right_up"/>
+        <TextView 
+            android:id = "@+id/live_cloud_direction_right"
+            android:layout_width="30dp"
+            android:layout_height="30dp"
+            android:layout_marginLeft="90dp"
+            android:layout_below="@id/live_cloud_direction_right_up"
+            android:background="@drawable/cloud_direction_right"/>
+        <TextView 
+            android:id = "@+id/live_cloud_direction_right_down"
+            android:layout_width="30dp"
+            android:layout_height="30dp"
+            android:layout_marginLeft="90dp"
+            android:layout_below="@id/live_cloud_direction_right"
+            android:background="@drawable/cloud_direction_right_down"/>
+    </RelativeLayout>
+    
+    <LinearLayout 
+        android:id = "@+id/live_cloud_pret"
+        android:layout_width="wrap_content" 
+        android:layout_height="wrap_content"
+        android:layout_alignParentBottom="true"
+        android:layout_marginBottom="60dp"
+        android:layout_toRightOf="@id/live_cloud_direction"
+        android:layout_marginLeft="10dp"
+        android:orientation="vertical">
+        <TextView 
+            android:id = "@+id/live_cloud_pret_set"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Pre Set"
+            android:gravity="center"
+            android:textColor="@color/black"
+            android:textSize="17sp"
+            android:background="@drawable/line_content_bg"/>
+        <TextView 
+            android:id = "@+id/live_cloud_pret_go"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Pre Go"
+            android:layout_marginTop="10dp"
+            android:gravity="center"
+            android:textColor="@color/black"
+            android:textSize="17sp"
+            android:background="@drawable/line_content_bg"/>
+         <TextView 
+            android:id = "@+id/live_cloud_pret_del"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Pre Del"
+            android:gravity="center"
+            android:layout_marginTop="10dp"
+            android:textColor="@color/black"
+            android:textSize="17sp"
+            android:background="@drawable/line_content_bg"/>
+    </LinearLayout>
+    
+    <LinearLayout 
+        android:layout_width="wrap_content" 
+        android:layout_height="wrap_content"
+        android:layout_alignParentBottom="true"
+        android:layout_marginBottom="60dp"
+        android:layout_toRightOf="@id/live_cloud_pret"
+        android:layout_marginLeft="10dp"
+        android:orientation="vertical">
+        <TextView 
+            android:id = "@+id/live_cloud_curise_set"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="curise   set"
+            android:gravity="center"
+            android:textColor="@color/black"
+            android:textSize="17sp"
+            android:background="@drawable/line_content_bg"/>
+        <TextView 
+            android:id = "@+id/live_cloud_curise_start"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="curise start"
+            android:layout_marginTop="10dp"
+            android:gravity="center"
+            android:textColor="@color/black"
+            android:textSize="17sp"
+            android:background="@drawable/line_content_bg"/>
+       <TextView 
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text=""
+            android:gravity="center"
+            android:layout_marginTop="10dp"
+            android:textColor="@color/black"
+            android:textSize="17sp"
+            android:background="@drawable/line_content_bg"/>
+    </LinearLayout>
+</RelativeLayout>
+

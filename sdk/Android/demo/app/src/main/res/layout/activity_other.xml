@@ -1,0 +1,133 @@
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/container"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/activity_bg_color">
+    
+    <LinearLayout 
+        android:id = "@+id/other_linar1"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginTop="30dp"
+        android:gravity="center_horizontal">
+        <Button 
+	        android:id = "@+id/other_get_time"
+	        android:layout_width="wrap_content"
+	        android:layout_height="wrap_content"
+	        android:text="   Get Time   "
+	        android:textSize="17sp"/>
+	   <Button 
+	        android:id = "@+id/other_set_time"
+	        android:layout_width="wrap_content"
+	        android:layout_height="wrap_content"
+	        android:text="   Set Time   "
+	        android:layout_marginLeft="20dp"
+	        android:textSize="17sp"/>
+    </LinearLayout>
+
+    <LinearLayout 
+        android:id = "@+id/other_linar2"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginTop="10dp"
+        android:layout_below="@id/other_linar1"
+        android:gravity="center_horizontal">
+	   <Button 
+	        android:id = "@+id/other_set_record"
+	        android:layout_width="wrap_content"
+	        android:layout_height="wrap_content"
+	        android:text="Record Start"
+	        android:textSize="17sp"/>
+	   <Button 
+	        android:id = "@+id/other_set_alarm"
+	        android:layout_width="wrap_content"
+	        android:layout_height="wrap_content"
+	        android:layout_marginLeft="20dp"
+	        android:text="Start Alarm"
+	        android:textSize="17sp"/>
+   </LinearLayout>
+   
+   <RadioGroup
+       android:id = "@+id/other_log"
+       android:layout_width="match_parent"
+       android:layout_height="wrap_content"
+       android:layout_below="@id/other_linar2"
+       android:layout_marginLeft="20dp"
+       android:layout_marginTop="30dp"
+       android:orientation="vertical" >
+       <RadioButton
+           android:id="@+id/other_log_system"
+           android:layout_width="wrap_content"
+           android:layout_height="wrap_content"
+           android:text="system" 
+           android:checked="true"
+           android:textColor="@color/black"/>
+       <RadioButton
+           android:id="@+id/other_log_config"
+           android:layout_width="wrap_content"
+           android:layout_height="wrap_content"
+           android:text="config" 
+           android:textColor="@color/black"/>
+       <RadioButton
+           android:id="@+id/other_log_playba"
+           android:layout_width="wrap_content"
+           android:layout_height="wrap_content"
+           android:text="playba" 
+           android:textColor="@color/black"/>
+       <RadioButton
+           android:id="@+id/other_log_backup"
+           android:layout_width="wrap_content"
+           android:layout_height="wrap_content"
+           android:layout_marginLeft="100dip"
+           android:layout_marginTop="-140dip"
+           android:text="backup" 
+           android:textColor="@color/black"/>
+       <RadioButton
+           android:id="@+id/other_log_search"
+           android:layout_width="wrap_content"
+           android:layout_height="wrap_content"
+           android:layout_marginLeft="100dip"
+           android:text="search" 
+           android:textColor="@color/black"/>
+       <RadioButton
+           android:id="@+id/other_log_information"
+           android:layout_width="wrap_content"
+           android:layout_height="wrap_content"
+           android:layout_marginLeft="100dip"
+           android:text="information" 
+           android:textColor="@color/black"/>
+      <RadioButton
+           android:id="@+id/other_log_error"
+           android:layout_width="wrap_content"
+           android:layout_height="wrap_content"
+           android:layout_marginLeft="200dip"
+           android:layout_marginTop="-140dip"
+           android:text="error" 
+           android:textColor="@color/black"/>
+   </RadioGroup>
+   
+   <EditText 
+       android:id = "@+id/other_log_date"
+       android:layout_width="150dp"
+       android:layout_height="wrap_content"
+       android:layout_marginLeft="20dp"
+       android:layout_marginTop="190dp"
+       android:text="2015-05-09"
+       android:layout_below="@id/other_linar2"
+       android:textColor = "@color/black"
+       android:textSize = "16sp"/>
+   <Button 
+       android:id = "@+id/other_log_find"
+       android:layout_width="wrap_content"
+       android:layout_height="wrap_content"
+       android:layout_below="@id/other_linar2"
+       android:layout_toRightOf="@id/other_log_date"
+       android:layout_marginTop="190dp"
+       android:layout_marginLeft="20dp"
+       android:text = "Search Log"
+       android:textSize = "16sp"/>
+</RelativeLayout>
+

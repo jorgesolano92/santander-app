@@ -1,0 +1,154 @@
+<FrameLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    >
+
+    <LinearLayout
+        android:id="@+id/container"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:paddingLeft="15dp"
+        android:paddingRight="15dp"
+        android:background="@color/white"
+        android:orientation="vertical">
+
+        <Button
+            android:id="@+id/btReturn"
+            android:layout_width="100dp"
+            android:layout_height="50dp"
+            android:text="return"
+            />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="20dp"
+            android:orientation="horizontal"
+            android:paddingLeft="12dp"
+            android:paddingRight="12dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Channel Id : "
+                android:textColor="@color/text_tip_color"
+                android:textSize="17sp"/>
+
+            <EditText
+                android:id="@+id/etChannelIndex"
+                android:layout_width="match_parent"
+                android:layout_height="38dp"
+                android:background="@drawable/edit_bg"
+                android:gravity="center_vertical"
+                android:hint="channel ID is default 1 "
+                android:inputType="number"
+                android:paddingLeft="10dp"
+                android:paddingRight="10dp"
+                android:singleLine="true"
+                android:textColor="@color/text_normal_color"
+                android:textColorHint="@color/text_tip_color"
+                android:textSize="17sp"/>
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="20dp"
+            android:orientation="vertical"
+            android:paddingRight="12dp">
+
+            <Button
+                android:id="@+id/btnSearchFaceId"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="search Face ID : "
+                android:textColor="@color/green"
+                android:textSize="17sp"/>
+
+            <EditText
+                android:id="@+id/etShowSearchResult"
+                android:layout_width="match_parent"
+                android:layout_height="120dp"
+                android:layout_weight="1"
+                android:background="@drawable/edit_bg"
+                android:gravity="left"
+                android:hint="show Search Result"
+                android:paddingLeft="10dp"
+                android:paddingRight="10dp"
+                android:scrollbars="vertical"
+                android:textColor="@color/text_normal_color"
+                android:textColorHighlight="#CCCCCC"
+                android:textColorHint="@color/text_tip_color"
+                android:textIsSelectable="true"
+                android:textSize="17sp"/>
+
+        </LinearLayout>
+
+        <EditText
+            android:id="@+id/etInputFaceId"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:background="@drawable/edit_yellow_bg"
+            android:gravity="left"
+            android:hint="please input face id before click Button as follow"
+            android:minHeight="60dp"
+            android:paddingLeft="5dp"
+            />
+
+        <RelativeLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:orientation="vertical"
+            >
+
+            <Button
+                android:id="@+id/btnSearchDetailById"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Search Detail By Id : "
+                android:textColor="@color/green"
+                android:textSize="17sp"/>
+
+
+            <EditText
+                android:id="@+id/etSearchDetailByIdResult"
+                android:layout_width="match_parent"
+                android:layout_height="120dp"
+                android:layout_below="@id/btnSearchDetailById"
+                android:layout_marginTop="15dp"
+                android:background="@drawable/edit_bg"
+                android:gravity="left"
+                android:hint="show Search Result"
+                android:paddingLeft="10dp"
+                android:paddingRight="10dp"
+                android:scrollbars="vertical"
+                android:textColor="@color/text_normal_color"
+                android:textColorHighlight="#CCCCCC"
+                android:textColorHint="@color/text_tip_color"
+                android:textIsSelectable="true"
+                android:textSize="17sp"/>
+        </RelativeLayout>
+
+        <Button
+            android:id="@+id/btnDeleteFace"
+            android:layout_width="match_parent"
+            android:layout_height="60dp"
+            android:layout_marginTop="10dp"
+            android:text="delete Face "
+            android:textColor="@color/green"
+            android:textSize="17sp"/>
+
+        <Button
+            android:id="@+id/btnAddFace"
+            android:layout_width="match_parent"
+            android:layout_height="60dp"
+            android:layout_marginTop="10dp"
+            android:text="add Face "
+            android:textColor="@color/green"
+            android:textSize="17sp"/>
+    </LinearLayout>
+</FrameLayout>

@@ -1,637 +1,265 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert, Platform } from 'react-native';
-import { Maximize, Camera, Wifi, WifiOff } from 'lucide-react-native';
-import Video from 'react-native-video';
+import React, { useEffect, useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Platform, PermissionsAndroid } from 'react-native';
+import { Camera, Video, VideoOff, Wifi, WifiOff, Mic, MicOff } from 'lucide-react-native';
 import { IntercomConfig } from './IntercomConfigurationModal';
-import { getProxyBaseUrl, getUseServerProxy } from '../services/AppMode';
-import { downloadCameraSnapshotDirect } from '../services/SnapshotService';
+import dvrSdkService from '@/services/DvrSdkService';
 
 interface DoorVideoStreamProps {
   intercomConfig: IntercomConfig;
   doorName: string;
 }
 
+type ConnectionState = 'idle' | 'connecting' | 'connected' | 'error';
+
+/**
+ * Vista de cámara basada SOLO en SDK nativo.
+ * Nota: en esta fase inicial se valida disponibilidad del SDK + login.
+ * El render de video nativo se conectará en el siguiente paso (SurfaceView/TextureView del módulo nativo).
+ */
 export default function DoorVideoStream({ intercomConfig, doorName }: DoorVideoStreamProps) {
-  const [isStreaming, setIsStreaming] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-  const [streamError, setStreamError] = useState<string | null>(null);
-  const [cameraStatus, setCameraStatus] = useState<'online' | 'offline' | 'unknown'>('unknown');
-  const [hlsUrl, setHlsUrl] = useState<string>('');
-  const [proxyBaseUrl, setProxyBaseUrl] = useState<string>('http://localhost:3001');
-  const [useServerProxy, setUseServerProxy] = useState<boolean>(true);
-  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [connectionState, setConnectionState] = useState<ConnectionState>('idle');
+  const [error, setError] = useState<string | null>(null);
+  const [deviceInfo, setDeviceInfo] = useState<string | null>(null);
+  const [isLiveActive, setIsLiveActive] = useState(false);
+  const [isVoiceActive, setIsVoiceActive] = useState(false);
+  const [isTalking, setIsTalking] = useState(false);
+  const [liveHandle, setLiveHandle] = useState<number | null>(null);
+  const [voiceHandle, setVoiceHandle] = useState<number | null>(null);
+
   useEffect(() => {
-    (async () => {
-      const [base, useProxy] = await Promise.all([getProxyBaseUrl(), getUseServerProxy()]);
-      setProxyBaseUrl(base);
-      setUseServerProxy(useProxy);
-    })();
-  }, []);
-  const videoRef = useRef<any>(null);
-  const nativeVideoRef = useRef<any>(null); // Ref para el Video de react-native-video
-  const hlsRef = useRef<any>(null);
-  const hasAutoStarted = useRef(false);
-
-  // Verificar estado de la cámara al montar
-  useEffect(() => {
-    if (intercomConfig.cameraIP) {
-      setCameraStatus('online');
-      setStreamError(null);
-    } else {
-      setCameraStatus('offline');
-      setStreamError('No hay IP de cámara configurada');
-    }
-  }, [intercomConfig.cameraIP]);
-
-  // Iniciar stream automáticamente al montar y cerrar al desmontar
-  useEffect(() => {
-    let isMounted = true;
-
-    const initStream = async () => {
-      if (isMounted && intercomConfig.cameraIP && !hasAutoStarted.current) {
-        hasAutoStarted.current = true;
-        await startStream();
-      }
-    };
-
-    // Iniciar stream después de un pequeño delay
-    const delay = doorName === 'Calle (P1)' ? 100 : 200; // P1 después de 100ms, P2 después de 200ms
-    console.log(`⏳ Esperando ${delay}ms antes de iniciar ${doorName}...`);
-    const timer = setTimeout(() => {
-      initStream();
-    }, delay);
-
-    // Cleanup: detener el stream al desmontar
     return () => {
-      isMounted = false;
-      clearTimeout(timer);
-      // Detener el stream al desmontar el componente
-      if (hasAutoStarted.current) {
-        stopStream();
-      }
+      // Evitar sesiones abiertas al cerrar el componente/modal.
+      dvrSdkService.stopMicStreaming().catch(() => {});
+      dvrSdkService.stopVoiceIntercom().catch(() => {});
+      dvrSdkService.stopLivePreview().catch(() => {});
+      dvrSdkService.logout().catch(() => {});
     };
-  }, []); // Solo ejecutar al montar/desmontar
-
-  // Verificar periódicamente si el archivo HLS está disponible
-  useEffect(() => {
-    if (!isStreaming || !hlsUrl) return;
-    // Solo verificar en modo servidor proxy (no en RTSP directo)
-    if (!useServerProxy) return;
-
-    const checkHLSFile = async () => {
-      try {
-        const response = await fetch(hlsUrl, { method: 'HEAD' });
-        if (response.ok) {
-          setStreamError(null);
-        } else {
-          console.log(`⏳ Esperando archivo HLS: ${hlsUrl}`);
-          setStreamError('Generando stream...');
-        }
-      } catch (error) {
-        console.log(`⏳ Archivo HLS no disponible aún: ${hlsUrl}`);
-        setStreamError('Generando stream...');
-      }
-    };
-
-    // Verificar inmediatamente
-    checkHLSFile();
-
-    // Verificar cada 2 segundos
-    const interval = setInterval(checkHLSFile, 2000);
-
-    return () => clearInterval(interval);
-  }, [isStreaming, hlsUrl, useServerProxy]);
-
-  // Cargar hls.js en web (CDN) una sola vez
-  useEffect(() => {
-    if (Platform.OS !== 'web') return; // Solo ejecutar en web
-    if (typeof window === 'undefined') return;
-    if ((window as any).Hls) return;
-    const script = document.createElement('script');
-    script.src = 'https://cdn.jsdelivr.net/npm/hls.js@latest';
-    script.async = true;
-    document.head.appendChild(script);
   }, []);
 
-  // Inicializar reproducción HLS cuando esté listo el stream
-  useEffect(() => {
-    if (Platform.OS !== 'web') return; // Solo ejecutar en web
-    if (typeof window === 'undefined') return;
-    if (!isStreaming || !hlsUrl) return;
-    if (streamError === 'Generando stream...') return;
-
-    const video = videoRef.current;
-    if (!video) return;
-
-    const setupPlayback = () => {
-      if ((window as any).Hls && (window as any).Hls.isSupported()) {
-        if (hlsRef.current) {
-          hlsRef.current.destroy();
-          hlsRef.current = null;
-        }
-        const hls = new (window as any).Hls();
-        hlsRef.current = hls;
-        hls.loadSource(hlsUrl);
-        hls.attachMedia(video);
-        hls.on((window as any).Hls.Events.MANIFEST_PARSED, () => {
-          setStreamError(null);
-          try { video.play().catch(() => {}); } catch {}
-        });
-        hls.on((window as any).Hls.Events.ERROR, (_evt: any, data: any) => {
-          if (data?.fatal) {
-            setStreamError('Error en el stream HLS');
-          }
-        });
-      } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-        // Soporte nativo (Safari)
-        video.src = hlsUrl;
-        video.addEventListener('loadedmetadata', () => {
-          try { video.play().catch(() => {}); } catch {}
-        }, { once: true });
-      } else {
-        // Si hls.js aún no cargó, reintentar cuando cargue el script
-        const retry = () => {
-          if ((window as any).Hls) {
-            setupPlayback();
-            document.removeEventListener('hlsjs-loaded', retry as any);
-          }
-        };
-        document.addEventListener('hlsjs-loaded', retry as any, { once: true });
-      }
-    };
-
-    // Si el script ya está, configurar de inmediato; si no, esperar a onload
-    if ((window as any).Hls) {
-      setupPlayback();
-    } else {
-      // Marcar evento personalizado cuando cargue el script
-      const scripts = Array.from(document.getElementsByTagName('script'));
-      const hlsScript = scripts.find(s => (s.src || '').includes('hls.js')) as HTMLScriptElement | undefined;
-      if (hlsScript) {
-        hlsScript.addEventListener('load', () => {
-          const evt = new Event('hlsjs-loaded');
-          document.dispatchEvent(evt);
-        }, { once: true });
-      }
-    }
-
-    return () => {
-      if (hlsRef.current) {
-        try { hlsRef.current.destroy(); } catch {}
-        hlsRef.current = null;
-      }
-      if (videoRef.current) {
-        try { videoRef.current.src = ''; } catch {}
-      }
-    };
-  }, [isStreaming, hlsUrl, streamError]);
-
-  const checkCameraStatus = async () => {
+  const connectSdk = async () => {
     if (!intercomConfig.cameraIP) {
-      setCameraStatus('offline');
-      setStreamError('No hay IP de cámara configurada');
-      return;
-    }
-
-    // Si hay IP configurada, asumir que está disponible
-    setCameraStatus('online');
-    setStreamError(null);
-  };
-
-  const startStream = async () => {
-    if (!intercomConfig.cameraIP) {
-      console.log('❌ No hay IP de cámara configurada');
-      return;
-    }
-
-    console.log(`🎬 Iniciando stream para ${doorName}...`);
-    setIsLoading(true);
-    setStreamError(null);
-
-    try {
-      console.log(`🚀 Iniciando stream para ${doorName}...`);
-      console.log(`📹 Configuración:`, {
-        ip: intercomConfig.cameraIP,
-        rtspPort: intercomConfig.rtspPort,
-        videoProfile: intercomConfig.rtspPath || intercomConfig.videoProfile,
-        username: intercomConfig.onvifUsername,
-      });
-
-      console.log(`🔍 DEBUG: useServerProxy = ${useServerProxy}, Platform.OS = ${Platform.OS}`);
-      
-      // FORZAR modo directo temporalmente
-      if (true) { // !useServerProxy
-        // RTSP nativo en Android: construir URL RTSP y abrir en reproductor nativo
-        if (Platform.OS === 'android') {
-          try {
-            console.log(`📱 Modo directo Android - construyendo URL RTSP...`);
-            const user = encodeURIComponent(intercomConfig.onvifUsername || '');
-            const pass = encodeURIComponent(intercomConfig.onvifPassword || '');
-            const auth = user && pass ? `${user}:${pass}@` : '';
-            const host = intercomConfig.cameraIP;
-            const port = intercomConfig.rtspPort || 554;
-            const path = intercomConfig.rtspPath || 'Streaming/Channels/101';
-            // Formatos comunes: Axis/IDIS pueden variar; permitir ruta personalizada en config
-            const rtspUrl = `rtsp://${auth}${host}:${port}/${path}`;
-            console.log(`🎬 URL RTSP construida: ${rtspUrl}`);
-            setHlsUrl(rtspUrl);
-            setIsStreaming(true);
-            setStreamError(null);
-            setIsLoading(false);
-            return;
-          } catch (error) {
-            console.error('❌ Error construyendo URL RTSP:', error);
-            setStreamError(`Error RTSP: ${error.message || error}`);
-            setCameraStatus('offline');
-            setIsLoading(false);
-            return;
-          }
-        } else {
-          setStreamError('Modo directo soportado solo en Android');
-          setIsLoading(false);
-          return;
-        }
-      }
-
-      // Primero configurar la cámara en el backend
-      console.log(`🔧 Configurando cámara ${doorName}...`);
-      const configResponse = await fetch(`${proxyBaseUrl}/configure-camera/${doorName}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          ip: intercomConfig.cameraIP,
-          rtspPort: intercomConfig.rtspPort,
-          videoProfile: intercomConfig.rtspPath || intercomConfig.videoProfile,
-          username: intercomConfig.onvifUsername,
-          password: intercomConfig.onvifPassword,
-          snapshotPath: intercomConfig.snapshotPath,
-        }),
-      });
-
-      if (!configResponse.ok) {
-        const errorText = await configResponse.text();
-        console.error('❌ Error configurando cámara:', errorText);
-        throw new Error(`Error configurando cámara: ${errorText}`);
-      }
-
-      console.log(`✅ Cámara ${doorName} configurada correctamente`);
-
-      // Esperar más tiempo para que la configuración se procese completamente
-      console.log(`⏳ Esperando procesamiento de configuración...`);
-      await new Promise(resolve => setTimeout(resolve, 2000));
-
-      // Luego iniciar el stream RTSP a HLS
-      console.log(`🎬 Iniciando stream HLS para ${doorName}...`);
-      const streamResponse = await fetch(`${proxyBaseUrl}/start-stream/${doorName}`, {
-        method: 'GET',
-      });
-
-      if (streamResponse.ok) {
-        const streamData = await streamResponse.json();
-        console.log(`✅ Stream iniciado para ${doorName}:`, streamData);
-        
-        // Usar la URL HLS que viene del backend
-        const fullHlsUrl = `${proxyBaseUrl}${streamData.hlsUrl}`;
-        console.log(`🎬 URL HLS del backend: ${fullHlsUrl}`);
-        console.log(`📁 Carpeta IP: ${streamData.ipFolder}`);
-        
-        setHlsUrl(fullHlsUrl);
-        setIsStreaming(true);
-        setCameraStatus('online');
-        setStreamError(null);
-        
-        console.log(`⏳ FFmpeg está iniciando, esperando generación de archivos HLS...`);
-        console.log(`📁 Los archivos se crearán en: proxy/hls/${streamData.ipFolder}/`);
-        
-        // Esperar un momento adicional para que FFmpeg se estabilice
-        console.log(`⏳ Esperando estabilización del stream...`);
-        await new Promise(resolve => setTimeout(resolve, 1500));
-      } else {
-        const errorText = await streamResponse.text();
-        console.error('❌ Error iniciando stream:', errorText);
-        throw new Error(`Error iniciando stream: ${errorText}`);
-      }
-    } catch (error: any) {
-      console.error('❌ Error iniciando stream:', error);
-      setStreamError(`Error: ${error.message || error}`);
-      setCameraStatus('offline');
-      
-      // No mostrar Alert que puede causar crash, solo log
-      console.log(`⚠️ Stream falló para ${doorName}: ${error.message || error}`);
-      
-      // Intentar modo de fallback si es Android
-      if (Platform.OS === 'android' && !useServerProxy) {
-        console.log(`🔄 Intentando modo de fallback para ${doorName}...`);
-        try {
-          const fallbackUrl = `rtsp://${intercomConfig.cameraIP}:${intercomConfig.rtspPort || 554}/`;
-          setHlsUrl(fallbackUrl);
-          setIsStreaming(true);
-          setStreamError(null);
-          console.log(`✅ Modo fallback activado para ${doorName}`);
-        } catch (fallbackError) {
-          console.error('❌ Error en modo fallback:', fallbackError);
-        }
-      }
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const stopStream = async () => {
-    setIsLoading(true);
-
-    try {
-      // Si está usando servidor proxy (modo web), detener el stream del servidor
-      if (useServerProxy) {
-        const response = await fetch(`${proxyBaseUrl}/stop-stream/${doorName}`, {
-          method: 'GET',
-        });
-
-        if (response.ok) {
-          console.log(`✅ Stream del servidor detenido para ${doorName}`);
-        }
-      }
-
-      // Detener el stream localmente (funciona tanto en web como en Android)
-      setIsStreaming(false);
-      console.log(`✅ Stream local detenido para ${doorName}`);
-      
-      // Limpieza del reproductor HLS (web)
-      if (hlsRef.current) {
-        try { 
-          hlsRef.current.destroy(); 
-          console.log('🧹 HLS player destruido');
-        } catch (e) {
-          console.log('⚠️ Error destruyendo HLS player:', e);
-        }
-        hlsRef.current = null;
-      }
-      
-      // Limpieza del elemento de video (web)
-      if (videoRef.current && Platform.OS === 'web') {
-        try { 
-          videoRef.current.src = ''; 
-          console.log('🧹 Video src limpiado');
-        } catch (e) {
-          console.log('⚠️ Error limpiando video src:', e);
-        }
-      }
-      
-      // En Android, el componente Video de react-native-video se limpia automáticamente
-      // cuando cambia isStreaming a false, ya que el source se establece condicionalmente
-      
-    } catch (error) {
-      console.error('❌ Error deteniendo stream:', error);
-      // Aún así, intentar detener el stream localmente
-      setIsStreaming(false);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const takeSnapshot = async () => {
-    if (!intercomConfig.cameraIP) {
-      Alert.alert('Error', 'No hay IP de cámara configurada');
+      setError('No hay IP de cámara configurada');
+      setConnectionState('error');
       return;
     }
 
     try {
-      if (useServerProxy) {
-        const link = `${proxyBaseUrl}/camera/snapshot/${doorName}`;
-        Alert.alert('Descarga', 'Abriendo descarga de snapshot...');
-        if (typeof window !== 'undefined') {
-          window.open(link, '_blank');
-        }
-      } else {
-        if (Platform.OS === 'android') {
-          const uri = await downloadCameraSnapshotDirect({
-            ip: intercomConfig.cameraIP,
-            username: intercomConfig.onvifUsername,
-            password: intercomConfig.onvifPassword,
-            preferHttps: intercomConfig.enableTLS,
-            snapshotPath: intercomConfig.snapshotPath,
-          });
-          if (uri) {
-            Alert.alert('Éxito', 'Captura guardada en la galería');
-          } else {
-            throw new Error('No se pudo descargar la captura');
-          }
-        } else {
-          Alert.alert('Info', 'Captura directa solo en Android');
-        }
+      setConnectionState('connecting');
+      setError(null);
+      setDeviceInfo(null);
+
+      if (!dvrSdkService.isAvailable()) {
+        throw new Error(
+          Platform.OS === 'android'
+            ? 'Módulo nativo DVR no disponible. Verifica prebuild/dev-client y registro del package.'
+            : 'El SDK DVR solo funciona en Android.'
+        );
       }
-    } catch (error) {
-      console.error('❌ Error tomando captura:', error);
-      Alert.alert('Error', 'No se pudo tomar la captura');
+
+      await dvrSdkService.initialize();
+      await dvrSdkService.login({
+        server: intercomConfig.cameraIP,
+        port: String(intercomConfig.httpPort || 80),
+        username: intercomConfig.onvifUsername || 'admin',
+        password: intercomConfig.onvifPassword || '',
+      });
+
+      const info = await dvrSdkService.getDeviceInfo();
+      setDeviceInfo(`${info.deviceName} · CH:${info.videoInputNum} · FW:${info.firmwareVersion}`);
+      setConnectionState('connected');
+    } catch (e: any) {
+      setError(e?.message || 'No se pudo conectar con el SDK');
+      setConnectionState('error');
     }
   };
 
-  const getStatusColor = () => {
-    switch (cameraStatus) {
-      case 'online': return '#28A745';
-      case 'offline': return '#DC3545';
-      default: return '#6C757D';
+  const disconnectSdk = async () => {
+    try {
+      await dvrSdkService.stopVoiceIntercom().catch(() => false);
+      await dvrSdkService.stopMicStreaming().catch(() => false);
+      await dvrSdkService.stopLivePreview().catch(() => false);
+      await dvrSdkService.logout();
+      setConnectionState('idle');
+      setDeviceInfo(null);
+      setError(null);
+      setIsLiveActive(false);
+      setIsVoiceActive(false);
+      setLiveHandle(null);
+      setVoiceHandle(null);
+      setIsTalking(false);
+    } catch (e: any) {
+      setError(e?.message || 'No se pudo cerrar sesión');
+      setConnectionState('error');
     }
   };
 
-  const getStatusIcon = () => {
-    switch (cameraStatus) {
-      case 'online': return <Wifi size={16} color="#28A745" />;
-      case 'offline': return <WifiOff size={16} color="#DC3545" />;
-      default: return <Wifi size={16} color="#6C757D" />;
+  const startLivePreview = async () => {
+    try {
+      const handle = await dvrSdkService.startLivePreview({ channel: 0, streamType: 1 });
+      setLiveHandle(handle);
+      setIsLiveActive(true);
+      setError(null);
+    } catch (e: any) {
+      setError(e?.message || 'No se pudo iniciar live preview');
     }
   };
 
-  const toggleFullscreen = () => {
-    if (Platform.OS === 'android' && nativeVideoRef.current) {
-      // En Android, usar react-native-video para pantalla completa nativa
-      console.log('🖥️ Alternando pantalla completa en Android');
-      nativeVideoRef.current.presentFullscreenPlayer();
-    } else if (Platform.OS === 'web' && videoRef.current) {
-      // En Web, usar Fullscreen API
-      if (!document.fullscreenElement) {
-        if (videoRef.current.requestFullscreen) {
-          videoRef.current.requestFullscreen();
-        } else if (videoRef.current.webkitRequestFullscreen) {
-          videoRef.current.webkitRequestFullscreen();
-        } else if (videoRef.current.mozRequestFullScreen) {
-          videoRef.current.mozRequestFullScreen();
-        } else if (videoRef.current.msRequestFullscreen) {
-          videoRef.current.msRequestFullscreen();
-        }
-      } else {
-        if (document.exitFullscreen) {
-          document.exitFullscreen();
-        }
+  const stopLivePreview = async () => {
+    try {
+      await dvrSdkService.stopLivePreview();
+      setIsLiveActive(false);
+      setLiveHandle(null);
+    } catch (e: any) {
+      setError(e?.message || 'No se pudo detener live preview');
+    }
+  };
+
+  const startVoiceIntercom = async () => {
+    try {
+      const handle = await dvrSdkService.startVoiceIntercom({ channel: 0 });
+      setVoiceHandle(handle);
+      setIsVoiceActive(true);
+      setError(null);
+    } catch (e: any) {
+      setError(e?.message || 'No se pudo iniciar intercom de voz');
+    }
+  };
+
+  const stopVoiceIntercom = async () => {
+    try {
+      await dvrSdkService.stopMicStreaming().catch(() => false);
+      await dvrSdkService.stopVoiceIntercom();
+      setIsVoiceActive(false);
+      setVoiceHandle(null);
+      setIsTalking(false);
+    } catch (e: any) {
+      setError(e?.message || 'No se pudo detener intercom de voz');
+    }
+  };
+
+  const toggleTalk = async () => {
+    try {
+      if (!isVoiceActive) {
+        setError('Primero inicia el intercom');
+        return;
       }
-    } else {
-      Alert.alert('Info', 'Pantalla completa no disponible en esta plataforma');
+      if (isTalking) {
+        await dvrSdkService.stopMicStreaming();
+        setIsTalking(false);
+        return;
+      }
+
+      const permission = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.RECORD_AUDIO);
+      if (permission !== PermissionsAndroid.RESULTS.GRANTED) {
+        setError('Permiso de micrófono denegado');
+        return;
+      }
+
+      await dvrSdkService.startMicStreaming();
+      setIsTalking(true);
+      setError(null);
+    } catch (e: any) {
+      setError(e?.message || 'No se pudo activar el envío de micrófono');
     }
   };
 
-  const getRTSPUrl = () => {
-    // Para RTSP, necesitamos encoding especial para caracteres especiales en password
-    // No usar encodeURIComponent porque el parser RTSP lo interpreta mal
-    const user = intercomConfig.onvifUsername || '';
-    const pass = (intercomConfig.onvifPassword || '')
-      .replace(/:/g, '%3A')  // Escape colon
-      .replace(/@/g, '%40')  // Escape @
-      .replace(/\//g, '%2F') // Escape /
-      .replace(/#/g, '%23'); // Escape #
-    
-    const auth = user && pass ? `${user}:${pass}@` : '';
-    const host = intercomConfig.cameraIP;
-    const port = intercomConfig.rtspPort || 554;
-    const path = intercomConfig.rtspPath || 'Streaming/Channels/101';
-    const rtspUrl = `rtsp://${auth}${host}:${port}/${path}`;
-    
-    console.log('🎬 Construyendo URL RTSP:', {
-      host,
-      port,
-      path,
-      hasAuth: !!auth,
-      originalPassword: intercomConfig.onvifPassword,
-      encodedPassword: pass,
-      urlLength: rtspUrl.length,
-      url: rtspUrl.replace(/:[^:@]+@/, ':****@') // Log con password oculta
-    });
-    
-    return rtspUrl;
-  };
+  const isConnected = connectionState === 'connected';
+  const isConnecting = connectionState === 'connecting';
 
   return (
     <View style={styles.container}>
-      {/* Video Stream Area */}
-      <View style={styles.videoContainer}>
-        {isStreaming ? (
-          <View style={styles.videoPlayer}>
-            {streamError === 'Generando stream...' ? (
-              <View style={styles.loadingContainer}>
-                <Text style={styles.loadingText}>⏳ Generando stream...</Text>
-                <Text style={styles.loadingSubtext}>Esperando archivos HLS</Text>
-              </View>
-            ) : Platform.OS === 'web' ? (
-              <video
-                ref={videoRef}
-                style={styles.videoElement as any}
-                controls={false}
-                autoPlay
-                muted
-                playsInline
-              />
-            ) : !useServerProxy && Platform.OS === 'android' ? (
-              <Video
-                ref={nativeVideoRef}
-                source={{ 
-                  uri: getRTSPUrl(),
-                  type: 'rtsp'
-                }}
-                style={styles.videoElement}
-                controls={false}
-                fullscreen={isFullscreen}
-                resizeMode="contain"
-                audioOnly={false}
-                muted={intercomConfig.hasAudio === false}
-                ignoreSilentSwitch="ignore"
-                playInBackground={false}
-                playWhenInactive={false}
-                {...(intercomConfig.hasAudio === false && {
-                  selectedAudioTrack: {
-                    type: "disabled"
-                  }
-                })}
-                bufferConfig={{
-                  minBufferMs: 2500,
-                  maxBufferMs: 5000,
-                  bufferForPlaybackMs: 2500,
-                  bufferForPlaybackAfterRebufferMs: 2500
-                }}
-                onError={(error) => {
-                  console.error('❌ Error en Video RTSP:', error);
-                  console.error('❌ Detalles del error:', JSON.stringify(error, null, 2));
-                  console.error('❌ URL RTSP:', getRTSPUrl().replace(/:[^:@]+@/, ':****@'));
-                  console.error('❌ Audio configurado:', intercomConfig.hasAudio !== false ? 'SÍ' : 'NO');
-                  setStreamError('Error reproduciendo video RTSP');
-                  setIsStreaming(false);
-                }}
-                onLoad={() => {
-                  console.log('✅ Video RTSP cargado correctamente');
-                  console.log('✅ URL:', getRTSPUrl().replace(/:[^:@]+@/, ':****@'));
-                  console.log('✅ Audio:', intercomConfig.hasAudio !== false ? 'Habilitado' : 'Deshabilitado');
-                  setStreamError(null);
-                }}
-                onBuffer={(buffer) => {
-                  console.log('📊 Buffer status:', buffer);
-                }}
-                onReadyForDisplay={() => {
-                  console.log('📺 Video listo para mostrar');
-                }}
-                onFullscreenPlayerWillPresent={() => {
-                  console.log('🖥️ Entrando a pantalla completa');
-                  setIsFullscreen(true);
-                }}
-                onFullscreenPlayerWillDismiss={() => {
-                  console.log('🖥️ Saliendo de pantalla completa');
-                  setIsFullscreen(false);
-                }}
-              />
-            ) : (
-              <View style={styles.loadingContainer}>
-                <Text style={styles.loadingText}>Modo HLS no soportado en móvil</Text>
-                <Text style={styles.loadingSubtext}>Usa modo directo en configuración</Text>
-              </View>
-            )}
-          </View>
+      <View style={styles.previewBox}>
+        <Camera size={30} color="#6C757D" />
+        <Text style={styles.title}>Cámara {doorName}</Text>
+        <Text style={styles.subtitle}>{intercomConfig.cameraIP || 'Sin IP configurada'}</Text>
+
+        {isConnected ? (
+          <Text style={styles.okText}>
+            SDK conectado {isLiveActive ? '· LivePlay activo' : '· listo para LivePlay'}
+          </Text>
         ) : (
-          <View style={styles.placeholderContainer}>
-            <Camera size={32} color="#6C757D" />
-            <Text style={styles.placeholderText}>Cámara {doorName}</Text>
-            <Text style={styles.placeholderSubtext}>
-              {intercomConfig.cameraIP || 'Sin configuración'}
-            </Text>
-          </View>
+          <Text style={styles.infoText}>Vista preparada para integrar preview/intercom por SDK nativo</Text>
         )}
       </View>
 
-      {/* Status Bar */}
-      <View style={styles.statusBar}>
-        {getStatusIcon()}
-        <Text style={[styles.statusText, { color: getStatusColor() }]}>
-          {cameraStatus.toUpperCase()}
+      <View style={styles.statusRow}>
+        {isConnected ? <Wifi size={14} color="#28A745" /> : <WifiOff size={14} color="#DC3545" />}
+        <Text style={[styles.statusText, { color: isConnected ? '#28A745' : '#DC3545' }]}>
+          {isConnected ? 'CONECTADO' : connectionState === 'connecting' ? 'CONECTANDO...' : 'DESCONECTADO'}
         </Text>
-        {streamError && (
-          <Text style={styles.errorText}>• {streamError}</Text>
-        )}
       </View>
 
-      {/* Control Buttons */}
-      <View style={styles.controlsContainer}>
+      {!!deviceInfo && <Text style={styles.deviceInfo}>{deviceInfo}</Text>}
+      {liveHandle ? <Text style={styles.deviceInfo}>Live handle: {liveHandle}</Text> : null}
+      {voiceHandle ? <Text style={styles.deviceInfo}>Voice handle: {voiceHandle}</Text> : null}
+      {!!error && <Text style={styles.errorText}>• {error}</Text>}
+
+      <View style={styles.controls}>
         <TouchableOpacity
-          style={[
-            styles.controlButton, 
-            styles.fullscreenButton,
-            !isStreaming && styles.controlButtonDisabled
-          ]}
-          onPress={toggleFullscreen}
-          disabled={!isStreaming}
+          style={[styles.button, styles.connectButton, isConnecting && styles.disabled]}
+          onPress={connectSdk}
+          disabled={isConnecting}
         >
-          <Maximize size={16} color="#FFFFFF" />
-          <Text style={styles.controlButtonText}>PANTALLA COMPLETA</Text>
+          {isConnecting ? <ActivityIndicator color="#FFF" /> : <Video size={16} color="#FFF" />}
+          <Text style={styles.buttonText}>CONECTAR SDK</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[
-            styles.controlButton, 
-            styles.snapshotButton,
-            cameraStatus === 'offline' && styles.controlButtonDisabled
-          ]}
-          onPress={takeSnapshot}
-          disabled={cameraStatus === 'offline'}
+          style={[styles.button, styles.disconnectButton, !isConnected && styles.disabled]}
+          onPress={disconnectSdk}
+          disabled={!isConnected}
         >
-          <Camera size={16} color="#FFFFFF" />
-          <Text style={styles.controlButtonText}>CAPTURA</Text>
+          <VideoOff size={16} color="#FFF" />
+          <Text style={styles.buttonText}>DESCONECTAR</Text>
+        </TouchableOpacity>
+      </View>
+
+      <View style={styles.controls}>
+        <TouchableOpacity
+          style={[styles.button, styles.liveButton, (!isConnected || isLiveActive) && styles.disabled]}
+          onPress={startLivePreview}
+          disabled={!isConnected || isLiveActive}
+        >
+          <Video size={16} color="#FFF" />
+          <Text style={styles.buttonText}>INICIAR LIVE</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.button, styles.stopLiveButton, !isLiveActive && styles.disabled]}
+          onPress={stopLivePreview}
+          disabled={!isLiveActive}
+        >
+          <VideoOff size={16} color="#FFF" />
+          <Text style={styles.buttonText}>DETENER LIVE</Text>
+        </TouchableOpacity>
+      </View>
+
+      <View style={styles.controls}>
+        <TouchableOpacity
+          style={[styles.button, styles.voiceButton, (!isConnected || isVoiceActive) && styles.disabled]}
+          onPress={startVoiceIntercom}
+          disabled={!isConnected || isVoiceActive}
+        >
+          <Mic size={16} color="#FFF" />
+          <Text style={styles.buttonText}>INICIAR INTERCOM</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.button, styles.stopVoiceButton, !isVoiceActive && styles.disabled]}
+          onPress={stopVoiceIntercom}
+          disabled={!isVoiceActive}
+        >
+          <MicOff size={16} color="#FFF" />
+          <Text style={styles.buttonText}>DETENER INTERCOM</Text>
+        </TouchableOpacity>
+      </View>
+
+      <View style={styles.controls}>
+        <TouchableOpacity
+          style={[styles.button, isTalking ? styles.talkOnButton : styles.talkOffButton, !isVoiceActive && styles.disabled]}
+          onPress={toggleTalk}
+          disabled={!isVoiceActive}
+        >
+          {isTalking ? <MicOff size={16} color="#FFF" /> : <Mic size={16} color="#FFF" />}
+          <Text style={styles.buttonText}>{isTalking ? 'DEJAR DE HABLAR' : 'HABLAR'}</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -645,151 +273,104 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1,
     borderColor: '#E9ECEF',
+    padding: 10,
   },
-  videoContainer: {
-    height: 200,
+  previewBox: {
+    minHeight: 140,
+    alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: '#E9ECEF',
     borderRadius: 8,
-    marginBottom: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
-    overflow: 'hidden',
-  },
-  videoPlayer: {
-    flex: 1,
-    width: '100%',
-    height: '100%',
-  },
-  videoElement: {
-    width: '100%',
-    height: '100%',
-    objectFit: 'cover',
-    backgroundColor: '#000',
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#000',
-    padding: 20,
-  },
-  loadingText: {
-    color: '#FFFFFF',
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginBottom: 8,
-    textAlign: 'center',
-  },
-  loadingSubtext: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    opacity: 0.8,
-    textAlign: 'center',
-  },
-  streamingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#28A745',
-    padding: 16,
-  },
-  streamingText: {
-    color: '#FFFFFF',
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginBottom: 12,
-    textAlign: 'center',
-  },
-  streamingUrl: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    opacity: 0.9,
-    marginBottom: 8,
-    textAlign: 'center',
-    fontFamily: 'monospace',
-  },
-  streamingInfo: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    opacity: 0.8,
-    marginBottom: 4,
-    textAlign: 'center',
-  },
-  openBrowserButton: {
-    backgroundColor: '#007BFF',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 8,
-    marginTop: 16,
-  },
-  openBrowserButtonText: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: 'bold',
-    textAlign: 'center',
-  },
-  placeholderContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  placeholderText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#6C757D',
-    marginTop: 8,
-  },
-  placeholderSubtext: {
-    fontSize: 12,
-    color: '#ADB5BD',
-    marginTop: 4,
-  },
-  statusBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    backgroundColor: '#F8F9FA',
-    borderTopWidth: 1,
-    borderTopColor: '#E9ECEF',
-  },
-  statusText: {
-    fontSize: 12,
-    fontWeight: '600',
-    marginLeft: 4,
-  },
-  errorText: {
-    fontSize: 10,
-    color: '#DC3545',
-    marginLeft: 8,
-  },
-  controlsContainer: {
-    flexDirection: 'row',
-    gap: 8,
     padding: 12,
   },
-  controlButton: {
-    flex: 1,
+  title: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#343A40',
+    marginTop: 6,
+  },
+  subtitle: {
+    fontSize: 12,
+    color: '#6C757D',
+    marginTop: 4,
+  },
+  infoText: {
+    fontSize: 11,
+    color: '#6C757D',
+    marginTop: 8,
+    textAlign: 'center',
+  },
+  okText: {
+    fontSize: 11,
+    color: '#28A745',
+    marginTop: 8,
+    textAlign: 'center',
+    fontWeight: '600',
+  },
+  statusRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: 6,
+    marginTop: 10,
     gap: 6,
   },
-  fullscreenButton: {
+  statusText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  deviceInfo: {
+    marginTop: 6,
+    fontSize: 10,
+    color: '#495057',
+  },
+  errorText: {
+    marginTop: 6,
+    fontSize: 10,
+    color: '#DC3545',
+  },
+  controls: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 10,
+  },
+  button: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 6,
+  },
+  connectButton: {
+    backgroundColor: '#28A745',
+  },
+  disconnectButton: {
     backgroundColor: '#6C757D',
   },
-  snapshotButton: {
+  liveButton: {
     backgroundColor: '#007BFF',
   },
-  controlButtonDisabled: {
+  stopLiveButton: {
+    backgroundColor: '#495057',
+  },
+  voiceButton: {
+    backgroundColor: '#17A2B8',
+  },
+  stopVoiceButton: {
+    backgroundColor: '#6F42C1',
+  },
+  talkOnButton: {
+    backgroundColor: '#DC3545',
+  },
+  talkOffButton: {
+    backgroundColor: '#20C997',
+  },
+  disabled: {
     opacity: 0.5,
   },
-  controlButtonText: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: '600',
+  buttonText: {
+    color: '#FFF',
+    fontSize: 11,
+    fontWeight: '700',
   },
 });

@@ -1,0 +1,151 @@
+apply plugin: 'com.android.application'
+import org.tmatesoft.svn.core.wc.*
+
+import java.text.SimpleDateFormat
+
+android {
+    signingConfigs {
+        config {
+            keyAlias 'supercam.keystore'
+            keyPassword '123456789'
+            storeFile file('supercam.keystore')
+            storePassword '123456789'
+        }
+    }
+    compileSdkVersion 35
+
+    /*compileSdkVersion 26
+    buildToolsVersion "27.0.3"*/
+    defaultConfig {
+        applicationId "com.ajhy.ehome.manage"
+        minSdkVersion rootProject.ext.android.minSdkVersion
+        targetSdkVersion rootProject.ext.android.targetSdkVersion
+
+
+        ndk {
+            moduleName "nvrsdk"
+            abiFilters 'arm64-v8a','armeabi-v7a'
+            ldLibs "log"
+        }
+    }
+    externalNativeBuild {
+        ndkBuild {
+            path "src/main/jni/Android.mk"
+        }
+    }
+    sourceSets {
+        main {
+            jniLibs.srcDirs = ['libs']
+            jniLibs.srcDir 'src/main/libs'
+            //disable automatic ndk-build call: 若是禁止编译JNI,需要加这行，
+            // 否则注释掉path "src/main/jni/Android.mk"后会报Your project contains C++ files but it is not using a supported native build
+            //使用cmakeList没有这个问题，可以不加这行
+        }
+    }
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            signingConfig signingConfigs.config
+            jniDebuggable true
+            debuggable true
+            applicationVariants.all { variant ->
+                variant.outputs.each { output ->
+                    variant.outputs.all {
+                        def outputFile = output.outputFile
+                        if (outputFile != null && outputFile.name.endsWith('release.apk')) {
+                            def output_path = "${OUTPUT_PATH}/${getJenkinsJobName()}/${getJenkinsBuildCode()}"
+                            def date = new SimpleDateFormat("yyyyMMdd").format(new Date()).toString();
+                            outputFileName = "DVR3.0_SDK_DEMO_v${getGitCommitHash()}_${date}.apk"
+                        }
+                    }
+                }
+            }
+        }
+        debug {
+            jniDebuggable true
+            debuggable true
+            minifyEnabled false
+
+//            signingConfig signingConfigs.config
+//            signingConfig signingConfigs.release
+            // buildConfigField "boolean", "LOG_DEBUG", "true"//是否输出LOG信息,调用BuildConfig.LOG_DEBUG即可
+        }
+    }
+    lintOptions {
+        disable "ResourceType"
+    }
+    ndkVersion '21.0.6113669'
+    buildFeatures {
+        viewBinding true
+    }
+    namespace 'com.switchbee.technician'
+    buildToolsVersion '36.0.0'
+}
+
+dependencies {
+    //implementation project(':dvrsdk_jar')
+    implementation fileTree(include: ['*.jar'], dir: 'libs')
+    implementation 'com.android.support:appcompat-v7:26.+'
+    implementation 'com.android.support.constraint:constraint-layout:1.1.3'
+    implementation 'com.android.support:design:26.1.0'
+    //implementation project(path: ':dvrsdk_jar')
+
+}
+
+def getGitCommitHash() {
+    def result = 'git rev-parse --short HEAD'.execute().text.trim()
+    return result
+}
+
+
+def getJenkinsBuildCode() {
+    boolean flag = isInJenkins();
+    if (flag) {
+        ext.env = System.getenv()
+        ext.buildNumber = env.BUILD_NUMBER?.toInteger()
+        return "$buildNumber"
+    } else {
+        return 0
+    }
+}
+
+def getJenkinsJobName() {
+    boolean flag = isInJenkins();
+    if (flag) {
+        ext.env = System.getenv()
+        ext.job_name = env.JOB_NAME?.toString()
+        return "$job_name"
+    } else {
+        return 0
+    }
+}
+
+/**
+ * 判断是否有jenkins
+ * @return
+ */
+boolean isInJenkins() {
+    Map<String, String> map = System.getenv()
+
+    if (map == null) {
+        return false
+    }
+    String str = map.get("Path")
+    if (str != null) {
+        //it's windows
+        return false;
+    } else {
+        str = ""
+        Iterator it = map.iterator();
+        while (it.hasNext()) {
+            str += it.next();
+        }
+        if (str.contains("jenkins")) {
+            return true
+        } else {
+            return false;
+        }
+    }
+    return false
+}

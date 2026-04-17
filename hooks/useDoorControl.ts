@@ -227,6 +227,26 @@ export function useDoorControl(): UseDoorControlReturn {
     }
   }, []);
 
+  const refreshAllDoorsStatus = useCallback(async (): Promise<boolean> => {
+    try {
+      if (!isMountedRef.current) return false;
+      
+      const success = await doorControlService.refreshAllDoorsStatus();
+      
+      if (!isMountedRef.current) return false;
+      
+      // Actualizar el estado después de refrescar (sin loader, ya está el de refreshing)
+      await updateSystemStatus(false);
+      
+      return success;
+    } catch (err) {
+      if (isMountedRef.current) {
+        setError(err instanceof Error ? err.message : 'Error refrescando estado de puertas');
+      }
+      return false;
+    }
+  }, [updateSystemStatus]);
+
   const validateDevice = useCallback(async (): Promise<boolean> => {
     try {
       if (!isMountedRef.current) return false;
@@ -242,6 +262,8 @@ export function useDoorControl(): UseDoorControlReturn {
       if (isValid) {
         setConnectionStatus('connected');
         await updateSystemStatus(true); // Mostrar loader en la carga inicial
+        // Refrescar estado de puertas y detectar modo actual al iniciar la app
+        await refreshAllDoorsStatus();
       } else {
         setConnectionStatus('disconnected');
         setError('Dispositivo no válido o no accesible');
@@ -259,7 +281,7 @@ export function useDoorControl(): UseDoorControlReturn {
         setIsLoading(false);
       }
     }
-  }, [updateSystemStatus]);
+  }, [updateSystemStatus, refreshAllDoorsStatus]);
 
   const determineScheduleMode = useCallback((): string => {
     if (!systemStatus) return 'MANUAL';
@@ -491,26 +513,6 @@ export function useDoorControl(): UseDoorControlReturn {
   const isDoorVerifying = useCallback((doorId: string): boolean => {
     return doorControlService.isDoorVerifying(doorId);
   }, []);
-
-  const refreshAllDoorsStatus = useCallback(async (): Promise<boolean> => {
-    try {
-      if (!isMountedRef.current) return false;
-      
-      const success = await doorControlService.refreshAllDoorsStatus();
-      
-      if (!isMountedRef.current) return false;
-      
-      // Actualizar el estado después de refrescar (sin loader, ya está el de refreshing)
-      await updateSystemStatus(false);
-      
-      return success;
-    } catch (err) {
-      if (isMountedRef.current) {
-        setError(err instanceof Error ? err.message : 'Error refrescando estado de puertas');
-      }
-      return false;
-    }
-  }, [updateSystemStatus]);
 
   return {
     systemStatus,

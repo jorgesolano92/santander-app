@@ -1,10 +1,8 @@
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, Modal, ScrollView, Switch, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, Modal, ScrollView, Switch } from 'react-native';
 import { useState, useEffect } from 'react';
 import { ArrowLeft, Save, X, Camera, Phone } from 'lucide-react-native';
 import { Picker } from '@react-native-picker/picker';
 import { useWindowDimensions } from 'react-native';
-import { doorControlService } from '../services/DoorControlService';
-
 export interface IntercomConfig {
   name: string;
   cameraIP: string;
@@ -46,11 +44,11 @@ interface IntercomConfigurationModalProps {
 
 const defaultIntercomConfig: IntercomConfig = {
   name: '',
-  cameraIP: '',
+  cameraIP: '192.168.1.120',
   httpPort: 80,
   httpsPort: 443,
-  onvifUsername: 'admin',
-  onvifPassword: '',
+  onvifUsername: 'ceroideas',
+  onvifPassword: 'Cero21264712-',
   rtspPort: 554,
   videoProfile: 'MainStream',
   rtspPath: '',
@@ -85,8 +83,6 @@ export default function IntercomConfigurationModal({
   const isLargeTablet = width >= 1200;
 
   const [config, setConfig] = useState<IntercomConfig>(defaultIntercomConfig);
-  const [isTestingAxis, setIsTestingAxis] = useState(false);
-  const [axisTestMessage, setAxisTestMessage] = useState<string | null>(null);
 
   useEffect(() => {
     if (visible) {
@@ -108,33 +104,6 @@ export default function IntercomConfigurationModal({
 
   const updateConfig = (field: keyof IntercomConfig, value: any) => {
     setConfig(prev => ({ ...prev, [field]: value }));
-  };
-
-  const handleTestAxis = async () => {
-    try {
-      setIsTestingAxis(true);
-      setAxisTestMessage(null);
-      if (!config.cameraIP || !config.onvifUsername || !config.onvifPassword) {
-        Alert.alert('Faltan datos', 'IP, usuario y contraseña son requeridos');
-        setIsTestingAxis(false);
-        return;
-      }
-      const result = await doorControlService.testAxisIntercomConnection(
-        config.cameraIP,
-        config.onvifUsername,
-        config.onvifPassword,
-        'axis'
-      );
-      if (result.success) {
-        setAxisTestMessage(`Conexión OK. Endpoints OK: ${result.deviceInfo?.successfulEndpoints}/${result.deviceInfo?.endpointsTested}`);
-      } else {
-        setAxisTestMessage(`Fallo conexión: ${result.message}${result.error ? ' - ' + result.error : ''}`);
-      }
-    } catch (e: any) {
-      setAxisTestMessage(`Error de prueba: ${e?.message || e}`);
-    } finally {
-      setIsTestingAxis(false);
-    }
   };
 
   const styles = StyleSheet.create({
@@ -463,16 +432,7 @@ export default function IntercomConfigurationModal({
                 />
               </View>
 
-              <View style={styles.inputRow}>
-                <Text style={styles.inputLabel}>Ruta Snapshot (opcional):</Text>
-                <TextInput
-                  style={styles.textInput}
-                  value={config.snapshotPath || ''}
-                  onChangeText={(text) => updateConfig('snapshotPath', text)}
-                  placeholder="ISAPI/Streaming/channels/101/picture | axis-cgi/jpg/image.cgi"
-                  autoCapitalize="none"
-                />
-              </View>
+              {/* Ruta Snapshot oculta - no se usa */}
 
               {/* Ayuda contextual y botones rápidos */}
               <View style={{ marginTop: 6 }}>
@@ -484,7 +444,7 @@ export default function IntercomConfigurationModal({
                     style={{ backgroundColor: '#F1F3F5', paddingHorizontal: 8, paddingVertical: 6, borderRadius: 6, borderWidth: 1, borderColor: '#E9ECEF' }}
                     onPress={() => updateConfig('snapshotPath', 'ISAPI/Streaming/channels/101/picture')}
                   >
-                    <Text style={{ fontSize: 11, color: '#212529' }}>Safire/Hik: ISAPI/Streaming/channels/101/picture</Text>
+                    <Text style={{ fontSize: 11, color: '#212529' }}>Hik/ISAPI: ISAPI/Streaming/channels/101/picture</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={{ backgroundColor: '#F1F3F5', paddingHorizontal: 8, paddingVertical: 6, borderRadius: 6, borderWidth: 1, borderColor: '#E9ECEF' }}
@@ -499,9 +459,11 @@ export default function IntercomConfigurationModal({
                     <Text style={{ fontSize: 11, color: '#212529' }}>IDIS/Dahua: cgi-bin/snapshot.cgi?channel=1</Text>
                   </TouchableOpacity>
                 </View>
+                <Text style={{ marginTop: 10, fontSize: 11, color: '#6C757D' }}>
+                  Vídeo e intercomunicación por SDK nativo de cámara (sin proxy ni pruebas ISAPI en app).
+                </Text>
               </View>
 
-                {/* Botón eliminado: prueba AXIS movida a modal independiente */}
               </View>
             </View>
           </View>
@@ -560,33 +522,12 @@ export default function IntercomConfigurationModal({
             </View>
           </View>
 
-          {/* Configuración SDIO12 */}
+          {/* Configuración Control de Puertas */}
           <View style={styles.section}>
             <View style={styles.sectionTitle}>
-              <Text style={styles.sectionTitle}>CONFIGURACIÓN CONTROL DE PUERTAS (SDIO12)</Text>
+              <Text style={styles.sectionTitle}>CONFIGURACIÓN CONTROL DE PUERTAS</Text>
             </View>
             <View style={styles.sectionCard}>
-              <View style={styles.inputRow}>
-                <Text style={styles.inputLabel}>Usuario SDIO12:</Text>
-                <TextInput
-                  style={styles.textInput}
-                  value={config.doorControlUsername}
-                  onChangeText={(text) => updateConfig('doorControlUsername', text)}
-                  placeholder="Scati2023"
-                />
-              </View>
-              
-              <View style={styles.inputRow}>
-                <Text style={styles.inputLabel}>Contraseña SDIO12:</Text>
-                <TextInput
-                  style={styles.textInput}
-                  value={config.doorControlPassword}
-                  onChangeText={(text) => updateConfig('doorControlPassword', text)}
-                  placeholder="Scati2023"
-                  secureTextEntry={true}
-                />
-              </View>
-              
               <View style={styles.inputRow}>
                 <Text style={styles.inputLabel}>PCB:</Text>
                 <View style={styles.pickerContainer}>
@@ -664,31 +605,19 @@ export default function IntercomConfigurationModal({
                 />
               </View>
               
-              <View style={styles.switchRow}>
-                <Text style={styles.switchLabel}>Control manual de puerta</Text>
-                <Switch
-                  value={config.doorControlManualMode !== false}
-                  onValueChange={(value) => updateConfig('doorControlManualMode', value)}
-                  trackColor={{ false: '#CED4DA', true: '#FFC107' }}
-                  thumbColor={config.doorControlManualMode !== false ? '#FFFFFF' : '#FFFFFF'}
+              <View style={styles.inputRow}>
+                <Text style={styles.inputLabel}>Tiempo de pulso (seg):</Text>
+                <TextInput
+                  style={styles.textInput}
+                  value={config.doorControlPulseTime?.toString() || '1.0'}
+                  onChangeText={(value) => {
+                    const numValue = parseFloat(value) || 1.0;
+                    updateConfig('doorControlPulseTime', Math.max(0.1, Math.min(10, numValue)));
+                  }}
+                  keyboardType="decimal-pad"
+                  placeholder="1.0"
                 />
               </View>
-              
-              {config.doorControlManualMode === false && (
-                <View style={styles.inputRow}>
-                  <Text style={styles.inputLabel}>Tiempo de pulso (seg):</Text>
-                  <TextInput
-                    style={styles.textInput}
-                    value={config.doorControlPulseTime?.toString() || '1.0'}
-                    onChangeText={(value) => {
-                      const numValue = parseFloat(value) || 1.0;
-                      updateConfig('doorControlPulseTime', Math.max(0.1, Math.min(10, numValue)));
-                    }}
-                    keyboardType="decimal-pad"
-                    placeholder="1.0"
-                  />
-                </View>
-              )}
               
               <View style={styles.inputRow}>
                 <Text style={styles.inputLabel}>Resolución:</Text>

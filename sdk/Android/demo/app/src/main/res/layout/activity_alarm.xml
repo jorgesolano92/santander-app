@@ -1,0 +1,250 @@
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/container"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/white"
+    android:orientation="vertical">
+
+    <Button
+        android:id="@+id/btReturn"
+        android:layout_width="100dp"
+        android:layout_height="50dp"
+        android:text="Return" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="20dp"
+        android:orientation="horizontal"
+        android:paddingLeft="12dp"
+        android:paddingRight="12dp">
+
+        <TextView
+            android:id="@+id/channelLabel"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="ChannelIndex : "
+            android:textColor="@color/text_tip_color"
+            android:textSize="17sp" />
+
+        <EditText
+            android:id="@+id/etChannelIndex"
+            android:layout_width="match_parent"
+            android:layout_height="38dp"
+            android:background="@drawable/edit_bg"
+            android:gravity="center_vertical"
+            android:hint="start 0 for channel index"
+            android:inputType="number"
+            android:paddingLeft="10dp"
+            android:paddingRight="10dp"
+            android:singleLine="true"
+            android:textColor="@color/text_normal_color"
+            android:textColorHint="@color/text_tip_color"
+            android:textSize="17sp" />
+    </LinearLayout>
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="190dp">
+
+        <RadioGroup
+            android:id="@+id/alam_radiogroup"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginLeft="15dp"
+            android:layout_marginTop="10dp"
+            android:gravity="center_vertical"
+            android:minHeight="60dp"
+            android:orientation="vertical"
+            android:paddingRight="60dp">
+
+            <RadioButton
+                android:id="@+id/rbAVD"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:checked="true"
+                android:text="AVD"
+                android:textColor="@color/text_normal_color"
+                android:textSize="15sp" />
+
+            <RadioButton
+                android:id="@+id/rbVFD"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="VFD"
+                android:textColor="@color/text_normal_color"
+                android:textSize="15sp" />
+
+            <RadioButton
+                android:id="@+id/rbVFD_MATCH"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="VFD_MATCH"
+                android:textColor="@color/text_normal_color"
+                android:textSize="15sp" />
+
+            <RadioButton
+                android:id="@+id/rbPEA"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="PEA"
+                android:textColor="@color/text_normal_color"
+                android:textSize="15sp" />
+
+            <RadioButton
+                android:id="@+id/rbOSC"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="OSC"
+                android:textColor="@color/text_normal_color"
+                android:textSize="15sp" />
+
+            <RadioButton
+                android:id="@+id/rbCPC"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="CPC"
+                android:textColor="@color/text_normal_color"
+                android:textSize="15sp" />
+
+            <RadioButton
+                android:id="@+id/rbCDD"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="CDD"
+                android:textColor="@color/text_normal_color"
+                android:textSize="15sp" />
+
+            <RadioButton
+                android:id="@+id/rbIPD"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="IPD"
+                android:textColor="@color/text_normal_color"
+                android:textSize="15sp" />
+
+            <RadioButton
+                android:id="@+id/rbVSD"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="VSD"
+                android:textColor="@color/text_normal_color"
+                android:textSize="15sp" />
+
+            <RadioButton
+                android:id="@+id/rbASD"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="ASD"
+                android:textColor="@color/text_normal_color"
+                android:textSize="15sp" />
+
+            <RadioButton
+                android:id="@+id/rbAOIENTRY"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="AOIENTRY"
+                android:textColor="@color/text_normal_color"
+                android:textSize="15sp" />
+
+            <RadioButton
+                android:id="@+id/rbAOILEAVE"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="AOILEAVE"
+                android:textColor="@color/text_normal_color"
+                android:textSize="15sp" />
+
+            <RadioButton
+                android:id="@+id/rbPVD"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="PVD"
+                android:textColor="@color/text_normal_color"
+                android:textSize="15sp" />
+
+            <RadioButton
+                android:id="@+id/rbLoiter"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Loiter"
+                android:textColor="@color/text_normal_color"
+                android:textSize="15sp" />
+        </RadioGroup>
+    </ScrollView>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_margin="10dp"
+        android:orientation="horizontal">
+
+        <Button
+            android:id="@+id/Subscrib"
+            android:layout_width="wrap_content"
+            android:layout_height="38dp"
+            android:layout_gravity="center"
+            android:layout_margin="10dp"
+            android:layout_weight="1"
+            android:background="@drawable/button_bg"
+            android:gravity="center_horizontal|center_vertical"
+            android:text="Subscrib"
+            android:textColor="@color/white"
+            android:textSize="17sp" />
+
+        <Button
+            android:id="@+id/unSubscrib"
+            android:layout_width="wrap_content"
+            android:layout_height="38dp"
+            android:layout_gravity="center"
+            android:layout_weight="1"
+            android:background="@drawable/button_bg"
+            android:gravity="center_horizontal|center_vertical"
+            android:text="unSubscrib"
+            android:textColor="@color/white"
+            android:textSize="17sp" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_margin="10dp"
+        android:orientation="horizontal">
+        <!--    <Button-->
+        <!--        android:id="@+id/btCheckFaceSupport"-->
+        <!--        android:layout_width="wrap_content"-->
+        <!--        android:layout_weight="1"-->
+        <!--        android:layout_height="wrap_content"-->
+        <!--        android:layout_margin="10dp"-->
+        <!--        android:text= "检测是否支持人脸比对">-->
+
+        <!--    </Button>-->
+        <Button
+            android:id="@+id/btSupportFun"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_margin="10dp"
+            android:text="是否支持口罩和测温"/>
+        <Button
+            android:id="@+id/btnClear"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_margin="10dp"
+            android:text="Clear"/>
+
+    </LinearLayout>
+    <ScrollView
+        android:id="@+id/iveAlarmArea"
+        android:layout_width="match_parent"
+        android:layout_height="250dp">
+        <LinearLayout
+            android:id="@+id/alarmLayout"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:orientation="vertical"
+            android:padding="15dp" />
+    </ScrollView>
+
+</LinearLayout>

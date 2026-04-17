@@ -1,0 +1,130 @@
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/activity_bg_color">
+
+    <RelativeLayout
+        android:id="@+id/container"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@color/activity_bg_color"
+        android:paddingTop="80dp"
+        android:gravity="center_vertical">
+
+        <Button
+            android:id="@+id/tvMediaCodecType"
+            android:layout_width="60dp"
+            android:layout_height="45dp"
+            android:gravity="center"
+            android:hint="解码器"
+            android:text="hard"
+            android:textColor="@color/red" />
+
+        <Button
+            android:id="@+id/main_device_record"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_centerHorizontal="true"
+            android:layout_marginBottom="10dp"
+            android:text="Video Record"
+            android:textSize="17sp" />
+
+        <Button
+            android:id="@+id/main_device_live"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_below="@id/main_device_record"
+            android:layout_centerHorizontal="true"
+            android:layout_marginBottom="10dp"
+            android:text=" Device   Live  "
+            android:textSize="17sp" />
+
+
+        <Button
+            android:id="@+id/main_search_device"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_below="@id/main_device_live"
+            android:layout_centerHorizontal="true"
+            android:layout_marginBottom="10dp"
+
+            android:text="Device Search"
+            android:textSize="17sp" />
+
+        <Button
+            android:id="@+id/main_device_other"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_below="@id/main_search_device"
+            android:layout_centerHorizontal="true"
+            android:layout_marginTop="10dp"
+            android:text=" Other Config "
+            android:textSize="17sp" />
+
+        <Button
+            android:id="@+id/main_SDKAlarmActivity"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_below="@id/main_device_other"
+            android:layout_centerHorizontal="true"
+            android:layout_marginTop="10dp"
+            android:text="   start Alarm    "
+            android:textSize="17sp" />
+
+        <Button
+            android:id="@+id/main_SDKFaceActivity"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_below="@id/main_SDKAlarmActivity"
+            android:layout_centerHorizontal="true"
+            android:layout_marginTop="10dp"
+            android:text="   start Face   "
+            android:textSize="17sp" />
+
+        <Button
+            android:id="@+id/main_device_logOut"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_below="@id/main_SDKFaceActivity"
+            android:layout_centerHorizontal="true"
+            android:layout_marginTop="10dp"
+            android:text="      LogOut      "
+            android:textSize="17sp" />
+
+        <Button
+            android:id="@+id/main_ipc_upgrade"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_below="@id/main_device_logOut"
+            android:layout_centerHorizontal="true"
+            android:layout_marginTop="10dp"
+            android:layout_marginBottom="10dp"
+            android:text="IPC Upgrade"
+            android:textSize="17sp" />
+
+        <TextView
+            android:id="@+id/tv_data"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_below="@id/main_ipc_upgrade"
+            android:layout_centerHorizontal="true"
+            android:layout_marginTop="10dp"
+            android:gravity="center"
+            android:text="No Data"
+            android:textColor="@android:color/black" />
+
+        <ProgressBar
+            android:id="@+id/upgrade_progress"
+            style="?android:attr/progressBarStyleHorizontal"
+            android:layout_centerHorizontal="true"
+            android:layout_width="200dp"
+            android:layout_height="10dp"
+            android:layout_below="@id/tv_data"
+            android:layout_marginTop="10dp"
+            android:gravity="center" />
+    </RelativeLayout>
+</ScrollView>
+
+
+
