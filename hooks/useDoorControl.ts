@@ -1,5 +1,10 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { doorControlService, ConfigurationData, SystemStatus } from '../services/DoorControlService';
+import {
+  doorControlService,
+  ConfigurationData,
+  SystemStatus,
+  type PanelApiResult,
+} from '../services/DoorControlService';
 import { sipService, SipConfig, SipCallState, SipEventType } from '../services/SipService';
 import { IntercomConfig } from '../components/IntercomConfigurationModal';
 import { emergencyService } from '../services/EmergencyService';
@@ -10,8 +15,8 @@ export interface UseDoorControlReturn {
   error: string | null;
   connectionStatus: 'connected' | 'disconnected' | 'connecting';
   currentScheduleMode: string | null;
-  changeMode: (mode: string) => Promise<boolean>;
-  toggleEmergency: (newState: boolean) => Promise<boolean>;
+  changeMode: (mode: string) => Promise<PanelApiResult>;
+  toggleEmergency: (newState: boolean) => Promise<PanelApiResult>;
   configure: (config: ConfigurationData) => Promise<boolean>;
   validateDevice: () => Promise<boolean>;
   determineScheduleMode: () => string;
@@ -70,36 +75,18 @@ export function useDoorControl(): UseDoorControlReturn {
       const emergencyState = await emergencyService.getEmergencyState();
       const isEmergencyActiveLocal = emergencyState?.isActive || false;
       const emergencyConfig = await emergencyService.getEmergencyConfig();
-      
-      let updatedStatus = {
+
+      const panelRuleKey = await doorControlService.getPanelCurrentModeRuleKey();
+      const emergRule = String(emergencyConfig?.rule_key || '').trim();
+      const emergencyActive =
+        !!emergencyConfig?.enabled &&
+        ((!!panelRuleKey && !!emergRule && panelRuleKey === emergRule) || isEmergencyActiveLocal);
+
+      const updatedStatus = {
         ...status,
-        emergencyActive: isEmergencyActiveLocal, // Usar estado local
-        emergencyConfigured: emergencyConfig?.enabled || false
+        emergencyActive,
+        emergencyConfigured: emergencyConfig?.enabled || false,
       };
-      
-      // Solo verificar estado SDIO12 si la emergencia está ACTIVA (para confirmar que los switches siguen activos)
-      if (isEmergencyActiveLocal) {
-        console.log('🔍 Emergencia activa localmente - verificando estado SDIO12...');
-        try {
-          const emergencyStatus = await doorControlService.getEmergencyStatus();
-          
-          // Log del estado de emergencia
-          console.log('🔍 Estado verificado en SDIO12:', {
-            isActive: emergencyStatus.isActive,
-            switches: emergencyStatus.switchesStatus
-          });
-          
-          // Si los switches ya NO están activos, desactivar emergencia automáticamente
-          if (!emergencyStatus.isActive) {
-            console.log('⚠️ Switches desactivados - desactivando emergencia automáticamente');
-            await emergencyService.deactivateEmergency();
-            updatedStatus.emergencyActive = false;
-          }
-        } catch (error) {
-          console.error('❌ Error verificando estado SDIO12 de emergencia:', error);
-          // Mantener estado local si hay error en la verificación
-        }
-      }
       
       setSystemStatus(updatedStatus);
       setConnectionStatus('connected');
@@ -122,27 +109,31 @@ export function useDoorControl(): UseDoorControlReturn {
     }
   }, []);
 
-  const changeMode = useCallback(async (mode: string): Promise<boolean> => {
+  const changeMode = useCallback(async (mode: string): Promise<PanelApiResult> => {
     try {
-      if (!isMountedRef.current) return false;
-      
+      if (!isMountedRef.current) return { ok: false, errorMessage: 'Operación cancelada.' };
+
       setIsLoading(true);
       setError(null);
-      
-      await doorControlService.changeMode(mode);
-      
-      if (!isMountedRef.current) return false;
-      
+
+      const result = await doorControlService.changeMode(mode);
+      if (!isMountedRef.current) return { ok: false, errorMessage: 'Operación cancelada.' };
+      if (!result.ok) {
+        return result;
+      }
+
       setCurrentScheduleMode(mode);
-      
-      // Refresh system status after mode change (sin loader, ya se está procesando el cambio de modo)
+
       await updateSystemStatus(false);
-      return true;
+      return { ok: true };
     } catch (err) {
       if (isMountedRef.current) {
         setError(err instanceof Error ? err.message : 'Error al cambiar modo');
       }
-      return false;
+      return {
+        ok: false,
+        errorMessage: err instanceof Error ? err.message : 'Error al cambiar modo',
+      };
     } finally {
       if (isMountedRef.current) {
         setIsLoading(false);
@@ -150,48 +141,50 @@ export function useDoorControl(): UseDoorControlReturn {
     }
   }, [updateSystemStatus]);
 
-  const toggleEmergency = useCallback(async (newState: boolean): Promise<boolean> => {
+  const toggleEmergency = useCallback(async (newState: boolean): Promise<PanelApiResult> => {
     try {
-      if (!isMountedRef.current) return false;
-      
+      if (!isMountedRef.current) return { ok: false, errorMessage: 'Operación cancelada.' };
+
       setIsLoading(true);
       setError(null);
-      
+
       console.log('🚨 toggleEmergency:', newState ? 'ACTIVANDO' : 'DESACTIVANDO');
-      
-      let success: boolean = false;
+
+      let result: PanelApiResult = { ok: false, errorMessage: 'Error desconocido.' };
       try {
         if (newState) {
-          success = await doorControlService.activateEmergency();
+          result = await doorControlService.activateEmergency();
         } else {
-          success = await doorControlService.deactivateEmergency();
+          result = await doorControlService.deactivateEmergency();
         }
       } catch (emergencyError) {
         console.error('❌ Error en activateEmergency/deactivateEmergency:', emergencyError);
-        console.error('❌ Error tipo:', emergencyError instanceof Error ? emergencyError.constructor.name : typeof emergencyError);
-        console.error('❌ Error mensaje:', emergencyError instanceof Error ? emergencyError.message : String(emergencyError));
-        if (emergencyError instanceof Error && emergencyError.stack) {
-          console.error('❌ Error stack:', emergencyError.stack);
-        }
-        success = false;
+        result = {
+          ok: false,
+          errorMessage:
+            emergencyError instanceof Error
+              ? emergencyError.message
+              : String(emergencyError),
+        };
       }
-      
-      if (!isMountedRef.current) return false;
-      
-      if (success) {
+
+      if (!isMountedRef.current) return { ok: false, errorMessage: 'Operación cancelada.' };
+
+      if (result.ok) {
         console.log('✅ Emergencia:', newState ? 'ACTIVADA' : 'DESACTIVADA');
-        // Refresh system status after emergency toggle (sin loader, ya se está procesando)
         await updateSystemStatus(false);
-        return true;
-      } else {
-        console.error('❌ Error en toggleEmergency - success es false');
-        return false;
+        return { ok: true };
       }
+      console.error('❌ Error en toggleEmergency:', result.errorMessage);
+      return result;
     } catch (err) {
       if (isMountedRef.current) {
         setError(err instanceof Error ? err.message : 'Error en modo emergencia');
       }
-      return false;
+      return {
+        ok: false,
+        errorMessage: err instanceof Error ? err.message : 'Error en modo emergencia',
+      };
     } finally {
       if (isMountedRef.current) {
         setIsLoading(false);

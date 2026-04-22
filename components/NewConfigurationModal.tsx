@@ -7,7 +7,7 @@ import { doorControlService, ApiResponse } from '@/services/DoorControlService';
 import ApiResponseDisplayModal from './ApiResponseDisplayModal';
 import IntercomConfigurationModal, { IntercomConfig } from './IntercomConfigurationModal';
 import { Picker } from '@react-native-picker/picker';
-import { emergencyService } from '@/services/EmergencyService';
+import { emergencyService, type EmergencyConfig } from '@/services/EmergencyService';
 
 interface NewConfigurationModalProps {
   visible: boolean;
@@ -30,18 +30,14 @@ interface ScheduleConfig {
   ini2: string;
 }
 
-interface EmergencyConfig {
-  enabled: boolean;
-  pcb1: number;
-  switch1: number;
-  pcb2: number;
-  switch2: number;
-}
-
 interface ModeConfig {
   rule_key: string;
-  action: 'set_rule';
+  action: 'set_rule' | 'set_output';
   enabled: boolean;
+  /** Obligatorio si action === set_output (código OUT del panel, ej. OUT_01_01). */
+  output_code?: string;
+  /** Por defecto true al activar salida. */
+  output_on?: boolean;
 }
 
 interface ModesConfig {
@@ -276,19 +272,19 @@ export default function NewConfigurationModal({
     officeWithATM: false,
     emergency: {
       enabled: true,
-      pcb1: 2,
-      switch1: 1,
-      pcb2: 3,
-      switch2: 1,
+      rule_key: '',
+      action: 'set_rule',
+      output_code: '',
+      output_on: true,
     },
     modes: {
-      automatico: { rule_key: 'horario_automatico', action: 'set_rule', enabled: true },
-      esclusa: { rule_key: 'horario_esclusa', action: 'set_rule', enabled: true },
-      extendido: { rule_key: 'horario_extendido', action: 'set_rule', enabled: true },
-      autoservicio: { rule_key: 'horario_autoservicio', action: 'set_rule', enabled: true },
-      oficinaCerrada: { rule_key: 'horario_cerrado', action: 'set_rule', enabled: true },
-      cargaCajero: { rule_key: 'carga_cajero', action: 'set_rule', enabled: true },
-      manual: { rule_key: 'manual', action: 'set_rule', enabled: true },
+      automatico: { rule_key: 'horario_automatico', action: 'set_rule', enabled: true, output_code: '', output_on: true },
+      esclusa: { rule_key: 'horario_esclusa', action: 'set_rule', enabled: true, output_code: '', output_on: true },
+      extendido: { rule_key: 'horario_extendido', action: 'set_rule', enabled: true, output_code: '', output_on: true },
+      autoservicio: { rule_key: 'horario_autoservicio', action: 'set_rule', enabled: true, output_code: '', output_on: true },
+      oficinaCerrada: { rule_key: 'horario_cerrado', action: 'set_rule', enabled: true, output_code: '', output_on: true },
+      cargaCajero: { rule_key: 'carga_cajero', action: 'set_rule', enabled: true, output_code: '', output_on: true },
+      manual: { rule_key: 'manual', action: 'set_rule', enabled: true, output_code: '', output_on: true },
     },
   });
 
@@ -339,23 +335,38 @@ export default function NewConfigurationModal({
           });
         }
         
-        // Cargar configuración de emergencia
         const emergencyConfig = await emergencyService.getEmergencyConfig();
-        if (emergencyConfig) {
-          parsedConfig.emergency = emergencyConfig;
-          console.log('✅ Configuración de emergencia cargada:', emergencyConfig);
+        parsedConfig.emergency = {
+          enabled: true,
+          rule_key: '',
+          action: 'set_rule',
+          output_code: '',
+          output_on: true,
+          ...parsedConfig.emergency,
+          ...(emergencyConfig ? emergencyConfig : {}),
+        };
+        const leg = parsedConfig.emergency as Record<string, unknown>;
+        delete leg.source;
+        delete leg.pcb1;
+        delete leg.switch1;
+        delete leg.pcb2;
+        delete leg.switch2;
+        if (!parsedConfig.emergency.action) {
+          parsedConfig.emergency.action = 'set_rule';
         }
+        console.log('✅ Emergencia tras migración:', parsedConfig.emergency);
         
         // Migrar configuración de modos si no existe
         if (!parsedConfig.modes) {
+          const def = { action: 'set_rule' as const, enabled: true, output_code: '', output_on: true };
           parsedConfig.modes = {
-            automatico: { rule_key: 'horario_automatico', action: 'set_rule', enabled: true },
-            esclusa: { rule_key: 'horario_esclusa', action: 'set_rule', enabled: true },
-            extendido: { rule_key: 'horario_extendido', action: 'set_rule', enabled: true },
-            autoservicio: { rule_key: 'horario_autoservicio', action: 'set_rule', enabled: true },
-            oficinaCerrada: { rule_key: 'horario_cerrado', action: 'set_rule', enabled: true },
-            cargaCajero: { rule_key: 'carga_cajero', action: 'set_rule', enabled: true },
-            manual: { rule_key: 'manual', action: 'set_rule', enabled: true },
+            automatico: { ...def, rule_key: 'horario_automatico' },
+            esclusa: { ...def, rule_key: 'horario_esclusa' },
+            extendido: { ...def, rule_key: 'horario_extendido' },
+            autoservicio: { ...def, rule_key: 'horario_autoservicio' },
+            oficinaCerrada: { ...def, rule_key: 'horario_cerrado' },
+            cargaCajero: { ...def, rule_key: 'carga_cajero' },
+            manual: { ...def, rule_key: 'manual' },
           };
           console.log('✅ Configuración de modos inicializada con valores por defecto');
         }
@@ -380,7 +391,16 @@ export default function NewConfigurationModal({
             parsedConfig.modes[k] = { ...v, action: 'set_rule' };
           }
         }
-        
+        for (const k of Object.keys(parsedConfig.modes || {})) {
+          const v = parsedConfig.modes[k];
+          if (!v || typeof v !== 'object') continue;
+          parsedConfig.modes[k] = {
+            ...v,
+            output_code: typeof (v as ModeConfig).output_code === 'string' ? (v as ModeConfig).output_code : '',
+            output_on: (v as ModeConfig).output_on !== false,
+          };
+        }
+
         // Migrar configuración de API si no tiene los nuevos campos
         if (parsedConfig.api) {
           if (!parsedConfig.api.urlToken) {
@@ -1517,28 +1537,78 @@ export default function NewConfigurationModal({
                         <View style={styles.modePickerContainer}>
                           <Picker
                             selectedValue={config.modes[key as keyof ModesConfig].action}
-                            onValueChange={(value) => setConfig(prev => ({
-                              ...prev,
-                              modes: {
-                                ...prev.modes,
-                                [key]: { ...prev.modes[key as keyof ModesConfig], action: value }
-                              }
-                            }))}
+                            onValueChange={(value) =>
+                              setConfig((prev) => ({
+                                ...prev,
+                                modes: {
+                                  ...prev.modes,
+                                  [key]: {
+                                    ...prev.modes[key as keyof ModesConfig],
+                                    action: value as 'set_rule' | 'set_output',
+                                  },
+                                },
+                              }))
+                            }
                             style={styles.modePicker}
                             mode="dropdown"
                             dropdownIconColor="#495057"
                           >
                             <Picker.Item label="set_rule" value="set_rule" />
+                            <Picker.Item label="set_output" value="set_output" />
                           </Picker>
                         </View>
                       </View>
                     )}
+                    {config.modes[key as keyof ModesConfig].enabled &&
+                      config.modes[key as keyof ModesConfig].action === 'set_output' && (
+                        <View style={styles.modeFieldBlock}>
+                          <Text style={styles.modeFieldLabel}>Código salida:</Text>
+                          <TextInput
+                            style={styles.modeTextInput}
+                            value={config.modes[key as keyof ModesConfig].output_code || ''}
+                            onChangeText={(value) =>
+                              setConfig((prev) => ({
+                                ...prev,
+                                modes: {
+                                  ...prev.modes,
+                                  [key]: {
+                                    ...prev.modes[key as keyof ModesConfig],
+                                    output_code: value,
+                                  },
+                                },
+                              }))
+                            }
+                            placeholder="ej: OUT_02_06"
+                            autoCapitalize="none"
+                          />
+                          <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 8, gap: 8 }}>
+                            <Text style={styles.modeFieldLabel}>ON al activar</Text>
+                            <Switch
+                              value={config.modes[key as keyof ModesConfig].output_on !== false}
+                              onValueChange={(value) =>
+                                setConfig((prev) => ({
+                                  ...prev,
+                                  modes: {
+                                    ...prev.modes,
+                                    [key]: {
+                                      ...prev.modes[key as keyof ModesConfig],
+                                      output_on: value,
+                                    },
+                                  },
+                                }))
+                              }
+                              trackColor={{ false: '#CED4DA', true: '#28A745' }}
+                            />
+                          </View>
+                        </View>
+                      )}
                   </View>
                 ))}
               </View>
               
               <Text style={styles.emergencyNote}>
-                ⚠️ `set_mode` enviará: {"{"}"action":"set_rule","rule_key":"...","active":true{"}"}.
+                set_rule: rule_key y active. set_output: code y on. El backend puede responder 409 al activar
+                set_rule.
               </Text>
             </View>
           </View>
@@ -1562,90 +1632,73 @@ export default function NewConfigurationModal({
               
               {config.emergency.enabled && (
                 <View style={styles.emergencyConfig}>
-                  <Text style={styles.emergencySubtitle}>Configuración de salidas de emergencia</Text>
-                  
-                  <View style={styles.emergencyInputs}>
-                    <View style={styles.emergencyInputGroup}>
-                      <Text style={styles.emergencyInputLabel}>Placa 1</Text>
-                      <View style={styles.emergencyInputRow}>
-                        <View style={styles.pickerContainer}>
-                          <Picker
-                            selectedValue={config.emergency.pcb1}
-                            onValueChange={(value) => setConfig(prev => ({
-                              ...prev,
-                              emergency: { ...prev.emergency, pcb1: value }
-                            }))}
-                            style={styles.picker}
-                            mode="dropdown"
-                            dropdownIconColor="#495057"
-                          >
-                            <Picker.Item label="PCB 1" value={1} />
-                            <Picker.Item label="PCB 2" value={2} />
-                            <Picker.Item label="PCB 3" value={3} />
-                          </Picker>
-                        </View>
-                        <Text style={styles.emergencyInputLabel}>Switch</Text>
-                        <View style={styles.pickerContainer}>
-                          <Picker
-                            selectedValue={config.emergency.switch1}
-                            onValueChange={(value) => setConfig(prev => ({
-                              ...prev,
-                              emergency: { ...prev.emergency, switch1: value }
-                            }))}
-                            style={styles.picker}
-                            mode="dropdown"
-                            dropdownIconColor="#495057"
-                          >
-                            {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(num => (
-                              <Picker.Item key={num} label={`Switch ${num}`} value={num} />
-                            ))}
-                          </Picker>
-                        </View>
-                      </View>
-                    </View>
-                    
-                    <View style={styles.emergencyInputGroup}>
-                      <Text style={styles.emergencyInputLabel}>Placa 2</Text>
-                      <View style={styles.emergencyInputRow}>
-                        <View style={styles.pickerContainer}>
-                          <Picker
-                            selectedValue={config.emergency.pcb2}
-                            onValueChange={(value) => setConfig(prev => ({
-                              ...prev,
-                              emergency: { ...prev.emergency, pcb2: value }
-                            }))}
-                            style={styles.picker}
-                            mode="dropdown"
-                            dropdownIconColor="#495057"
-                          >
-                            <Picker.Item label="PCB 1" value={1} />
-                            <Picker.Item label="PCB 2" value={2} />
-                            <Picker.Item label="PCB 3" value={3} />
-                          </Picker>
-                        </View>
-                        <Text style={styles.emergencyInputLabel}>Switch</Text>
-                        <View style={styles.pickerContainer}>
-                          <Picker
-                            selectedValue={config.emergency.switch2}
-                            onValueChange={(value) => setConfig(prev => ({
-                              ...prev,
-                              emergency: { ...prev.emergency, switch2: value }
-                            }))}
-                            style={styles.picker}
-                            mode="dropdown"
-                            dropdownIconColor="#495057"
-                          >
-                            {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(num => (
-                              <Picker.Item key={num} label={`Switch ${num}`} value={num} />
-                            ))}
-                          </Picker>
-                        </View>
-                      </View>
-                    </View>
+                  <Text style={styles.emergencySubtitle}>API del panel vía set_mode</Text>
+                  <Text style={styles.modeFieldLabel}>rule_key</Text>
+                  <TextInput
+                    style={styles.modeTextInput}
+                    value={config.emergency.rule_key || ''}
+                    onChangeText={(value) =>
+                      setConfig((prev) => ({
+                        ...prev,
+                        emergency: { ...prev.emergency, rule_key: value },
+                      }))
+                    }
+                    placeholder="ej: senal_de_incendio_activada"
+                    autoCapitalize="none"
+                  />
+                  <Text style={[styles.modeFieldLabel, { marginTop: 10 }]}>action</Text>
+                  <View style={styles.modePickerContainer}>
+                    <Picker
+                      selectedValue={config.emergency.action || 'set_rule'}
+                      onValueChange={(value) =>
+                        setConfig((prev) => ({
+                          ...prev,
+                          emergency: {
+                            ...prev.emergency,
+                            action: value as 'set_rule' | 'set_output',
+                          },
+                        }))
+                      }
+                      style={styles.modePicker}
+                      mode="dropdown"
+                      dropdownIconColor="#495057"
+                    >
+                      <Picker.Item label="set_rule" value="set_rule" />
+                      <Picker.Item label="set_output" value="set_output" />
+                    </Picker>
                   </View>
-                  
+                  {config.emergency.action === 'set_output' && (
+                    <>
+                      <Text style={[styles.modeFieldLabel, { marginTop: 10 }]}>Código salida</Text>
+                      <TextInput
+                        style={styles.modeTextInput}
+                        value={config.emergency.output_code || ''}
+                        onChangeText={(value) =>
+                          setConfig((prev) => ({
+                            ...prev,
+                            emergency: { ...prev.emergency, output_code: value },
+                          }))
+                        }
+                        placeholder="OUT_02_03"
+                        autoCapitalize="none"
+                      />
+                      <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 8, gap: 8 }}>
+                        <Text style={styles.modeFieldLabel}>ON al activar</Text>
+                        <Switch
+                          value={config.emergency.output_on !== false}
+                          onValueChange={(value) =>
+                            setConfig((prev) => ({
+                              ...prev,
+                              emergency: { ...prev.emergency, output_on: value },
+                            }))
+                          }
+                          trackColor={{ false: '#CED4DA', true: '#28A745' }}
+                        />
+                      </View>
+                    </>
+                  )}
                   <Text style={styles.emergencyNote}>
-                    ⚠️ Al activar emergencia se enviará comando permanente a las salidas configuradas
+                    Titilado rojo cuando get_mode coincide con rule_key o tras activar desde la tablet.
                   </Text>
                 </View>
               )}

@@ -1,4 +1,12 @@
-import { View, Text, StyleSheet, TouchableOpacity, Dimensions, Platform, ScrollView } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  Dimensions,
+  Platform,
+  ScrollView,
+} from 'react-native';
 import { useWindowDimensions } from 'react-native';
 import { useState, useEffect, useCallback } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -13,6 +21,7 @@ import ManualModeModal from '@/components/ManualModeModal';
 import EmergencyConfirmationModal from '@/components/EmergencyConfirmationModal';
 import { useDoorControl } from '@/hooks/useDoorControl';
 import { doorControlService } from '@/services/DoorControlService';
+import { showOperationError } from '@/utils/showOperationError';
 // (Eliminar) import * as FileSystem from 'expo-file-system';
 
 interface SystemConfig {
@@ -296,19 +305,22 @@ export default function MainScreen() {
     const targetMode = modeMap[mode] || mode;
     console.log('🔄 Cambiando a modo:', targetMode);
     
-    const success = await changeMode(targetMode);
-    if (success) {
+    const result = await changeMode(targetMode);
+    if (result.ok) {
       console.log('✅ Modo cambiado exitosamente a:', targetMode);
-      
-      // Cerrar el modal de selección de modo
+
       setShowModeModal(false);
-      
-      // Si el modo es MANUAL, abrir directamente el modal de control manual
+
       if (targetMode === 'MANUAL') {
         setShowManualModeModal(true);
       }
     } else {
       console.error('❌ Error cambiando modo a:', targetMode);
+      setShowModeModal(false);
+      showOperationError(
+        'No se pudo cambiar el modo',
+        result.errorMessage ?? 'Error desconocido.',
+      );
     }
   };
 
@@ -322,11 +334,15 @@ export default function MainScreen() {
     const newState = !isEmergencyActive;
     console.log('🚨 Emergencia (Sandbox):', newState ? 'ACTIVANDO' : 'DESACTIVANDO');
     
-    const success = await toggleEmergency(newState);
-    if (success) {
+    const result = await toggleEmergency(newState);
+    if (result.ok) {
       console.log('✅ Emergencia:', newState ? 'ACTIVADA' : 'DESACTIVADA');
     } else {
       console.error('❌ Error cambiando estado de emergencia');
+      showOperationError(
+        newState ? 'No se pudo activar la emergencia' : 'No se pudo desactivar la emergencia',
+        result.errorMessage ?? 'Error desconocido.',
+      );
     }
   };
 

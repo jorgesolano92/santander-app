@@ -190,6 +190,9 @@ const modeNameToNumericValueMap: { [key: string]: string } = {
   'EMERGENCIA': '8',
 };
 
+/** Resultado de operaciones contra el API del panel para mostrar feedback al usuario. */
+export type PanelApiResult = { ok: true } | { ok: false; errorMessage: string };
+
 class DoorControlService {
   private baseURL: string = '';
   private apiUsername: string = '';
@@ -204,6 +207,52 @@ class DoorControlService {
   private statusChangeCallback: (() => void) | null = null;
   private verifyingDoors: Set<string> = new Set();
   private bearerToken: string | null = null;
+
+  /** Interpreta cuerpo JSON de error de FastAPI u otros formatos habituales. */
+  private formatPanelApiErrorMessage(status: number, bodyText: string): string {
+    const fallback =
+      (bodyText && bodyText.trim()) || `Error del servidor (${status}).`;
+    try {
+      const json = JSON.parse(bodyText) as Record<string, unknown>;
+      const raw =
+        json.detail !== undefined && typeof json.detail === 'object' && json.detail !== null
+          ? (json.detail as Record<string, unknown>)
+          : json;
+      if (typeof raw === 'string') {
+        return raw;
+      }
+      if (raw && typeof raw === 'object') {
+        const reason = raw.reason != null ? String(raw.reason) : '';
+        const message = raw.message != null ? String(raw.message) : '';
+        const blocked = Array.isArray(raw.blocked_inputs)
+          ? (raw.blocked_inputs as unknown[]).map(String).filter(Boolean).join(', ')
+          : '';
+        const parts: string[] = [];
+        if (message) {
+          parts.push(String(message));
+        }
+        if (reason && reason !== message) {
+          parts.push(reason);
+        } else if (!message && reason) {
+          parts.push(reason);
+        }
+        if (blocked) {
+          const combined = `${message} ${reason}`;
+          const codes = blocked.split(',').map((s) => s.trim()).filter(Boolean);
+          const anyMissing = codes.some((c) => !combined.includes(c));
+          if (anyMissing) {
+            parts.push(`Entradas activas: ${blocked}`);
+          }
+        }
+        if (parts.length) {
+          return parts.join('\n\n');
+        }
+      }
+    } catch {
+      /* texto no JSON */
+    }
+    return fallback;
+  }
 
   constructor() {
     // Estado inicial simulado
@@ -906,6 +955,24 @@ class DoorControlService {
   // }
 
   /**
+   * `current_mode` crudo del panel (rule_key), sin mapeo a etiquetas de la app.
+   */
+  async getPanelCurrentModeRuleKey(): Promise<string | null> {
+    try {
+      const config = await this.getSavedAppConfig();
+      if (!config) return null;
+      const endpoint = config?.api?.urlGet || '/api/v1/get_mode';
+      const response = await this.authenticatedRequest(config, 'GET', endpoint);
+      if (!response?.ok) return null;
+      const data = await response.json();
+      const rk = data?.current_mode;
+      return typeof rk === 'string' && rk.trim() ? rk.trim() : null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
    * Obtener modo actual desde backend Python (`GET /api/v1/get_mode`).
    * Mapea `current_mode` (rule_key) al nombre de modo de la app.
    */
@@ -983,41 +1050,80 @@ class DoorControlService {
 
   /**
    * Cambiar modo usando backend Python (`POST /api/v1/set_mode`).
-   * Payload:
-   * { action: "set_rule", rule_key: "...", active: true }
+   * set_rule: rule_key y active. set_output: code y on.
    */
-  async changeModeWithAPI2(mode: string): Promise<boolean> {
+  async changeModeWithAPI2(mode: string): Promise<PanelApiResult> {
     try {
       const config = await this.getSavedAppConfig();
       if (!config) {
         console.error('❌ No hay configuración guardada');
-        return false;
+        return { ok: false, errorMessage: 'No hay configuración guardada en la tablet.' };
       }
 
       const configKey = modeNameToConfigKeyMap[mode.toUpperCase()];
       if (!configKey) {
         console.error(`❌ Modo no reconocido: ${mode}`);
-        return false;
+        return { ok: false, errorMessage: `Modo no reconocido: ${mode}` };
       }
-      const modeConfig = config?.modes?.[configKey];
+      const modeConfig = config?.modes?.[configKey] as {
+        rule_key?: string;
+        action?: string;
+        enabled?: boolean;
+        output_code?: string;
+        output_on?: boolean;
+      };
       if (!modeConfig || modeConfig.enabled === false) {
         console.error(`❌ Configuración de modo inválida o deshabilitada para ${mode}`);
-        return false;
+        return {
+          ok: false,
+          errorMessage: 'Este modo está deshabilitado o mal configurado en ajustes.',
+        };
       }
 
       const endpoint = config?.api?.urlPost || '/api/v1/set_mode';
-      const payload = {
-        action: modeConfig.action || 'set_rule',
-        rule_key: modeConfig.rule_key,
-        active: true,
-      };
+      const useOutput = modeConfig.action === 'set_output';
+      let payload: Record<string, unknown>;
+      if (useOutput) {
+        const code = String(modeConfig.output_code || '').trim();
+        if (!code) {
+          console.error(`❌ Modo ${configKey}: action set_output requiere output_code`);
+          return {
+            ok: false,
+            errorMessage: 'Falta el código de salida para set_output. Revísalo en configuración.',
+          };
+        }
+        const on = modeConfig.output_on !== false;
+        payload = { action: 'set_output', code, on };
+      } else {
+        const rk = String(modeConfig.rule_key || '').trim();
+        if (!rk) {
+          console.error(`❌ Modo ${configKey}: falta rule_key para set_rule`);
+          return {
+            ok: false,
+            errorMessage: 'Falta la clave de regla (rule_key) para set_rule. Revísalo en configuración.',
+          };
+        }
+        payload = { action: 'set_rule', rule_key: rk, active: true };
+      }
 
       const response = await this.authenticatedRequest(config, 'POST', endpoint, payload);
-      if (!response) return false;
+      if (!response) {
+        return {
+          ok: false,
+          errorMessage: 'No se pudo conectar con el panel. Comprueba red y credenciales.',
+        };
+      }
       if (!response.ok) {
         const t = await response.text().catch(() => '');
-        console.error(`❌ Error cambiando modo (${response.status}): ${t}`);
-        return false;
+        if (response.status === 409) {
+          console.warn(`⚠️ Modo bloqueado por el panel (409): ${t}`);
+        } else {
+          console.error(`❌ Error cambiando modo (${response.status}): ${t}`);
+        }
+        return {
+          ok: false,
+          errorMessage: this.formatPanelApiErrorMessage(response.status, t),
+        };
       }
 
       await new Promise(resolve => setTimeout(resolve, 300));
@@ -1027,16 +1133,18 @@ class DoorControlService {
       }
       this.mockSystemStatus.lastSync = new Date().toISOString();
       this.notifyStatusChange();
-      return true;
+      return { ok: true };
     } catch (error) {
       console.error('❌ Error cambiando modo:', error);
-      return false;
+      return {
+        ok: false,
+        errorMessage:
+          error instanceof Error ? error.message : 'Error inesperado al cambiar de modo.',
+      };
     }
   }
 
-  // Cambiar modo de operación (ahora usa API2/settags)
-  async changeMode(mode: string): Promise<boolean> {
-    // Usar el nuevo método con API2
+  async changeMode(mode: string): Promise<PanelApiResult> {
     return await this.changeModeWithAPI2(mode);
   }
 
@@ -1836,34 +1944,13 @@ class DoorControlService {
 
   /**
    * ===== MÉTODOS DE EMERGENCIA =====
+   * Emergencia solo vía API del panel set_mode.
    */
-
-  private async getEmergencyConnectionConfig(): Promise<{
-    ip: string;
-    port: number;
-    username: string;
-    password: string;
-  } | null> {
-    try {
-      const savedConfig = await AsyncStorage.getItem('new_door_config');
-      if (!savedConfig) return null;
-      const cfg = JSON.parse(savedConfig);
-      const ip = cfg?.network?.consoleIP;
-      const port = Number(cfg?.api?.port || 4436);
-      const username = cfg?.api?.username;
-      const password = cfg?.api?.password;
-      if (!ip || !username || !password) return null;
-      return { ip, port, username, password };
-    } catch {
-      return null;
-    }
-  }
 
   /**
-   * Activar sistema de emergencia
-   * Envía comando permanente a las salidas configuradas
+   * Activar emergencia contra el backend del panel.
    */
-  async activateEmergency(): Promise<boolean> {
+  async activateEmergency(): Promise<PanelApiResult> {
     try {
       console.log('🚨 ACTIVANDO SISTEMA DE EMERGENCIA');
       
@@ -1872,171 +1959,190 @@ class DoorControlService {
       
       if (!config || !config.enabled) {
         console.error('❌ Configuración de emergencia no habilitada');
-        console.error('❌ config:', config);
-        console.error('❌ config.enabled:', config?.enabled);
-        return false;
+        return {
+          ok: false,
+          errorMessage: 'La emergencia no está habilitada en la configuración de la tablet.',
+        };
       }
 
-      const conn = await this.getEmergencyConnectionConfig();
-      if (!conn) {
-        console.error('❌ No hay configuración de conexión para emergencia (network/api)');
-        return false;
+      const saved = await this.getSavedAppConfig();
+      if (!saved) {
+        console.error('❌ No hay new_door_config para emergencia');
+        return { ok: false, errorMessage: 'Falta la configuración de la tablet.' };
       }
-      const { ip, port, username, password } = conn;
+      const endpoint = saved.api?.urlPost || '/api/v1/set_mode';
+      const useOut = config.action === 'set_output';
+      const body: Record<string, unknown> = useOut
+        ? {
+            action: 'set_output',
+            code: String(config.output_code || '').trim(),
+            on: config.output_on !== false,
+          }
+        : {
+            action: 'set_rule',
+            rule_key: String(config.rule_key || '').trim(),
+            active: true,
+          };
+      if (useOut && !(body.code as string)) {
+        console.error('❌ Emergencia set_output: falta output_code');
+        return { ok: false, errorMessage: 'Falta el código de salida para emergencia set_output.' };
+      }
+      if (!useOut && !(body.rule_key as string)) {
+        console.error('❌ Emergencia set_rule: falta rule_key');
+        return { ok: false, errorMessage: 'Falta la clave de regla para emergencia set_rule.' };
+      }
 
-      console.log('🔧 Configuración de emergencia:', {
-        ip,
-        port,
-        pcb1: config.pcb1,
-        switch1: config.switch1,
-        pcb2: config.pcb2,
-        switch2: config.switch2
-      });
+      const emergRuleForUi = String(config.rule_key || '').trim();
+      const currentKey = await this.getPanelCurrentModeRuleKey();
+      const alreadyEmergency =
+        !useOut && !!emergRuleForUi && !!currentKey && currentKey === emergRuleForUi;
+      if (alreadyEmergency) {
+        await emergencyService.clearPreviousPanelModeRuleKey();
+      } else if (currentKey) {
+        await emergencyService.setPreviousPanelModeRuleKey(currentKey);
+      } else {
+        await emergencyService.clearPreviousPanelModeRuleKey();
+      }
 
-      try {
-        // Activar salida 1 (Placa 1)
-        console.log(`🔌 Activando salida 1: PCB ${config.pcb1}, Switch ${config.switch1}`);
-        const success1 = await this.controlSDIO12Switch(
-          ip, username, password,
-          config.pcb1, config.switch1, 'open',
-          false, // Usar "do" (salidas digitales) para emergencia
-          port // Puerto específico
-        );
-        console.log(`${success1 ? '✅' : '❌'} Salida 1: ${success1 ? 'Activada' : 'Falló'}`);
-
-        // Activar salida 2 (Placa 2)
-        console.log(`🔌 Activando salida 2: PCB ${config.pcb2}, Switch ${config.switch2}`);
-        const success2 = await this.controlSDIO12Switch(
-          ip, username, password,
-          config.pcb2, config.switch2, 'open',
-          false, // Usar "do" (salidas digitales) para emergencia
-          port // Puerto específico
-        );
-        console.log(`${success2 ? '✅' : '❌'} Salida 2: ${success2 ? 'Activada' : 'Falló'}`);
-
-        if (success1 && success2) {
-          await emergencyService.activateEmergency();
-          console.log('✅ EMERGENCIA ACTIVADA EXITOSAMENTE');
-          return true;
+      const response = await this.authenticatedRequest(saved, 'POST', endpoint, body);
+      if (!response) {
+        return {
+          ok: false,
+          errorMessage: 'No se pudo conectar con el panel. Comprueba red y credenciales.',
+        };
+      }
+      if (!response.ok) {
+        const t = await response.text().catch(() => '');
+        await emergencyService.clearPreviousPanelModeRuleKey();
+        if (response.status === 409) {
+          console.warn(`⚠️ Emergencia bloqueada (409): ${t}`);
         } else {
-          console.error('❌ Error activando emergencia - falló alguna salida');
-          console.error(`❌ Salida 1: ${success1}, Salida 2: ${success2}`);
-          return false;
+          console.error(`❌ Emergencia (${response.status}): ${t}`);
         }
-      } catch (switchError) {
-        console.error('❌ Error en controlSDIO12Switch:', switchError);
-        console.error('❌ Error stack:', switchError instanceof Error ? switchError.stack : 'No stack');
-        return false;
+        return {
+          ok: false,
+          errorMessage: this.formatPanelApiErrorMessage(response.status, t),
+        };
       }
+      await emergencyService.activateEmergency();
+      const m = await this.getCurrentModeFromAPI2();
+      if (m) this.mockSystemStatus.mode = m;
+      this.mockSystemStatus.emergencyActive = true;
+      this.mockSystemStatus.lastSync = new Date().toISOString();
+      this.notifyStatusChange();
+      return { ok: true };
     } catch (error) {
       console.error('❌ Error activando emergencia:', error);
-      console.error('❌ Error tipo:', error instanceof Error ? error.constructor.name : typeof error);
-      console.error('❌ Error mensaje:', error instanceof Error ? error.message : String(error));
-      if (error instanceof Error && error.stack) {
-        console.error('❌ Error stack:', error.stack);
-      }
-      return false;
+      return {
+        ok: false,
+        errorMessage:
+          error instanceof Error ? error.message : 'Error inesperado al activar emergencia.',
+      };
     }
   }
 
-  /**
-   * Desactivar sistema de emergencia
-   * Envía comando para desactivar las salidas configuradas
-   */
-  async deactivateEmergency(): Promise<boolean> {
+  /** Desactivar emergencia vía set_mode en el panel. */
+  async deactivateEmergency(): Promise<PanelApiResult> {
     try {
       console.log('✅ DESACTIVANDO SISTEMA DE EMERGENCIA');
       
       const config = await emergencyService.getEmergencyConfig();
       if (!config || !config.enabled) {
         console.error('❌ Configuración de emergencia no habilitada');
-        return false;
+        return {
+          ok: false,
+          errorMessage: 'La emergencia no está habilitada en la configuración de la tablet.',
+        };
       }
 
-      const conn = await this.getEmergencyConnectionConfig();
-      if (!conn) {
-        console.error('❌ No hay configuración de conexión para emergencia (network/api)');
-        return false;
+      const saved = await this.getSavedAppConfig();
+      if (!saved) {
+        console.error('❌ No hay new_door_config para emergencia');
+        return { ok: false, errorMessage: 'Falta la configuración de la tablet.' };
       }
-      const { ip, port, username, password } = conn;
-
-      // Desactivar salida 1 (Placa 1)
-      const success1 = await this.controlSDIO12Switch(
-        ip, username, password,
-        config.pcb1, config.switch1, 'close',
-        false, // Usar "do" (salidas digitales) para emergencia
-        port // Puerto específico
-      );
-
-      // Desactivar salida 2 (Placa 2)
-      const success2 = await this.controlSDIO12Switch(
-        ip, username, password,
-        config.pcb2, config.switch2, 'close',
-        false, // Usar "do" (salidas digitales) para emergencia
-        port // Puerto específico
-      );
-
-      if (success1 && success2) {
-        await emergencyService.deactivateEmergency();
-        console.log('✅ EMERGENCIA DESACTIVADA EXITOSAMENTE');
-        return true;
-      } else {
-        console.error('❌ Error desactivando emergencia - falló alguna salida');
-        return false;
+      const endpoint = saved.api?.urlPost || '/api/v1/set_mode';
+      const useOut = config.action === 'set_output';
+      const body: Record<string, unknown> = useOut
+        ? {
+            action: 'set_output',
+            code: String(config.output_code || '').trim(),
+            on: false,
+          }
+        : {
+            action: 'set_rule',
+            rule_key: String(config.rule_key || '').trim(),
+            active: false,
+          };
+      if (useOut && !(body.code as string)) {
+        console.error('❌ Emergencia set_output: falta output_code para desactivar');
+        return { ok: false, errorMessage: 'Falta el código de salida para desactivar emergencia.' };
       }
+      if (!useOut && !(body.rule_key as string)) {
+        console.error('❌ Emergencia set_rule: falta rule_key');
+        return { ok: false, errorMessage: 'Falta la clave de regla para desactivar emergencia.' };
+      }
+      const response = await this.authenticatedRequest(saved, 'POST', endpoint, body);
+      if (!response) {
+        return {
+          ok: false,
+          errorMessage: 'No se pudo conectar con el panel. Comprueba red y credenciales.',
+        };
+      }
+      if (!response.ok) {
+        const t = await response.text().catch(() => '');
+        console.error(`❌ Error desactivando emergencia (${response.status}): ${t}`);
+        return {
+          ok: false,
+          errorMessage: this.formatPanelApiErrorMessage(response.status, t),
+        };
+      }
+      await emergencyService.deactivateEmergency();
+
+      const prevRule = await emergencyService.getPreviousPanelModeRuleKey();
+      if (prevRule) {
+        const restoreResp = await this.authenticatedRequest(saved, 'POST', endpoint, {
+          action: 'set_rule',
+          rule_key: prevRule,
+          active: true,
+        });
+        if (!restoreResp?.ok) {
+          const txt = restoreResp ? await restoreResp.text().catch(() => '') : '';
+          console.warn(
+            'No se pudo restaurar el modo anterior del panel:',
+            restoreResp
+              ? this.formatPanelApiErrorMessage(restoreResp.status, txt)
+              : 'sin respuesta',
+          );
+        }
+      }
+      await emergencyService.clearPreviousPanelModeRuleKey();
+
+      const m = await this.getCurrentModeFromAPI2();
+      if (m) this.mockSystemStatus.mode = m;
+      this.mockSystemStatus.emergencyActive = false;
+      this.mockSystemStatus.lastSync = new Date().toISOString();
+      this.notifyStatusChange();
+      return { ok: true };
     } catch (error) {
       console.error('❌ Error desactivando emergencia:', error);
-      return false;
+      return {
+        ok: false,
+        errorMessage:
+          error instanceof Error ? error.message : 'Error inesperado al desactivar emergencia.',
+      };
     }
   }
 
   /**
-   * Verificar estado de emergencia
-   * Comprueba si los switches configurados están activos
+   * Compatibilidad: delega en getEmergencyStatus.
    */
   async checkEmergencyStatus(): Promise<boolean> {
-    try {
-      const config = await emergencyService.getEmergencyConfig();
-      if (!config || !config.enabled) {
-        return false;
-      }
-
-      const conn = await this.getEmergencyConnectionConfig();
-      if (!conn) return false;
-      const { ip, port, username, password } = conn;
-
-      // Obtener estado de todas las salidas
-      const status = await this.getSDIO12Status(ip, username, password, port);
-      if (!status) {
-        console.log('⚠️ No se pudo obtener estado SDIO12 para verificar emergencia');
-        return false;
-      }
-
-      // Buscar los switches configurados
-      const switch1Tag = this.buildSDIO12Tag(config.pcb1, config.switch1);
-      const switch2Tag = this.buildSDIO12Tag(config.pcb2, config.switch2);
-
-      const switch1Status = status.tags.find(tag => tag.tag === switch1Tag);
-      const switch2Status = status.tags.find(tag => tag.tag === switch2Tag);
-
-      const switch1Active = switch1Status?.v === '1';
-      const switch2Active = switch2Status?.v === '1';
-
-      console.log('🔍 Estado de switches de emergencia:', {
-        switch1: { tag: switch1Tag, active: switch1Active },
-        switch2: { tag: switch2Tag, active: switch2Active }
-      });
-
-      // Ambos switches deben estar activos para considerar emergencia activa
-      return switch1Active && switch2Active;
-    } catch (error) {
-      console.error('❌ Error verificando estado de emergencia:', error);
-      return false;
-    }
+    const s = await this.getEmergencyStatus();
+    return s.isActive;
   }
 
   /**
-   * Obtener estado completo de emergencia
+   * Estado de emergencia vía panel get_mode y estado local.
    */
   async getEmergencyStatus(): Promise<{
     isConfigured: boolean;
@@ -2046,73 +2152,30 @@ class DoorControlService {
       switch2: { active: boolean; tag: string };
     };
   }> {
+    const emptySwitches = {
+      switch1: { active: false, tag: '' },
+      switch2: { active: false, tag: '' },
+    };
     try {
       const config = await emergencyService.getEmergencyConfig();
-      const isConfigured = config?.enabled || false;
-      
-      if (!isConfigured) {
-        return {
-          isConfigured: false,
-          isActive: false,
-          switchesStatus: {
-            switch1: { active: false, tag: '' },
-            switch2: { active: false, tag: '' }
-          }
-        };
+      if (!config?.enabled) {
+        return { isConfigured: false, isActive: false, switchesStatus: emptySwitches };
       }
 
-      const conn = await this.getEmergencyConnectionConfig();
-      if (!conn) {
-        return {
-          isConfigured: true,
-          isActive: false,
-          switchesStatus: {
-            switch1: { active: false, tag: this.buildSDIO12Tag(config!.pcb1, config!.switch1) },
-            switch2: { active: false, tag: this.buildSDIO12Tag(config!.pcb2, config!.switch2) }
-          }
-        };
-      }
-      const { ip, port, username, password } = conn;
-
-      const status = await this.getSDIO12Status(ip, username, password, port);
-      if (!status) {
-        return {
-          isConfigured: true,
-          isActive: false,
-          switchesStatus: {
-            switch1: { active: false, tag: this.buildSDIO12Tag(config!.pcb1, config!.switch1) },
-            switch2: { active: false, tag: this.buildSDIO12Tag(config!.pcb2, config!.switch2) }
-          }
-        };
-      }
-
-      const switch1Tag = this.buildSDIO12Tag(config!.pcb1, config!.switch1);
-      const switch2Tag = this.buildSDIO12Tag(config!.pcb2, config!.switch2);
-
-      const switch1Status = status.tags.find(tag => tag.tag === switch1Tag);
-      const switch2Status = status.tags.find(tag => tag.tag === switch2Tag);
-
-      const switch1Active = switch1Status?.v === '1';
-      const switch2Active = switch2Status?.v === '1';
+      const panelKey = await this.getPanelCurrentModeRuleKey();
+      const rk = String(config.rule_key || '').trim();
+      const fromPanel = !!rk && !!panelKey && panelKey === rk;
+      const local = await emergencyService.getEmergencyState();
+      const isActive = fromPanel || !!local?.isActive;
 
       return {
         isConfigured: true,
-        isActive: switch1Active && switch2Active,
-        switchesStatus: {
-          switch1: { active: switch1Active, tag: switch1Tag },
-          switch2: { active: switch2Active, tag: switch2Tag }
-        }
+        isActive,
+        switchesStatus: emptySwitches,
       };
     } catch (error) {
       console.error('❌ Error obteniendo estado de emergencia:', error);
-      return {
-        isConfigured: false,
-        isActive: false,
-        switchesStatus: {
-          switch1: { active: false, tag: '' },
-          switch2: { active: false, tag: '' }
-        }
-      };
+      return { isConfigured: false, isActive: false, switchesStatus: emptySwitches };
     }
   }
 }
