@@ -21,6 +21,7 @@ import ManualModeModal from '@/components/ManualModeModal';
 import EmergencyConfirmationModal from '@/components/EmergencyConfirmationModal';
 import { useDoorControl } from '@/hooks/useDoorControl';
 import { doorControlService } from '@/services/DoorControlService';
+import { cloneDefaultDoorAppConfig } from '@/config/defaultDoorAppConfig';
 import { showOperationError } from '@/utils/showOperationError';
 // (Eliminar) import * as FileSystem from 'expo-file-system';
 
@@ -172,6 +173,11 @@ export default function MainScreen() {
           const parsedConfig = JSON.parse(savedConfig);
           setSystemConfig(parsedConfig);
           console.log('📋 Configuración del sistema cargada:', parsedConfig);
+        } else {
+          const defaults = cloneDefaultDoorAppConfig();
+          await AsyncStorage.setItem('new_door_config', JSON.stringify(defaults));
+          setSystemConfig(defaults);
+          console.log('📋 Configuración por defecto aplicada al iniciar');
         }
       } catch (error) {
         console.error('❌ Error cargando configuración del sistema:', error);
@@ -985,20 +991,6 @@ export default function MainScreen() {
       color: '#495057',
       letterSpacing: 0.5,
     },
-    // Estilos adicionales para modo manual responsivo
-    modeBadge: {
-      backgroundColor: '#343A40',
-      paddingHorizontal: 10,
-      paddingVertical: 6,
-      borderRadius: 8,
-      marginRight: 8,
-    },
-    modeBadgeText: {
-      color: '#FFFFFF',
-      fontSize: isSmallTablet ? 10 : isLargeTablet ? 12 : 11,
-      fontWeight: '700',
-      letterSpacing: 0.5,
-    }
   });
 
 
@@ -1036,11 +1028,6 @@ export default function MainScreen() {
 
         {/* Right Section */}
         <View style={styles.rightHeaderSection}>
-          <View style={styles.modeBadge}>
-            <Text style={styles.modeBadgeText}>
-              MODO: SDK CÁMARAS
-            </Text>
-          </View>
           <View style={styles.connectionIndicator}>
             <Wifi 
               size={isSmallTablet ? 20 : isLargeTablet ? 24 : 22} 

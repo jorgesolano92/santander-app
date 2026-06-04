@@ -8,7 +8,6 @@ import android.os.Process;
 import android.util.Log;
 import com.sdk.interfance.nvrsdk;
 import com.sdk.interfance.NET_SDK_DEVICEINFO;
-import java.lang.reflect.Method;
 // NET_SDK_CONNECT_TYPE: 0=TCP, 1=P2P, 2=P2P2
 
 /**
@@ -32,7 +31,7 @@ public class DvrSdkManager {
     private static final int MIC_AUDIO_FORMAT = AudioFormat.ENCODING_PCM_16BIT;
     
     private DvrSdkManager() {
-        nvrSdk = new nvrsdk();
+        // nvrsdk requiere Context; se crea en initialize().
     }
     
     public static synchronized DvrSdkManager getInstance() {
@@ -47,20 +46,24 @@ public class DvrSdkManager {
      * @return true si la inicialización fue exitosa
      */
     public boolean initialize(Context context) {
-        if (isInitialized) {
+        if (isInitialized && nvrSdk != null) {
             Log.d(TAG, "SDK ya está inicializado");
             return true;
         }
         
         try {
-            // El SDK se inicializa automáticamente al crear la instancia
-            // Si hay métodos de inicialización específicos, agregarlos aquí
+            if (context == null) {
+                Log.e(TAG, "Context nulo al inicializar SDK");
+                return false;
+            }
+            nvrSdk = nvrsdk.getInstance(context.getApplicationContext());
             isInitialized = true;
             Log.d(TAG, "SDK inicializado correctamente");
             return true;
         } catch (Exception e) {
             Log.e(TAG, "Error al inicializar SDK", e);
             isInitialized = false;
+            nvrSdk = null;
             return false;
         }
     }
@@ -176,7 +179,7 @@ public class DvrSdkManager {
      * Obtiene el último código de error del SDK
      * @return código de error
      */
-    public long getLastError() {
+    public int getLastError() {
         if (nvrSdk == null) {
             return -1;
         }
@@ -246,18 +249,14 @@ public class DvrSdkManager {
         }
 
         try {
-            Method livePlayMethod = nvrSdk.getClass().getMethod("LivePlay", int.class, int.class, int.class);
-            Object result = livePlayMethod.invoke(nvrSdk, userId, channel, streamType);
-            if (result instanceof Number) {
-                liveHandle = ((Number) result).longValue();
-                Log.d(TAG, "LivePlay handle: " + liveHandle);
-                return liveHandle;
-            }
+            liveHandle = nvrSdk.LivePlay(userId, channel, streamType);
+            Log.d(TAG, "LivePlay handle: " + liveHandle);
+            return liveHandle > 0 ? liveHandle : -1;
         } catch (Exception e) {
             Log.e(TAG, "Error startLivePreview", e);
+            liveHandle = -1;
+            return -1;
         }
-        liveHandle = -1;
-        return -1;
     }
 
     public boolean stopLivePreview() {
@@ -265,23 +264,13 @@ public class DvrSdkManager {
             return false;
         }
         try {
-            Method stopLivePlayMethod = nvrSdk.getClass().getMethod("StopLivePlay", long.class);
-            Object result = stopLivePlayMethod.invoke(nvrSdk, liveHandle);
+            boolean result = nvrSdk.StopLivePlay(liveHandle);
             liveHandle = -1;
-            return !(result instanceof Boolean) || (Boolean) result;
-        } catch (NoSuchMethodException e) {
-            try {
-                Method stopLivePlayMethodInt = nvrSdk.getClass().getMethod("StopLivePlay", int.class);
-                Object result = stopLivePlayMethodInt.invoke(nvrSdk, (int) liveHandle);
-                liveHandle = -1;
-                return !(result instanceof Boolean) || (Boolean) result;
-            } catch (Exception inner) {
-                Log.e(TAG, "Error stopLivePreview (int/long)", inner);
-            }
+            return result;
         } catch (Exception e) {
             Log.e(TAG, "Error stopLivePreview", e);
+            return false;
         }
-        return false;
     }
 
     public long startVoiceIntercom(int channel) {
@@ -290,28 +279,18 @@ public class DvrSdkManager {
             return -1;
         }
         try {
-            Method m = nvrSdk.getClass().getMethod("StartVoiceComMR", int.class, boolean.class, Object.class, Object.class, int.class);
-            Object result = m.invoke(nvrSdk, userId, true, null, null, channel);
-            if (result instanceof Number) {
-                voiceHandle = ((Number) result).longValue();
-                return voiceHandle;
+            voiceHandle = nvrSdk.StartVoiceComMR(userId, true, channel);
+            if (voiceHandle <= 0) {
+                Log.w(TAG, "StartVoiceComMR falló, probando StartVoiceCom");
+                voiceHandle = nvrSdk.StartVoiceCom(userId, false, channel);
             }
-        } catch (NoSuchMethodException ex) {
-            try {
-                Method fallback = nvrSdk.getClass().getMethod("StartVoiceCom", int.class, boolean.class, Object.class, Object.class, int.class);
-                Object result = fallback.invoke(nvrSdk, userId, false, null, null, channel);
-                if (result instanceof Number) {
-                    voiceHandle = ((Number) result).longValue();
-                    return voiceHandle;
-                }
-            } catch (Exception inner) {
-                Log.e(TAG, "Error startVoiceIntercom fallback", inner);
-            }
+            Log.d(TAG, "Voice handle: " + voiceHandle);
+            return voiceHandle > 0 ? voiceHandle : -1;
         } catch (Exception e) {
             Log.e(TAG, "Error startVoiceIntercom", e);
+            voiceHandle = -1;
+            return -1;
         }
-        voiceHandle = -1;
-        return -1;
     }
 
     public boolean sendVoiceData(byte[] pcmData) {
@@ -319,21 +298,11 @@ public class DvrSdkManager {
             return false;
         }
         try {
-            Method m = nvrSdk.getClass().getMethod("VoiceComSendData", long.class, byte[].class, int.class);
-            Object result = m.invoke(nvrSdk, voiceHandle, pcmData, pcmData.length);
-            return !(result instanceof Boolean) || (Boolean) result;
-        } catch (NoSuchMethodException ex) {
-            try {
-                Method fallback = nvrSdk.getClass().getMethod("VoiceComSendData", int.class, byte[].class, int.class);
-                Object result = fallback.invoke(nvrSdk, (int) voiceHandle, pcmData, pcmData.length);
-                return !(result instanceof Boolean) || (Boolean) result;
-            } catch (Exception inner) {
-                Log.e(TAG, "Error sendVoiceData fallback", inner);
-            }
+            return nvrSdk.VoiceComSendData(voiceHandle, pcmData, pcmData.length);
         } catch (Exception e) {
             Log.e(TAG, "Error sendVoiceData", e);
+            return false;
         }
-        return false;
     }
 
     public boolean stopVoiceIntercom() {
@@ -342,23 +311,13 @@ public class DvrSdkManager {
         }
         stopMicStreaming();
         try {
-            Method m = nvrSdk.getClass().getMethod("StopVoiceCom", long.class);
-            Object result = m.invoke(nvrSdk, voiceHandle);
+            boolean result = nvrSdk.StopVoiceCom(voiceHandle);
             voiceHandle = -1;
-            return !(result instanceof Boolean) || (Boolean) result;
-        } catch (NoSuchMethodException ex) {
-            try {
-                Method fallback = nvrSdk.getClass().getMethod("StopVoiceCom", int.class);
-                Object result = fallback.invoke(nvrSdk, (int) voiceHandle);
-                voiceHandle = -1;
-                return !(result instanceof Boolean) || (Boolean) result;
-            } catch (Exception inner) {
-                Log.e(TAG, "Error stopVoiceIntercom fallback", inner);
-            }
+            return result;
         } catch (Exception e) {
             Log.e(TAG, "Error stopVoiceIntercom", e);
+            return false;
         }
-        return false;
     }
 
     public boolean isMicStreaming() {

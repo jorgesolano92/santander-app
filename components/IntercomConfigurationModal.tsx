@@ -14,8 +14,8 @@ export interface IntercomConfig {
   videoProfile: 'MainStream' | 'SubStream' | 'Auto';
   rtspPath?: string; // Ruta RTSP personalizada (p.ej. axis-media/media.amp?...)
   snapshotPath?: string; // Ruta HTTP(S) de snapshot por modelo
-  videoConnectionMode?: 'sdk' | 'proxy'; // Android siempre usa SDK; web puede elegir
-  proxyUrl?: string; // URL base del proxy para pruebas web
+  /** Solo web: URL del proxy Node (FFmpeg→HLS). */
+  proxyUrl?: string;
   sipUri: string;
   sipUsername: string;
   sipPassword: string;
@@ -32,6 +32,12 @@ export interface IntercomConfig {
   hasAudio?: boolean; // Indica si la cámara tiene audio (por defecto true)
   doorControlManualMode?: boolean; // true = control manual (permanente), false = pulso automático (temporal)
   doorControlPulseTime?: number; // Tiempo de pulso en segundos (por defecto 1.0)
+  /** Estrategia de apertura en modo manual: set_output (OUT) o set_rule (regla panel). */
+  doorControlAction?: 'set_output' | 'set_rule';
+  /** rule_key usada cuando doorControlAction === set_rule. */
+  doorControlRuleKey?: string;
+  /** Solo para set_output: auto = pulso con auto-off, manual = queda ON hasta cerrar. */
+  doorOutputMode?: 'auto' | 'manual';
   deviceType?: 'AXIS-I8116-E' | 'SAFIRE' | 'GENERIC'; // Tipo de dispositivo para control de audio
   supportsIntercom?: boolean; // true si soporta intercomunicación bidireccional
 }
@@ -55,7 +61,6 @@ const defaultIntercomConfig: IntercomConfig = {
   videoProfile: 'MainStream',
   rtspPath: '',
   snapshotPath: '',
-  videoConnectionMode: 'sdk',
   proxyUrl: 'http://localhost:3001',
   sipUri: '',
   sipUsername: '',
@@ -73,6 +78,9 @@ const defaultIntercomConfig: IntercomConfig = {
   hasAudio: true, // Por defecto las cámaras tienen audio
   doorControlManualMode: false, // Por defecto pulso automático
   doorControlPulseTime: 1.0, // 1 segundo por defecto
+  doorControlAction: 'set_output',
+  doorControlRuleKey: '',
+  doorOutputMode: 'auto',
 };
 
 export default function IntercomConfigurationModal({ 
@@ -356,7 +364,7 @@ export default function IntercomConfigurationModal({
                     keyboardType="numeric"
                   />
                 </View>
-                
+
                 <View style={styles.inputRow}>
                   <Text style={styles.inputLabel}>Puerto HTTPS:</Text>
                   <TextInput
@@ -439,32 +447,16 @@ export default function IntercomConfigurationModal({
               {/* Ruta Snapshot oculta - no se usa */}
 
               {Platform.OS === 'web' && (
-                <>
-                  <View style={styles.inputRow}>
-                    <Text style={styles.inputLabel}>Modo Video (web):</Text>
-                    <View style={styles.pickerContainer}>
-                      <Picker
-                        selectedValue={config.videoConnectionMode || 'proxy'}
-                        onValueChange={(value) => updateConfig('videoConnectionMode', value)}
-                        style={styles.picker}
-                      >
-                        <Picker.Item label="Proxy (PC pruebas rápidas)" value="proxy" />
-                        <Picker.Item label="SDK/Directo (solo Android)" value="sdk" />
-                      </Picker>
-                    </View>
-                  </View>
-
-                  <View style={styles.inputRow}>
-                    <Text style={styles.inputLabel}>URL Proxy:</Text>
-                    <TextInput
-                      style={styles.textInput}
-                      value={config.proxyUrl || ''}
-                      onChangeText={(text) => updateConfig('proxyUrl', text)}
-                      placeholder="http://localhost:3001"
-                      autoCapitalize="none"
-                    />
-                  </View>
-                </>
+                <View style={styles.inputRow}>
+                  <Text style={styles.inputLabel}>URL Proxy (solo web):</Text>
+                  <TextInput
+                    style={styles.textInput}
+                    value={config.proxyUrl || ''}
+                    onChangeText={(text) => updateConfig('proxyUrl', text)}
+                    placeholder="http://localhost:3001"
+                    autoCapitalize="none"
+                  />
+                </View>
               )}
 
               {/* Ayuda contextual y botones rápidos */}
@@ -493,7 +485,7 @@ export default function IntercomConfigurationModal({
                   </TouchableOpacity>
                 </View>
                 <Text style={{ marginTop: 10, fontSize: 11, color: '#6C757D' }}>
-                  Android usa SDK nativo. En web puedes usar modo proxy para validar video/audio ambiente desde el PC.
+                  En Android/tablet el vídeo usa RTSP directo (puerto {config.rtspPort}). En web, proxy HLS.
                 </Text>
               </View>
 
@@ -599,6 +591,47 @@ export default function IntercomConfigurationModal({
                   </Picker>
                 </View>
               </View>
+
+              <View style={styles.inputRow}>
+                <Text style={styles.inputLabel}>Acción:</Text>
+                <View style={styles.pickerContainer}>
+                  <Picker
+                    selectedValue={config.doorControlAction || 'set_output'}
+                    onValueChange={(value) => updateConfig('doorControlAction', value)}
+                    style={styles.picker}
+                  >
+                    <Picker.Item label="set_output (OUT)" value="set_output" />
+                    <Picker.Item label="set_rule (regla panel)" value="set_rule" />
+                  </Picker>
+                </View>
+              </View>
+
+              {(config.doorControlAction || 'set_output') === 'set_rule' ? (
+                <View style={styles.inputRow}>
+                  <Text style={styles.inputLabel}>Rule key:</Text>
+                  <TextInput
+                    style={styles.textInput}
+                    value={config.doorControlRuleKey || ''}
+                    onChangeText={(text) => updateConfig('doorControlRuleKey', text)}
+                    placeholder="interfono_puerta_calle_interior"
+                    autoCapitalize="none"
+                  />
+                </View>
+              ) : (
+                <View style={styles.inputRow}>
+                  <Text style={styles.inputLabel}>Modo OUT:</Text>
+                  <View style={styles.pickerContainer}>
+                    <Picker
+                      selectedValue={config.doorOutputMode || 'auto'}
+                      onValueChange={(value) => updateConfig('doorOutputMode', value)}
+                      style={styles.picker}
+                    >
+                      <Picker.Item label="Auto (pulso + auto OFF)" value="auto" />
+                      <Picker.Item label="Manual (ABRIR/CERRAR)" value="manual" />
+                    </Picker>
+                  </View>
+                </View>
+              )}
             </View>
           </View>
 
@@ -638,19 +671,22 @@ export default function IntercomConfigurationModal({
                 />
               </View>
               
-              <View style={styles.inputRow}>
-                <Text style={styles.inputLabel}>Tiempo de pulso (seg):</Text>
-                <TextInput
-                  style={styles.textInput}
-                  value={config.doorControlPulseTime?.toString() || '1.0'}
-                  onChangeText={(value) => {
-                    const numValue = parseFloat(value) || 1.0;
-                    updateConfig('doorControlPulseTime', Math.max(0.1, Math.min(10, numValue)));
-                  }}
-                  keyboardType="decimal-pad"
-                  placeholder="1.0"
-                />
-              </View>
+              {((config.doorControlAction || 'set_output') === 'set_output' &&
+                (config.doorOutputMode || 'auto') === 'auto') && (
+                <View style={styles.inputRow}>
+                  <Text style={styles.inputLabel}>Tiempo auto-OFF (seg):</Text>
+                  <TextInput
+                    style={styles.textInput}
+                    value={config.doorControlPulseTime?.toString() || '1.0'}
+                    onChangeText={(value) => {
+                      const numValue = parseFloat(value) || 1.0;
+                      updateConfig('doorControlPulseTime', Math.max(0.1, Math.min(30, numValue)));
+                    }}
+                    keyboardType="decimal-pad"
+                    placeholder="1.0"
+                  />
+                </View>
+              )}
               
               <View style={styles.inputRow}>
                 <Text style={styles.inputLabel}>Resolución:</Text>

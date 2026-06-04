@@ -3,6 +3,28 @@ import { Platform } from 'react-native';
 import axios from 'axios';
 import { emergencyService, EmergencyConfig } from './EmergencyService';
 
+/** Evita que la UI quede en "Procesando..." si el backend/panel no responde. */
+const API_FETCH_TIMEOUT_MS = 10_000;
+
+async function fetchWithTimeout(
+  url: string,
+  init?: RequestInit,
+  timeoutMs: number = API_FETCH_TIMEOUT_MS
+): Promise<Response> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new Error(`Timeout (${timeoutMs}ms) al conectar con ${url}`);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 // Importar RNFetchBlob solo en React Native (no en web)
 let RNFetchBlob: any = null;
 if (Platform.OS !== 'web') {
@@ -393,7 +415,17 @@ class DoorControlService {
   private normalizeApiPath(path: string): string {
     const p = String(path || '').trim();
     if (!p) return '';
-    return p.startsWith('/') ? p : `/${p}`;
+    if (p.startsWith('http://') || p.startsWith('https://')) {
+      try {
+        const u = new URL(p);
+        u.pathname = u.pathname.replace(/\/{2,}/g, '/');
+        return u.toString();
+      } catch {
+        return p;
+      }
+    }
+    const withSlash = p.startsWith('/') ? p : `/${p}`;
+    return withSlash.replace(/\/{2,}/g, '/');
   }
 
   private buildBackendBaseUrl(consoleIP: string, port: number): string {
@@ -449,11 +481,15 @@ class DoorControlService {
       }
 
       const baseUrl = this.buildBackendBaseUrl(consoleIP, port);
+      const tokenUrl =
+        tokenPath.startsWith('http://') || tokenPath.startsWith('https://')
+          ? tokenPath
+          : `${baseUrl}${tokenPath}`;
       const body = new URLSearchParams();
       body.append('username', username);
       body.append('password', password);
 
-      const response = await fetch(`${baseUrl}${tokenPath}`, {
+      const response = await fetchWithTimeout(tokenUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded',
@@ -490,6 +526,10 @@ class DoorControlService {
   ): Promise<Response | null> {
     const baseUrl = this.buildBackendBaseUrl(config?.network?.consoleIP, Number(config?.api?.port || 8000));
     const endpoint = this.normalizeApiPath(endpointPath);
+    const requestUrl =
+      endpoint.startsWith('http://') || endpoint.startsWith('https://')
+        ? endpoint
+        : `${baseUrl}${endpoint}`;
 
     let token = await this.getBearerToken();
     if (!token) {
@@ -504,7 +544,7 @@ class DoorControlService {
       if (jsonBody !== undefined) {
         headers['Content-Type'] = 'application/json';
       }
-      return fetch(`${baseUrl}${endpoint}`, {
+      return fetchWithTimeout(requestUrl, {
         method,
         headers,
         ...(jsonBody !== undefined ? { body: JSON.stringify(jsonBody) } : {}),
@@ -1218,7 +1258,7 @@ class DoorControlService {
     }
   }
 
-  // Control de puertas usando API2/settags (configuración global)
+  // Control de puertas vía panel (`POST /api/v1/set_mode` + `action=set_output`)
   async controlDoor(doorId: 'P1' | 'P2' | 'P3' | 'P4', action: 'open' | 'close'): Promise<boolean> {
     try {
       console.log(`🚪 Intentando ${action === 'open' ? 'abrir' : 'cerrar'} ${doorId}`);
@@ -1255,102 +1295,88 @@ class DoorControlService {
         return false;
       }
 
-      // Verificar que tenga configuración de PCB y Switch
-      if (!doorConfig.intercom?.doorControlPCB || !doorConfig.intercom?.doorControlSwitch) {
+      const endpoint = config?.api?.urlPost || '/api/v1/set_mode';
+      const intercom = doorConfig.intercom || {};
+      const controlAction = intercom.doorControlAction || 'set_output';
+      if (controlAction === 'set_rule') {
+        const ruleKey = String(intercom.doorControlRuleKey || '').trim();
+        if (!ruleKey) {
+          console.error(`❌ Falta doorControlRuleKey para ${doorId} (set_rule)`);
+          return false;
+        }
+        const payload = {
+          action: 'set_rule',
+          rule_key: ruleKey,
+          active: action === 'open',
+        };
+        console.log(`🔧 Control de puerta ${doorId} usando set_mode/set_rule:`, {
+          endpoint,
+          payload,
+        });
+        const response = await this.authenticatedRequest(config, 'POST', endpoint, payload);
+        if (!response) {
+          console.error('❌ Sin respuesta del panel al ejecutar regla');
+          return false;
+        }
+        if (!response.ok) {
+          const errorText = await response.text().catch(() => '');
+          console.error(`❌ Error HTTP ${response.status} ejecutando regla: ${errorText}`);
+          return false;
+        }
+        await response.json().catch(() => ({}));
+        this.notifyStatusChange();
+        return true;
+      }
+
+      // set_output: puede ser auto (pulso) o manual (queda ON hasta "cerrar puerta")
+      if (!intercom?.doorControlPCB || !intercom?.doorControlSwitch) {
         console.error(`❌ Configuración de PCB/Switch incompleta para ${doorId}`);
         return false;
       }
+      const outputCode = `OUT_${String(intercom.doorControlPCB).padStart(2, '0')}_${String(
+        intercom.doorControlSwitch
+      ).padStart(2, '0')}`;
+      const outputMode = intercom.doorOutputMode || 'auto';
+      const pulseSecondsRaw = Number(intercom.doorControlPulseTime ?? 1.0);
+      const pulseSeconds = Number.isFinite(pulseSecondsRaw)
+        ? Math.max(0.1, Math.min(30, pulseSecondsRaw))
+        : 1.0;
 
-      const { doorControlPCB, doorControlSwitch } = doorConfig.intercom;
-      const modeTag = config.api.modeTag || 'Srv_Horario_2';
-      const apiUrlPost = config.api.urlPost || 'API2/settags';
-      const consoleIP = config.network.consoleIP;
-      const port = config.api.port;
-      const username = config.api.username;
-      const password = config.api.password;
-
-      // Construir tag de entrada digital (smcse_di_XX_XX_XX) usando PCB y Switch
-      const diTag = this.buildSDIO12Tag(doorControlPCB, doorControlSwitch, true);
-
-      // Construir payload: AMBOS tags (igual que en cambio de modo)
-      // Primer tag: modeTag global (Srv_Horario_2)
-      // Segundo tag: tag de la puerta (smcse_di_XX_XX_XX)
-      const payload = {
-        tags: [
-          {
-            tag: modeTag,
-            Tip: 1,
-            v: action === 'open' ? '1001' : '1000',
-            St: action === 'open' ? 1001 : 1000
-          },
-          {
-            tag: diTag,
-            Tip: 1,
-            v: action === 'open' ? '1001' : '1000',
-            St: action === 'open' ? 1001 : 1000
-          }
-        ]
+      const sendSetOutput = async (on: boolean): Promise<boolean> => {
+        const payload = { action: 'set_output', code: outputCode, on };
+        const response = await this.authenticatedRequest(config, 'POST', endpoint, payload);
+        if (!response) {
+          console.error('❌ Sin respuesta del panel al controlar salida');
+          return false;
+        }
+        if (!response.ok) {
+          const errorText = await response.text().catch(() => '');
+          console.error(`❌ Error HTTP ${response.status} controlando salida: ${errorText}`);
+          return false;
+        }
+        await response.json().catch(() => ({}));
+        return true;
       };
 
-      console.log(`🔧 Control de puerta ${doorId} usando API2/settags:`, {
-        consoleIP,
-        port,
-        modeTag,
-        diTag,
-        pcb: doorControlPCB,
-        switch: doorControlSwitch,
-        payload
-      });
-
-      const authHeader = this.getBasicAuthHeaderForAPI(username, password);
-
-      let result: any;
-
-      const directUrl = `https://${consoleIP}:${port}/${apiUrlPost}`;
-      console.log(`📡 Enviando POST: ${directUrl}`);
-
-      if (Platform.OS !== 'web' && RNFetchBlob && RNFetchBlob.config) {
-        console.log(`📱 Usando RNFetchBlob (React Native)`);
-
-        const response = await RNFetchBlob.config({
-          trusty: true,
-          timeout: 10000
-        }).fetch('POST', directUrl, {
-          'Authorization': authHeader,
-          'Content-Type': 'application/json',
-        }, JSON.stringify(payload));
-
-        const status = response.info().status;
-        if (status >= 200 && status < 300) {
-          const responseText = response.text();
-          result = JSON.parse(responseText);
-          console.log(`✅ Puerta ${doorId} ${action === 'open' ? 'abierta' : 'cerrada'} exitosamente:`, result);
-        } else {
-          console.error(`❌ Error HTTP ${status} controlando puerta`);
-          return false;
-        }
+      if (action === 'close') {
+        const ok = await sendSetOutput(false);
+        if (!ok) return false;
+        console.log(`✅ Puerta ${doorId} cerrada vía set_output`);
+      } else if (outputMode === 'manual') {
+        const ok = await sendSetOutput(true);
+        if (!ok) return false;
+        console.log(`✅ Puerta ${doorId} abierta en modo manual (queda ON)`);
       } else {
-        const response = await fetch(directUrl, {
-          method: 'POST',
-          headers: {
-            'Authorization': authHeader,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(payload),
-        });
-
-        if (!response.ok) {
-          console.error(`❌ Error HTTP ${response.status} controlando puerta`);
-          const errorText = await response.text();
-          console.error(`❌ Error respuesta: ${errorText}`);
-          return false;
-        }
-
-        result = await response.json();
-        console.log(`✅ Puerta ${doorId} ${action === 'open' ? 'abierta' : 'cerrada'} exitosamente:`, result);
+        // Auto: abre y apaga automáticamente tras doorControlPulseTime segundos.
+        const opened = await sendSetOutput(true);
+        if (!opened) return false;
+        console.log(`✅ Puerta ${doorId} abierta (auto), esperando ${pulseSeconds}s`);
+        await new Promise((resolve) => setTimeout(resolve, pulseSeconds * 1000));
+        const closed = await sendSetOutput(false);
+        if (!closed) return false;
+        console.log(`✅ Puerta ${doorId} cerrada automáticamente`);
       }
 
-      // Siempre es un pulso, así que no necesitamos verificar estado después
       this.notifyStatusChange();
       return true;
     } catch (error) {

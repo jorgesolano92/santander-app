@@ -27,6 +27,7 @@
       "expo-media-library",
       "expo-file-system",
       "./plugins/with-dependency-resolver.js",
+      "./plugins/with-rtsp-tcp.js",
       [
         "@config-plugins/react-native-webrtc",
         {

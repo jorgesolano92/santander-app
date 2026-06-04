@@ -1,5 +1,14 @@
-import { View, Text, StyleSheet, TouchableOpacity, Modal, ActivityIndicator } from 'react-native';
-import { X, MessageCircle, DoorOpen, PhoneCall, PhoneOff, Mic, MicOff, Volume2, Camera } from 'lucide-react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  Modal,
+  ActivityIndicator,
+  BackHandler,
+  Dimensions,
+} from 'react-native';
+import { X, MessageCircle, DoorOpen, PhoneCall, PhoneOff, Mic, MicOff, Volume2, Camera, Minimize2 } from 'lucide-react-native';
 import { ScrollView } from 'react-native';
 import { useWindowDimensions } from 'react-native';
 import { useState, useEffect } from 'react';
@@ -50,6 +59,7 @@ export default function ManualModeModal({
   refreshAllDoorsStatus,
   intercomConfigs
 }: ManualModeModalProps) {
+  const MANUAL_OUTPUT_STATE_KEY = 'door_manual_output_state';
   const { width = 0 } = useWindowDimensions();
   const isSmallTablet = width < 900;
   const isLargeTablet = width >= 1200;
@@ -58,6 +68,8 @@ export default function ManualModeModal({
   const [currentIntercomConfigs, setCurrentIntercomConfigs] = useState<DoorConfig[]>(intercomConfigs || []);
   const [cameraConfigs, setCameraConfigs] = useState<DoorConfig[]>([]);
   const [sendingPulse, setSendingPulse] = useState<Set<string>>(new Set()); // Track puertas con pulso en proceso
+  const [manualOutputState, setManualOutputState] = useState<Record<string, boolean>>({});
+  const [expandedVideoDoorId, setExpandedVideoDoorId] = useState<string | null>(null);
   
   // Filter enabled doors for styling calculations
   const enabledDoors = currentIntercomConfigs.filter(door => door.enabled);
@@ -74,6 +86,25 @@ export default function ManualModeModal({
       });
     }
   }, [visible, refreshAllDoorsStatus]);
+
+  useEffect(() => {
+    if (!visible) {
+      setExpandedVideoDoorId(null);
+    }
+  }, [visible]);
+
+  useEffect(() => {
+    if (!expandedVideoDoorId) return;
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      setExpandedVideoDoorId(null);
+      return true;
+    });
+    return () => sub.remove();
+  }, [expandedVideoDoorId]);
+
+  const screen = Dimensions.get('window');
+  /** Vídeo a pantalla completa; botones flotantes encima (no restan altura). */
+  const expandedVideoHeight = screen.height;
   
   // Actualizar cuando cambie la prop
   useEffect(() => {
@@ -87,6 +118,11 @@ export default function ManualModeModal({
       const savedConfig = await AsyncStorage.getItem('new_door_config');
       if (savedConfig) {
         const parsedConfig = JSON.parse(savedConfig);
+        const manualStateRaw = await AsyncStorage.getItem(MANUAL_OUTPUT_STATE_KEY);
+        const manualStateParsed = manualStateRaw ? JSON.parse(manualStateRaw) : {};
+        setManualOutputState(
+          manualStateParsed && typeof manualStateParsed === 'object' ? manualStateParsed : {}
+        );
         if (parsedConfig.doors) {
           // Migrar configuraciones antiguas que no tienen campos SDIO12
           const migratedDoors = parsedConfig.doors.map((door: any, index: number) => {
@@ -101,6 +137,13 @@ export default function ManualModeModal({
                   doorControlPassword: door.intercom.doorControlPassword || 'Scati2023',
                   doorControlPCB: door.intercom.doorControlPCB ?? 1,
                   doorControlSwitch: door.intercom.doorControlSwitch ?? (index + 1),
+                  doorControlAction: door.intercom.doorControlAction || 'set_output',
+                  doorControlRuleKey: door.intercom.doorControlRuleKey || '',
+                  doorOutputMode: door.intercom.doorOutputMode || 'auto',
+                  doorControlPulseTime:
+                    typeof door.intercom.doorControlPulseTime === 'number'
+                      ? door.intercom.doorControlPulseTime
+                      : 1.0,
                 }
               };
             }
@@ -171,15 +214,26 @@ export default function ManualModeModal({
 
   const handleOpenDoor = async (doorId: 'P1' | 'P2', doorName: string) => {
     try {
-      console.log(`🚪 Abriendo ${doorName} (enviando pulso)`);
+      const doorIndex = doorId === 'P1' ? 0 : 1;
+      const doorCfg = currentIntercomConfigs[doorIndex]?.intercom;
+      const actionKind = doorCfg?.doorControlAction || 'set_output';
+      const outputMode = doorCfg?.doorOutputMode || 'auto';
+      const currentlyOpen = Boolean(manualOutputState[doorId]);
+      const nextAction: 'open' | 'close' =
+        actionKind === 'set_output' && outputMode === 'manual' && currentlyOpen
+          ? 'close'
+          : 'open';
+      console.log(
+        `🚪 ${nextAction === 'open' ? 'Abriendo' : 'Cerrando'} ${doorName} (${actionKind}/${outputMode})`
+      );
       
-      // Agregar puerta al set de puertas enviando pulso para mostrar feedback
+      // Agregar puerta al set para mostrar feedback mientras se envía el comando
       setSendingPulse(prev => new Set(prev).add(doorId));
       
-      // Usar el método controlDoor que ahora usa la API global (API2/settags)
-      const success = await controlDoor(doorId, 'open');
+      // Usar controlDoor vía panel (/api/v1/set_mode con action=set_output)
+      const success = await controlDoor(doorId, nextAction);
 
-      // Remover puerta del set después de un delay (para mostrar feedback visual)
+      // Remover puerta del set después de un delay (feedback visual)
       setTimeout(() => {
         setSendingPulse(prev => {
           const newSet = new Set(prev);
@@ -189,9 +243,15 @@ export default function ManualModeModal({
       }, 1000);
 
       if (success) {
-        console.log(`✅ ${doorName} - Pulso enviado correctamente`);
+        if (actionKind === 'set_output' && outputMode === 'manual') {
+          const newState = nextAction === 'open';
+          const updated = { ...manualOutputState, [doorId]: newState };
+          setManualOutputState(updated);
+          await AsyncStorage.setItem(MANUAL_OUTPUT_STATE_KEY, JSON.stringify(updated));
+        }
+        console.log(`✅ ${doorName} - comando enviado correctamente`);
       } else {
-        console.error(`❌ Error enviando pulso en ${doorName}`);
+        console.error(`❌ Error enviando comando en ${doorName}`);
         // Remover inmediatamente en caso de error
         setSendingPulse(prev => {
           const newSet = new Set(prev);
@@ -220,7 +280,7 @@ export default function ManualModeModal({
 
   const getDoorButtonTextLocal = (doorId: 'P1' | 'P2'): string => {
     const doorIndex = doorId === 'P1' ? 0 : 1;
-    const doorConfig = intercomConfigs[doorIndex];
+    const doorConfig = currentIntercomConfigs[doorIndex];
     
     if (!doorConfig || !doorConfig.intercom) {
       return 'ABRIR';
@@ -230,10 +290,67 @@ export default function ManualModeModal({
     if (sendingPulse.has(doorId)) {
       return 'ENVIANDO PULSO...';
     }
-    
-    // Siempre mostrar "ABRIR PUERTA" (siempre se envía como pulso)
+
+    const intercom = doorConfig.intercom;
+    const actionKind = intercom?.doorControlAction || 'set_output';
+    const outputMode = intercom?.doorOutputMode || 'auto';
+    if (actionKind === 'set_rule') {
+      return 'EJECUTAR REGLA';
+    }
+    if (outputMode === 'manual') {
+      return manualOutputState[doorId] ? 'CERRAR PUERTA' : 'ABRIR PUERTA';
+    }
     return 'ABRIR PUERTA';
   };
+
+  const renderDoorControlButton = (doorId: string, doorName: string, floating = false) => (
+    <TouchableOpacity
+      style={[
+        styles.doorControlButton,
+        floating && styles.doorControlButtonFloating,
+        getDoorStatus(doorId).isOpen && styles.doorControlButtonClose,
+        (isDoorButtonDisabled(doorId) || isDoorVerifying(doorId)) && styles.doorControlButtonDisabled,
+      ]}
+      onPress={() => handleOpenDoor(doorId as 'P1' | 'P2', doorName)}
+      disabled={isDoorButtonDisabled(doorId) || isDoorVerifying(doorId) || sendingPulse.has(doorId)}
+    >
+      {isDoorVerifying(doorId) ? (
+        <>
+          <ActivityIndicator
+            size="small"
+            color={getDoorStatus(doorId).isOpen ? '#FFFFFF' : '#495057'}
+          />
+          <Text
+            style={[
+              styles.doorControlButtonText,
+              getDoorStatus(doorId).isOpen && styles.doorControlButtonCloseText,
+            ]}
+          >
+            VERIFICANDO...
+          </Text>
+        </>
+      ) : sendingPulse.has(doorId) ? (
+        <>
+          <ActivityIndicator size="small" color="#FFC107" />
+          <Text style={[styles.doorControlButtonText, { color: '#FFC107' }]}>
+            {getDoorButtonTextLocal(doorId as 'P1' | 'P2')}
+          </Text>
+        </>
+      ) : (
+        <>
+          <DoorOpen size={16} color={getDoorStatus(doorId).isOpen ? '#FFFFFF' : '#495057'} />
+          <Text
+            style={[
+              styles.doorControlButtonText,
+              getDoorStatus(doorId).isOpen && styles.doorControlButtonCloseText,
+            ]}
+          >
+            {getDoorButtonTextLocal(doorId as 'P1' | 'P2')}
+          </Text>
+        </>
+      )}
+    </TouchableOpacity>
+  );
 
   const handleMuteMicrophone = async () => {
     if (sipCallState) {
@@ -277,12 +394,37 @@ export default function ManualModeModal({
   };
 
   const styles = StyleSheet.create({
+    modalRoot: {
+      flex: 1,
+    },
     container: {
       flex: 1,
       backgroundColor: '#F8F9FA',
     },
     scrollContent: {
       flexGrow: 1,
+    },
+    scrollContentFullscreen: {
+      flexGrow: 1,
+      minHeight: screen.height,
+      width: '100%',
+      backgroundColor: '#000',
+    },
+    contentExpanded: {
+      flex: 1,
+      width: '100%',
+      paddingHorizontal: 0,
+      paddingVertical: 0,
+      minHeight: screen.height,
+    },
+    doorControlsContainerExpanded: {
+      flex: 1,
+      width: '100%',
+      flexDirection: 'column',
+      justifyContent: 'flex-start',
+      alignItems: 'stretch',
+      marginBottom: 0,
+      gap: 0,
     },
     header: {
       backgroundColor: '#495057',
@@ -583,6 +725,62 @@ export default function ManualModeModal({
       textAlign: 'left',
       fontWeight: '400',
     },
+    doorControlCardExpanded: {
+      flex: 1,
+      width: '100%',
+      alignSelf: 'stretch',
+      position: 'relative',
+      backgroundColor: '#000',
+      borderColor: '#000',
+      borderRadius: 0,
+      padding: 0,
+      shadowOpacity: 0,
+      elevation: 0,
+      overflow: 'hidden',
+    },
+    doorControlSectionExpanded: {
+      flex: 1,
+      width: '100%',
+      alignSelf: 'stretch',
+      marginBottom: 0,
+    },
+    doorControlButtonsFloating: {
+      position: 'absolute',
+      left: 0,
+      right: 0,
+      bottom: 32,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 12,
+      zIndex: 30,
+      elevation: 30,
+    },
+    doorControlButtonFloating: {
+      minWidth: 180,
+      maxWidth: 240,
+      paddingVertical: 11,
+      paddingHorizontal: 20,
+      borderRadius: 28,
+      backgroundColor: 'rgba(248, 249, 250, 0.96)',
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.35,
+      shadowRadius: 8,
+      elevation: 10,
+    },
+    fullscreenExitButtonFloating: {
+      minWidth: 96,
+      maxWidth: 110,
+      paddingHorizontal: 14,
+      backgroundColor: 'rgba(52, 58, 64, 0.92)',
+      borderColor: 'rgba(255, 255, 255, 0.15)',
+    },
+    fullscreenExitButtonText: {
+      color: '#FFFFFF',
+      fontSize: isSmallTablet ? 11 : 13,
+      fontWeight: '700',
+    },
   });
 
   return (
@@ -592,14 +790,23 @@ export default function ManualModeModal({
       transparent={false}
       onRequestClose={onClose}
     >
-      <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
-        {/* Header */}
-        <View style={styles.header}>
-          <Text style={styles.headerTitle}>SAIMA SEGURIDAD – Panel de control puertas SECURA</Text>
-        </View>
+      <View style={styles.modalRoot}>
+        <ScrollView
+          style={styles.container}
+          contentContainerStyle={[
+            styles.scrollContent,
+            expandedVideoDoorId ? styles.scrollContentFullscreen : null,
+          ]}
+          scrollEnabled={!expandedVideoDoorId}
+        >
+        {!expandedVideoDoorId ? (
+          <View style={styles.header}>
+            <Text style={styles.headerTitle}>SAIMA SEGURIDAD – Panel de control puertas SECURA</Text>
+          </View>
+        ) : null}
 
-        <View style={styles.content}>
-          {/* Mode Header */}
+        <View style={[styles.content, expandedVideoDoorId ? styles.contentExpanded : null]}>
+          {!expandedVideoDoorId ? (
           <View style={styles.modeHeader}>
             <View style={styles.infoIcon}>
               <Text style={styles.infoIconText}>i</Text>
@@ -614,22 +821,62 @@ export default function ManualModeModal({
               <Text style={styles.changeModeButtonText}>CAMBIAR MODO</Text>
             </TouchableOpacity>
           </View>
+          ) : null}
 
-          {/* Door Controls */}
-          <View style={styles.doorControlsContainer}>
+          <View
+            style={[
+              styles.doorControlsContainer,
+              expandedVideoDoorId ? styles.doorControlsContainerExpanded : null,
+            ]}
+          >
             {enabledDoors.map((door, index) => {
               const doorId = `P${index + 1}`;
+              if (expandedVideoDoorId && expandedVideoDoorId !== doorId) {
+                return null;
+              }
+              const isDoorExpanded = expandedVideoDoorId === doorId;
               return (
-                <View key={doorId} style={styles.doorControlSection}>
-                  <Text style={styles.doorControlTitle}>{door.name.toUpperCase()}</Text>
-                  <View style={styles.doorControlCard}>
+                <View
+                  key={doorId}
+                  style={isDoorExpanded ? styles.doorControlSectionExpanded : styles.doorControlSection}
+                >
+                  {!isDoorExpanded ? (
+                    <Text style={styles.doorControlTitle}>{door.name.toUpperCase()}</Text>
+                  ) : null}
+                  <View
+                    style={[
+                      styles.doorControlCard,
+                      isDoorExpanded && styles.doorControlCardExpanded,
+                    ]}
+                  >
                     {door.intercom ? (
                       <>
-                        <DoorVideoStream 
-                          intercomConfig={door.intercom} 
+                        <DoorVideoStream
+                          intercomConfig={door.intercom}
                           doorName={door.name}
+                          isExpanded={isDoorExpanded}
+                          expandedVideoHeight={expandedVideoHeight}
+                          onExpandedChange={(expanded) =>
+                            setExpandedVideoDoorId(expanded ? doorId : null)
+                          }
                         />
-                        {/* Migración SDK: el audio/intercom se manejará desde el módulo nativo DVR */}
+                        {isDoorExpanded ? (
+                          <View style={styles.doorControlButtonsFloating} pointerEvents="box-none">
+                            {renderDoorControlButton(doorId, door.name, true)}
+                            <TouchableOpacity
+                              style={[
+                                styles.doorControlButton,
+                                styles.doorControlButtonFloating,
+                                styles.fullscreenExitButtonFloating,
+                              ]}
+                              onPress={() => setExpandedVideoDoorId(null)}
+                              accessibilityLabel="Salir de pantalla completa"
+                            >
+                              <Minimize2 size={16} color="#FFFFFF" />
+                              <Text style={styles.fullscreenExitButtonText}>SALIR</Text>
+                            </TouchableOpacity>
+                          </View>
+                        ) : null}
                       </>
                     ) : (
                       <View style={styles.doorControlImagePlaceholder}>
@@ -639,68 +886,18 @@ export default function ManualModeModal({
                       </View>
                     )}
                     
-                    <View style={styles.doorControlButtons}>
-                      {/* Intercom voz: SDK nativo de cámara (pendiente en UI) */}
-                      
-                      <TouchableOpacity 
-                        style={[
-                          styles.doorControlButton,
-                          getDoorStatus(doorId).isOpen && styles.doorControlButtonClose,
-                          (isDoorButtonDisabled(doorId) || isDoorVerifying(doorId)) && styles.doorControlButtonDisabled
-                        ]}
-                        onPress={() => handleOpenDoor(doorId as 'P1' | 'P2', door.name)}
-                        disabled={isDoorButtonDisabled(doorId) || isDoorVerifying(doorId) || sendingPulse.has(doorId)}
-                      >
-                        {isDoorVerifying(doorId) ? (
-                          <>
-                            <ActivityIndicator 
-                              size="small" 
-                              color={getDoorStatus(doorId).isOpen ? "#FFFFFF" : "#495057"} 
-                            />
-                            <Text style={[
-                              styles.doorControlButtonText,
-                              getDoorStatus(doorId).isOpen && styles.doorControlButtonCloseText
-                            ]}>
-                              VERIFICANDO...
-                            </Text>
-                          </>
-                        ) : sendingPulse.has(doorId) ? (
-                          <>
-                            <ActivityIndicator 
-                              size="small" 
-                              color="#FFC107"
-                            />
-                            <Text style={[
-                              styles.doorControlButtonText,
-                              { color: '#FFC107' }
-                            ]}>
-                              {getDoorButtonTextLocal(doorId as 'P1' | 'P2')}
-                            </Text>
-                          </>
-                        ) : (
-                          <>
-                            <DoorOpen 
-                              size={16} 
-                              color={getDoorStatus(doorId).isOpen ? "#FFFFFF" : "#495057"} 
-                            />
-                            <Text style={[
-                              styles.doorControlButtonText,
-                              getDoorStatus(doorId).isOpen && styles.doorControlButtonCloseText
-                            ]}>
-                              {getDoorButtonTextLocal(doorId as 'P1' | 'P2')}
-                            </Text>
-                          </>
-                        )}
-                      </TouchableOpacity>
-                    </View>
+                    {!isDoorExpanded ? (
+                      <View style={styles.doorControlButtons}>
+                        {renderDoorControlButton(doorId, door.name)}
+                      </View>
+                    ) : null}
                   </View>
                 </View>
               );
             })}
           </View>
 
-
-          {/* Bottom Buttons */}
+          {!expandedVideoDoorId ? (
           <View style={styles.bottomButtons}>
             <TouchableOpacity 
               style={styles.emergencyButton}
@@ -716,10 +913,11 @@ export default function ManualModeModal({
               <Text style={styles.visualizationButtonText}>VOLVER</Text>
             </TouchableOpacity>
           </View>
+          ) : null}
 
-          {/* Footer Text */}
         </View>
-      </ScrollView>
+        </ScrollView>
+      </View>
     </Modal>
   );
 }

@@ -7,7 +7,11 @@ import { doorControlService, ApiResponse } from '@/services/DoorControlService';
 import ApiResponseDisplayModal from './ApiResponseDisplayModal';
 import IntercomConfigurationModal, { IntercomConfig } from './IntercomConfigurationModal';
 import { Picker } from '@react-native-picker/picker';
-import { emergencyService, type EmergencyConfig } from '@/services/EmergencyService';
+import { emergencyService } from '@/services/EmergencyService';
+import { cloneDefaultDoorAppConfig } from '@/config/defaultDoorAppConfig';
+import type { ConfigurationData, ModeConfig } from '@/types/configurationData';
+
+export type { ConfigurationData, ModeConfig, DoorConfig, ModesConfig } from '@/types/configurationData';
 
 interface NewConfigurationModalProps {
   visible: boolean;
@@ -15,66 +19,6 @@ interface NewConfigurationModalProps {
   onSave: (config: ConfigurationData) => void;
   initialSandboxMode: boolean;
   onToggleSandboxMode: (isSandbox: boolean) => void;
-}
-
-interface DoorConfig {
-  enabled: boolean;
-  name: string;
-  ipExterior: string;
-  ipInterior: string;
-  intercom: IntercomConfig;
-}
-
-interface ScheduleConfig {
-  ini1: string;
-  ini2: string;
-}
-
-interface ModeConfig {
-  rule_key: string;
-  action: 'set_rule' | 'set_output';
-  enabled: boolean;
-  /** Obligatorio si action === set_output (código OUT del panel, ej. OUT_01_01). */
-  output_code?: string;
-  /** Por defecto true al activar salida. */
-  output_on?: boolean;
-}
-
-interface ModesConfig {
-  automatico: ModeConfig;
-  esclusa: ModeConfig;
-  extendido: ModeConfig;
-  autoservicio: ModeConfig;
-  oficinaCerrada: ModeConfig;
-  cargaCajero: ModeConfig;
-  manual: ModeConfig;
-}
-
-interface ConfigurationData {
-  doors: DoorConfig[];
-  network: {
-    consoleIP: string;
-    netmask: string;
-    gateway: string;
-  };
-  api: {
-    port: number;
-    username: string;
-    password: string;
-    urlToken: string; // URL para token (ej: /api/v1/auth/token)
-    urlGet: string;   // URL para GET (ej: /api/v1/get_mode)
-    urlPost: string;  // URL para POST (ej: /api/v1/set_mode)
-    urlModes: string; // URL para listar modos (ej: /api/v1/modes)
-  };
-  schedules: {
-    comercial: ScheduleConfig;
-    extendido: ScheduleConfig;
-    autoservicio: ScheduleConfig;
-    cerrado: ScheduleConfig;
-  };
-  officeWithATM: boolean;
-  emergency: EmergencyConfig;
-  modes: ModesConfig;
 }
 
 export default function NewConfigurationModal({ 
@@ -88,205 +32,7 @@ export default function NewConfigurationModal({
   const isSmallTablet = width < 900;
   const isLargeTablet = width >= 1200;
 
-  const [config, setConfig] = useState<ConfigurationData>({
-    doors: [
-      {
-        enabled: true,
-        name: 'Calle (P1)',
-        ipExterior: '127.0.0.1',
-        ipInterior: '',
-        intercom: {
-          name: 'Intercomunicador Calle (P1)',
-          cameraIP: '192.168.1.120',
-          httpPort: 80,
-          httpsPort: 443,
-          onvifUsername: 'ceroideas',
-          onvifPassword: 'Cero21264712-',
-          rtspPort: 554,
-          videoProfile: 'MainStream',
-          snapshotPath: 'ISAPI/Streaming/channels/101/picture',
-          sipUri: '',
-          sipUsername: '',
-          sipPassword: '',
-          sipDomain: '',
-          enableOnvifEvents: true,
-          enableTLS: false,
-          preferredResolution: '1920x1080',
-          preferredFPS: 25,
-          defaultOpenTime: 5,
-          doorControlUsername: 'Scati2023',
-          doorControlPassword: 'Scati2023',
-          doorControlPCB: 1,
-          doorControlSwitch: 5,
-          rtspPath: 'profile1',
-          doorControlManualMode: false, // Pulso automático
-          doorControlPulseTime: 1.0,
-          hasAudio: true,
-        }
-      },
-      {
-        enabled: true,
-        name: 'Oficina (P2)',
-        ipExterior: '127.0.0.1',
-        ipInterior: '',
-        intercom: {
-          name: 'Intercomunicador Oficina (P2)',
-          cameraIP: '192.168.1.130',
-          httpPort: 80,
-          httpsPort: 443,
-          onvifUsername: 'ceroideas',
-          onvifPassword: 'Cero21264712-',
-          rtspPort: 554,
-          videoProfile: 'MainStream',
-          snapshotPath: 'axis-cgi/jpg/image.cgi',
-          sipUri: '',
-          sipUsername: '',
-          sipPassword: '',
-          sipDomain: '',
-          enableOnvifEvents: true,
-          enableTLS: false,
-          preferredResolution: '1920x1080',
-          preferredFPS: 25,
-          defaultOpenTime: 5,
-          doorControlUsername: 'Scati2023',
-          doorControlPassword: 'Scati2023',
-          doorControlPCB: 2,
-          doorControlSwitch: 10,
-          rtspPath: 'axis-media/media.amp?videocodec=h264&audio=1',
-          doorControlManualMode: true, // Modo manual
-          doorControlPulseTime: 1.0,
-          hasAudio: true,
-        }
-      },
-      {
-        enabled: false,
-        name: 'Puerta 3',
-        ipExterior: '127.0.0.1',
-        ipInterior: '',
-        intercom: {
-          name: 'Intercomunicador Puerta 3',
-          cameraIP: '192.168.1.120',
-          httpPort: 80,
-          httpsPort: 443,
-          onvifUsername: 'ceroideas',
-          onvifPassword: 'Cero21264712-',
-          rtspPort: 554,
-          videoProfile: 'MainStream',
-          snapshotPath: 'cgi-bin/snapshot.cgi?channel=1',
-          sipUri: '',
-          sipUsername: '',
-          sipPassword: '',
-          sipDomain: '',
-          enableOnvifEvents: true,
-          enableTLS: false,
-          preferredResolution: '1920x1080',
-          preferredFPS: 25,
-          defaultOpenTime: 5,
-          doorControlUsername: 'Scati2023',
-          doorControlPassword: 'Scati2023',
-          doorControlPCB: 1,
-          doorControlSwitch: 5,
-          rtspPath: 'trackID=1',
-          hasAudio: false, // Esta cámara NO tiene audio
-        }
-      },
-      {
-        enabled: false,
-        name: 'Puerta 4',
-        ipExterior: '',
-        ipInterior: '',
-        intercom: {
-          name: 'Intercomunicador Puerta 4',
-          cameraIP: '',
-          httpPort: 80,
-          httpsPort: 443,
-          onvifUsername: 'ceroideas',
-          onvifPassword: 'Cero21264712-',
-          rtspPort: 554,
-          videoProfile: 'MainStream',
-          sipUri: '',
-          sipUsername: '',
-          sipPassword: '',
-          sipDomain: '',
-          enableOnvifEvents: true,
-          enableTLS: false,
-          preferredResolution: '1920x1080',
-          preferredFPS: 25,
-          defaultOpenTime: 5,
-          doorControlUsername: 'Scati2023',
-          doorControlPassword: 'Scati2023',
-          doorControlPCB: 1,
-          doorControlSwitch: 4,
-        }
-      },
-      {
-        enabled: false,
-        name: 'Puerta 5',
-        ipExterior: '',
-        ipInterior: '',
-        intercom: {
-          name: 'Intercomunicador Puerta 5',
-          cameraIP: '',
-          httpPort: 80,
-          httpsPort: 443,
-          onvifUsername: 'ceroideas',
-          onvifPassword: 'Cero21264712-',
-          rtspPort: 554,
-          videoProfile: 'MainStream',
-          sipUri: '',
-          sipUsername: '',
-          sipPassword: '',
-          sipDomain: '',
-          enableOnvifEvents: true,
-          enableTLS: false,
-          preferredResolution: '1920x1080',
-          preferredFPS: 25,
-          defaultOpenTime: 5,
-          doorControlUsername: 'Scati2023',
-          doorControlPassword: 'Scati2023',
-          doorControlPCB: 1,
-          doorControlSwitch: 5,
-        }
-      }
-    ],
-    network: {
-      consoleIP: '127.0.0.1',
-      netmask: '255.255.255.0',
-      gateway: '0.0.0.0',
-    },
-    api: {
-      port: 8000,
-      username: '',
-      password: '',
-      urlToken: '/api/v1/auth/token',
-      urlGet: '/api/v1/get_mode',
-      urlPost: '/api/v1/set_mode',
-      urlModes: '/api/v1/modes',
-    },
-    schedules: {
-      comercial: { ini1: '08:00', ini2: '14:00' },
-      extendido: { ini1: '07:00', ini2: '22:00' },
-      autoservicio: { ini1: '00:00', ini2: '23:59' },
-      cerrado: { ini1: '22:00', ini2: '08:00' },
-    },
-    officeWithATM: false,
-    emergency: {
-      enabled: true,
-      rule_key: '',
-      action: 'set_rule',
-      output_code: '',
-      output_on: true,
-    },
-    modes: {
-      automatico: { rule_key: 'horario_automatico', action: 'set_rule', enabled: true, output_code: '', output_on: true },
-      esclusa: { rule_key: 'horario_esclusa', action: 'set_rule', enabled: true, output_code: '', output_on: true },
-      extendido: { rule_key: 'horario_extendido', action: 'set_rule', enabled: true, output_code: '', output_on: true },
-      autoservicio: { rule_key: 'horario_autoservicio', action: 'set_rule', enabled: true, output_code: '', output_on: true },
-      oficinaCerrada: { rule_key: 'horario_cerrado', action: 'set_rule', enabled: true, output_code: '', output_on: true },
-      cargaCajero: { rule_key: 'carga_cajero', action: 'set_rule', enabled: true, output_code: '', output_on: true },
-      manual: { rule_key: 'manual', action: 'set_rule', enabled: true, output_code: '', output_on: true },
-    },
-  });
+  const [config, setConfig] = useState<ConfigurationData>(cloneDefaultDoorAppConfig);
 
   const [connectionStatus, setConnectionStatus] = useState<{ [key: string]: 'testing' | 'success' | 'error' | null }>({});
   const [showApiResponseModal, setShowApiResponseModal] = useState(false);
@@ -294,13 +40,7 @@ export default function NewConfigurationModal({
   const [isTestingApi, setIsTestingApi] = useState(false);
   const [showIntercomModal, setShowIntercomModal] = useState(false);
   const [selectedDoorIndex, setSelectedDoorIndex] = useState<number>(0);
-  const defaultConfigRef = useRef<ConfigurationData | null>(null);
-
-  useEffect(() => {
-    if (!defaultConfigRef.current) {
-      defaultConfigRef.current = JSON.parse(JSON.stringify(config));
-    }
-  }, []);
+  const defaultConfigRef = useRef<ConfigurationData>(cloneDefaultDoorAppConfig());
 
   useEffect(() => {
     if (visible) {
@@ -328,6 +68,13 @@ export default function NewConfigurationModal({
                   doorControlPassword: door.intercom.doorControlPassword || 'Scati2023',
                   doorControlPCB: door.intercom.doorControlPCB ?? 1,
                   doorControlSwitch: door.intercom.doorControlSwitch ?? (index + 1),
+                  doorControlAction: door.intercom.doorControlAction || 'set_output',
+                  doorControlRuleKey: door.intercom.doorControlRuleKey || '',
+                  doorOutputMode: door.intercom.doorOutputMode || 'auto',
+                  doorControlPulseTime:
+                    typeof door.intercom.doorControlPulseTime === 'number'
+                      ? door.intercom.doorControlPulseTime
+                      : 1.0,
                 }
               };
             }
@@ -365,8 +112,8 @@ export default function NewConfigurationModal({
             extendido: { ...def, rule_key: 'horario_extendido' },
             autoservicio: { ...def, rule_key: 'horario_autoservicio' },
             oficinaCerrada: { ...def, rule_key: 'horario_cerrado' },
-            cargaCajero: { ...def, rule_key: 'carga_cajero' },
-            manual: { ...def, rule_key: 'manual' },
+            cargaCajero: { ...def, rule_key: 'horario_carga_cajero' },
+            manual: { ...def, rule_key: 'horario_manual' },
           };
           console.log('✅ Configuración de modos inicializada con valores por defecto');
         }
@@ -379,8 +126,8 @@ export default function NewConfigurationModal({
               extendido: 'horario_extendido',
               autoservicio: 'horario_autoservicio',
               oficinaCerrada: 'horario_cerrado',
-              cargaCajero: 'carga_cajero',
-              manual: 'manual',
+              cargaCajero: 'horario_carga_cajero',
+              manual: 'horario_manual',
             };
             parsedConfig.modes[k] = {
               rule_key: defaultRuleKeyMap[k] || k,
@@ -425,6 +172,12 @@ export default function NewConfigurationModal({
           await AsyncStorage.setItem('new_door_config', JSON.stringify(parsedConfig));
           console.log('✅ Configuración migrada exitosamente');
         }
+      } else {
+        const defaults = cloneDefaultDoorAppConfig();
+        setConfig(defaults);
+        await AsyncStorage.setItem('new_door_config', JSON.stringify(defaults));
+        await emergencyService.setEmergencyConfig(defaults.emergency);
+        console.log('✅ Configuración por defecto aplicada (primera instalación)');
       }
     } catch (error) {
       console.error('Error loading configuration:', error);
@@ -492,11 +245,11 @@ export default function NewConfigurationModal({
             try {
               await AsyncStorage.removeItem('new_door_config');
               await AsyncStorage.removeItem('detailed_door_config');
-              if (defaultConfigRef.current) {
-                const resetConfig = JSON.parse(JSON.stringify(defaultConfigRef.current));
-                setConfig(resetConfig);
-                await emergencyService.setEmergencyConfig(resetConfig.emergency);
-              }
+              const resetConfig = cloneDefaultDoorAppConfig();
+              defaultConfigRef.current = resetConfig;
+              setConfig(resetConfig);
+              await AsyncStorage.setItem('new_door_config', JSON.stringify(resetConfig));
+              await emergencyService.setEmergencyConfig(resetConfig.emergency);
               console.log('✅ Configuración restablecida a valores por defecto');
             } catch (error) {
               console.error('❌ Error restableciendo configuración:', error);

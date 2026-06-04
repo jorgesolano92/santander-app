@@ -254,9 +254,11 @@ export function useDoorControl(): UseDoorControlReturn {
       
       if (isValid) {
         setConnectionStatus('connected');
-        await updateSystemStatus(true); // Mostrar loader en la carga inicial
-        // Refrescar estado de puertas y detectar modo actual al iniciar la app
-        await refreshAllDoorsStatus();
+        // Estado local rápido; no bloquear la pantalla principal
+        await updateSystemStatus(false);
+        void refreshAllDoorsStatus().catch((err) => {
+          console.warn('⚠️ Refresco inicial del panel en segundo plano:', err);
+        });
       } else {
         setConnectionStatus('disconnected');
         setError('Dispositivo no válido o no accesible');

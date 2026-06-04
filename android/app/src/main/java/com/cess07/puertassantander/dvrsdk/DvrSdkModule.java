@@ -160,7 +160,7 @@ public class DvrSdkModule extends ReactContextBaseJavaModule {
     @ReactMethod
     public void getLastError(Promise promise) {
         try {
-            long errorCode = sdkManager.getLastError();
+            int errorCode = sdkManager.getLastError();
             promise.resolve(errorCode);
         } catch (Exception e) {
             Log.e(TAG, "Error en getLastError", e);
