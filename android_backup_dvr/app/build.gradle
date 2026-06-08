@@ -29,8 +29,10 @@ react {
     // codegenDir = file("../../node_modules/@react-native/codegen")
 
     /* Variants */
-    // Embebe el bundle JS en el APK debug (la tablet no depende de Metro en runtime).
-    debuggableVariants = []
+    //   The list of variants to that are debuggable. For those we're going to
+    //   skip the bundling of the JS bundle and the assets. By default is just 'debug'.
+    //   If you add flavors like lite, prod, etc. you'll have to list your debuggableVariants.
+    // debuggableVariants = ["liteDebug", "prodDebug"]
 
     /* Bundling */
     //   A list containing the node command and its flags. Default is just 'node'.
@@ -98,12 +100,13 @@ android {
         externalNativeBuild {
             cmake {
                 cppFlags ""
+                abiFilters "arm64-v8a", "armeabi-v7a"
             }
         }
     }
     externalNativeBuild {
         cmake {
-            path "src/main/jni/CMakeLists.txt"
+            path "src/main/cpp/CMakeLists.txt"
         }
     }
     signingConfigs {
@@ -120,6 +123,8 @@ android {
         minifyEnabled false
     }
         release {
+            // Caution! In production, you need to generate your own keystore file.
+            // see https://reactnative.dev/docs/signed-apk-android.
             signingConfig signingConfigs.debug
             def enableShrinkResources = findProperty('android.enableShrinkResourcesInReleaseBuilds') ?: 'false'
             shrinkResources enableShrinkResources.toBoolean()
@@ -137,10 +142,6 @@ android {
     }
     androidResources {
         ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:!CVS:!thumbs.db:!picasa.ini:!*~'
-    }
-    lint {
-        abortOnError false
-        checkReleaseBuilds false
     }
 }
 
@@ -196,7 +197,7 @@ dependencies {
     implementation "androidx.media3:media3-exoplayer-rtsp:1.3.1"
     implementation "androidx.media3:media3-datasource:1.3.1"
     implementation "androidx.media3:media3-datasource-rtmp:1.3.1"
-
-    // SDK DVR intercom
+    
+    // SDK DVR - Agregar el JAR del SDK
     implementation files('libs/dvrsdk.jar')
 }

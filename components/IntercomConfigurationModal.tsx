@@ -16,6 +16,14 @@ export interface IntercomConfig {
   snapshotPath?: string; // Ruta HTTP(S) de snapshot por modelo
   /** Solo web: URL del proxy Node (FFmpeg→HLS). */
   proxyUrl?: string;
+  /** Puerto Net SDK del fabricante (p. ej. 9008 en TD-E3110). */
+  sdkPort?: number;
+  /** Usuario SDK; si vacío, se usa onvifUsername. */
+  sdkUsername?: string;
+  /** Contraseña SDK; si vacía, se usa onvifPassword. */
+  sdkPassword?: string;
+  /** Canal de voz/intercom en el SDK (-1 = IPC/videoportero, 0/1 = canal NVR). */
+  voiceChannel?: number;
   sipUri: string;
   sipUsername: string;
   sipPassword: string;
@@ -62,6 +70,10 @@ const defaultIntercomConfig: IntercomConfig = {
   rtspPath: '',
   snapshotPath: '',
   proxyUrl: 'http://localhost:3001',
+  sdkPort: 9008,
+  sdkUsername: 'admin',
+  sdkPassword: '',
+  voiceChannel: -1,
   sipUri: '',
   sipUsername: '',
   sipPassword: '',
@@ -445,6 +457,65 @@ export default function IntercomConfigurationModal({
               </View>
 
               {/* Ruta Snapshot oculta - no se usa */}
+
+              <View style={styles.inputRow}>
+                <Text style={styles.inputLabel}>Puerto SDK:</Text>
+                <TextInput
+                  style={styles.textInput}
+                  value={String(config.sdkPort ?? 9008)}
+                  onChangeText={(text) => {
+                    const n = parseInt(text.replace(/\D/g, ''), 10);
+                    updateConfig('sdkPort', Number.isFinite(n) ? n : 9008);
+                  }}
+                  placeholder="9008"
+                  keyboardType="numeric"
+                />
+              </View>
+
+              <View style={styles.inputRow}>
+                <Text style={styles.inputLabel}>Usuario SDK:</Text>
+                <TextInput
+                  style={styles.textInput}
+                  value={config.sdkUsername || ''}
+                  onChangeText={(text) => updateConfig('sdkUsername', text)}
+                  placeholder="admin (vacío = ONVIF)"
+                  autoCapitalize="none"
+                />
+              </View>
+
+              <View style={styles.inputRow}>
+                <Text style={styles.inputLabel}>Contraseña SDK:</Text>
+                <TextInput
+                  style={styles.textInput}
+                  value={config.sdkPassword || ''}
+                  onChangeText={(text) => updateConfig('sdkPassword', text)}
+                  placeholder="vacío = ONVIF"
+                  secureTextEntry
+                  autoCapitalize="none"
+                />
+              </View>
+
+              <View style={styles.inputRow}>
+                <Text style={styles.inputLabel}>Canal voz SDK:</Text>
+                <TextInput
+                  style={styles.textInput}
+                  value={String(config.voiceChannel ?? -1)}
+                  onChangeText={(text) => {
+                    const t = text.trim();
+                    if (t === '' || t === '-') {
+                      updateConfig('voiceChannel', -1);
+                      return;
+                    }
+                    if (!/^-?\d+$/.test(t)) return;
+                    const n = parseInt(t, 10);
+                    if (Number.isFinite(n)) {
+                      updateConfig('voiceChannel', n);
+                    }
+                  }}
+                  placeholder="-1 (IPC)"
+                  keyboardType="numbers-and-punctuation"
+                />
+              </View>
 
               {Platform.OS === 'web' && (
                 <View style={styles.inputRow}>

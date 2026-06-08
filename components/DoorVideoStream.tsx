@@ -33,6 +33,8 @@ interface DoorVideoStreamProps {
   intercomConfig: IntercomConfig;
   doorName: string;
   voiceOutboundOnly?: boolean;
+  /** Pausa RTSP mientras el intercom SDK usa la cámara (evita timeout código 20). */
+  suspendStream?: boolean;
   isExpanded?: boolean;
   onExpandedChange?: (expanded: boolean) => void;
   /** Alto del área de vídeo en pantalla completa (px). */
@@ -94,6 +96,7 @@ if (Platform.OS === 'android') {
 export default function DoorVideoStream({
   intercomConfig,
   doorName,
+  suspendStream = false,
   isExpanded = false,
   onExpandedChange,
   expandedVideoHeight,
@@ -256,6 +259,12 @@ export default function DoorVideoStream({
     setError(null);
   };
 
+  useEffect(() => {
+    if (suspendStream && streamActive) {
+      stopAndroidRtsp();
+    }
+  }, [suspendStream, streamActive]);
+
   const enterExpanded = () => {
     if (!isConnected || !streamActive) return;
     onExpandedChange?.(true);
@@ -401,9 +410,10 @@ export default function DoorVideoStream({
                 }}
                 style={nativeVideoStyle}
                 resizeMode="contain"
-                muted={!ambientAudioOn}
-                volume={ambientAudioOn ? 1.0 : 0}
-                selectedAudioTrack={androidAudioTrack}
+                paused={suspendStream}
+                muted={suspendStream || !ambientAudioOn}
+                volume={suspendStream || !ambientAudioOn ? 0 : 1.0}
+                selectedAudioTrack={suspendStream ? { type: 'disabled' as const } : androidAudioTrack}
                 ignoreSilentSwitch="ignore"
                 playInBackground={false}
                 controls={false}

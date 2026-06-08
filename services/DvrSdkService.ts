@@ -24,6 +24,7 @@ export interface DvrDeviceInfo {
   deviceName: string;
   firmwareVersion: string;
   deviceProduct: string;
+  talkAudio?: number;
 }
 
 export interface DvrLiveParams {
@@ -232,7 +233,7 @@ class DvrSdkService {
     if (!this.isAvailable()) {
       throw new Error('DvrSdk no está disponible en esta plataforma');
     }
-    const channel = params.channel ?? 0;
+    const channel = params.channel ?? -1;
     return await DvrSdk.startVoiceIntercom(channel);
   }
 

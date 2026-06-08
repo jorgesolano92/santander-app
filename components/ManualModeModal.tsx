@@ -7,6 +7,8 @@ import {
   ActivityIndicator,
   BackHandler,
   Dimensions,
+  Platform,
+  Alert,
 } from 'react-native';
 import { X, MessageCircle, DoorOpen, PhoneCall, PhoneOff, Mic, MicOff, Volume2, Camera, Minimize2 } from 'lucide-react-native';
 import { ScrollView } from 'react-native';
@@ -15,6 +17,8 @@ import { useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useDoorControl } from '@/hooks/useDoorControl';
 import DoorVideoStream from './DoorVideoStream';
+import { testDvrSdkLogin } from '@/services/testDvrSdkLogin';
+import { startSdkIntercom, stopSdkIntercom } from '@/services/dvrSdkIntercom';
 import { IntercomConfig } from './IntercomConfigurationModal';
 
 interface DoorConfig {
@@ -70,6 +74,9 @@ export default function ManualModeModal({
   const [sendingPulse, setSendingPulse] = useState<Set<string>>(new Set()); // Track puertas con pulso en proceso
   const [manualOutputState, setManualOutputState] = useState<Record<string, boolean>>({});
   const [expandedVideoDoorId, setExpandedVideoDoorId] = useState<string | null>(null);
+  const [sdkTestingDoorId, setSdkTestingDoorId] = useState<string | null>(null);
+  const [sdkIntercomDoorId, setSdkIntercomDoorId] = useState<string | null>(null);
+  const [sdkIntercomLoading, setSdkIntercomLoading] = useState<string | null>(null);
   
   // Filter enabled doors for styling calculations
   const enabledDoors = currentIntercomConfigs.filter(door => door.enabled);
@@ -144,6 +151,13 @@ export default function ManualModeModal({
                     typeof door.intercom.doorControlPulseTime === 'number'
                       ? door.intercom.doorControlPulseTime
                       : 1.0,
+                  sdkPort:
+                    door.intercom.sdkPort === 6036 || door.intercom.sdkPort == null
+                      ? 9008
+                      : door.intercom.sdkPort,
+                  sdkUsername: door.intercom.sdkUsername ?? 'admin',
+                  sdkPassword: door.intercom.sdkPassword ?? '',
+                  voiceChannel: door.intercom.voiceChannel ?? -1,
                 }
               };
             }
@@ -301,6 +315,57 @@ export default function ManualModeModal({
       return manualOutputState[doorId] ? 'CERRAR PUERTA' : 'ABRIR PUERTA';
     }
     return 'ABRIR PUERTA';
+  };
+
+  const handleTestSdk = async (doorId: string, intercom: IntercomConfig) => {
+    if (Platform.OS !== 'android') {
+      Alert.alert('SDK', 'La prueba SDK solo está disponible en Android.');
+      return;
+    }
+    setSdkTestingDoorId(doorId);
+    try {
+      await testDvrSdkLogin(intercom);
+    } finally {
+      setSdkTestingDoorId(null);
+    }
+  };
+
+  useEffect(() => {
+    if (!visible && sdkIntercomDoorId) {
+      void stopSdkIntercom().finally(() => setSdkIntercomDoorId(null));
+    }
+  }, [visible, sdkIntercomDoorId]);
+
+  const handleToggleSdkIntercom = async (doorId: string, intercom: IntercomConfig) => {
+    if (Platform.OS !== 'android') {
+      Alert.alert('Intercom SDK', 'Solo disponible en Android.');
+      return;
+    }
+    if (sipCallState?.isActive) {
+      Alert.alert('Intercom SDK', 'Hay una llamada SIP activa. Finalízala antes.');
+      return;
+    }
+
+    if (sdkIntercomDoorId === doorId) {
+      setSdkIntercomLoading(doorId);
+      try {
+        await stopSdkIntercom();
+        setSdkIntercomDoorId(null);
+      } finally {
+        setSdkIntercomLoading(null);
+      }
+      return;
+    }
+
+    setSdkIntercomLoading(doorId);
+    try {
+      const ok = await startSdkIntercom(doorId, intercom);
+      if (ok) {
+        setSdkIntercomDoorId(doorId);
+      }
+    } finally {
+      setSdkIntercomLoading(null);
+    }
   };
 
   const renderDoorControlButton = (doorId: string, doorName: string, floating = false) => (
@@ -600,6 +665,27 @@ export default function ManualModeModal({
       gap: isSmallTablet ? 8 : isLargeTablet ? 12 : 10,
       width: '100%',
     },
+    sdkTestButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: '#6F42C1',
+      paddingVertical: isSmallTablet ? 11 : 13,
+      paddingHorizontal: 16,
+      borderRadius: 8,
+      gap: 8,
+      width: '100%',
+      marginBottom: isSmallTablet ? 8 : 10,
+    },
+    sdkTestButtonText: {
+      fontSize: isSmallTablet ? 12 : 14,
+      fontWeight: '700',
+      color: '#FFFFFF',
+      letterSpacing: 0.5,
+    },
+    sdkIntercomButtonActive: {
+      backgroundColor: '#DC3545',
+    },
     doorControlButton: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -854,6 +940,9 @@ export default function ManualModeModal({
                         <DoorVideoStream
                           intercomConfig={door.intercom}
                           doorName={door.name}
+                          suspendStream={
+                            sdkIntercomDoorId === doorId || sdkIntercomLoading === doorId
+                          }
                           isExpanded={isDoorExpanded}
                           expandedVideoHeight={expandedVideoHeight}
                           onExpandedChange={(expanded) =>
@@ -886,6 +975,55 @@ export default function ManualModeModal({
                       </View>
                     )}
                     
+                    {!isDoorExpanded && door.intercom && Platform.OS === 'android' ? (
+                      <>
+                        <TouchableOpacity
+                          style={styles.sdkTestButton}
+                          onPress={() => handleTestSdk(doorId, door.intercom)}
+                          disabled={
+                            sdkTestingDoorId === doorId ||
+                            sdkIntercomDoorId === doorId ||
+                            sdkIntercomLoading === doorId
+                          }
+                        >
+                          {sdkTestingDoorId === doorId ? (
+                            <ActivityIndicator color="#FFFFFF" />
+                          ) : (
+                            <Text style={styles.sdkTestButtonText}>
+                              PROBAR SDK ({door.intercom.sdkPort ?? 9008})
+                            </Text>
+                          )}
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={[
+                            styles.sdkTestButton,
+                            sdkIntercomDoorId === doorId && styles.sdkIntercomButtonActive,
+                          ]}
+                          onPress={() => handleToggleSdkIntercom(doorId, door.intercom)}
+                          disabled={
+                            sdkIntercomLoading === doorId ||
+                            sdkTestingDoorId === doorId ||
+                            (sdkIntercomDoorId !== null && sdkIntercomDoorId !== doorId)
+                          }
+                        >
+                          {sdkIntercomLoading === doorId ? (
+                            <ActivityIndicator color="#FFFFFF" />
+                          ) : (
+                            <>
+                              {sdkIntercomDoorId === doorId ? (
+                                <MicOff size={16} color="#FFFFFF" />
+                              ) : (
+                                <Mic size={16} color="#FFFFFF" />
+                              )}
+                              <Text style={styles.sdkTestButtonText}>
+                                {sdkIntercomDoorId === doorId ? 'DETENER INTERCOM' : 'INTERCOM SDK'}
+                              </Text>
+                            </>
+                          )}
+                        </TouchableOpacity>
+                      </>
+                    ) : null}
+
                     {!isDoorExpanded ? (
                       <View style={styles.doorControlButtons}>
                         {renderDoorControlButton(doorId, door.name)}

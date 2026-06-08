@@ -75,6 +75,13 @@ export default function NewConfigurationModal({
                     typeof door.intercom.doorControlPulseTime === 'number'
                       ? door.intercom.doorControlPulseTime
                       : 1.0,
+                  sdkPort:
+                    door.intercom.sdkPort === 6036 || door.intercom.sdkPort == null
+                      ? 9008
+                      : door.intercom.sdkPort,
+                  sdkUsername: door.intercom.sdkUsername ?? 'admin',
+                  sdkPassword: door.intercom.sdkPassword ?? '',
+                  voiceChannel: door.intercom.voiceChannel ?? -1,
                 }
               };
             }

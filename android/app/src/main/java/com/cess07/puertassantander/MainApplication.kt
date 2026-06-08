@@ -24,7 +24,6 @@ class MainApplication : Application(), ReactApplication {
       object : DefaultReactNativeHost(this) {
         override fun getPackages(): List<ReactPackage> =
             PackageList(this).packages.apply {
-              // Agregar el package del SDK DVR
               add(DvrSdkPackage())
             }
 

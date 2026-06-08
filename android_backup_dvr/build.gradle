@@ -22,12 +22,3 @@ allprojects {
 
 apply plugin: "expo-root-project"
 apply plugin: "com.facebook.react.rootproject"
-
-// Evita lintVital en dependencias (react-native-svg, react-native-video, etc.) que agotan Metaspace.
-gradle.taskGraph.whenReady { graph ->
-    graph.allTasks.each { task ->
-        if (task.name.contains("lintVital")) {
-            task.enabled = false
-        }
-    }
-}

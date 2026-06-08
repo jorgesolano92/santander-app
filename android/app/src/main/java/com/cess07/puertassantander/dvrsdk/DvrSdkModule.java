@@ -190,11 +190,15 @@ public class DvrSdkModule extends ReactContextBaseJavaModule {
         }
     }
 
+    private static boolean isValidNativeHandle(long handle) {
+        return handle != 0 && handle != -1;
+    }
+
     @ReactMethod
     public void startLivePreview(int channel, int streamType, Promise promise) {
         try {
             long handle = sdkManager.startLivePreview(channel, streamType);
-            if (handle > 0) {
+            if (isValidNativeHandle(handle)) {
                 promise.resolve((double) handle);
             } else {
                 promise.reject("LIVEPLAY_FAILED", "No se pudo iniciar LivePlay");
@@ -219,10 +223,11 @@ public class DvrSdkModule extends ReactContextBaseJavaModule {
     public void startVoiceIntercom(int channel, Promise promise) {
         try {
             long handle = sdkManager.startVoiceIntercom(channel);
-            if (handle > 0) {
+            if (isValidNativeHandle(handle)) {
                 promise.resolve((double) handle);
             } else {
-                promise.reject("VOICE_START_FAILED", "No se pudo iniciar intercom de voz");
+                int err = sdkManager.getLastError();
+                promise.reject("VOICE_START_FAILED", "No se pudo iniciar intercom de voz, err=" + err);
             }
         } catch (Exception e) {
             Log.e(TAG, "Error en startVoiceIntercom", e);
