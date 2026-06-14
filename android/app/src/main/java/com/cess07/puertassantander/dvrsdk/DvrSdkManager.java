@@ -37,7 +37,7 @@ public class DvrSdkManager {
     /** Handle dedicado a VoiceComSendData cuando RX y TX usan sesiones distintas. */
     private long voiceSendHandle = -1;
     private volatile boolean voiceSendSymmetricG711 = false;
-    private volatile boolean txAttachAttempted = false;
+    private volatile boolean voiceRxSeen = false;
     /** Invalida callbacks/runnables de voz pendientes en mainHandler. */
     private volatile int voiceSessionGeneration = 0;
     private volatile long voiceSessionReadyAt = 0;
@@ -58,8 +58,10 @@ public class DvrSdkManager {
     private int pcmChunkBytes = 1280;
     private int talkSampleRate = 16000;
     private String voiceModeLabel = "";
-    /** VoiceComSendData solo es válido con handle de StartVoiceComMR, no StartVoiceCom. */
+    /** VoiceComSendData: doc oficial MR; test_audio.py usa StartVoiceCom(FALSE) en canal -1. */
     private volatile boolean voiceSendEnabled = false;
+    /** Si true, VoiceComSendData usa voiceHandle (sesión MR única); si no, solo voiceSendHandle. */
+    private volatile boolean voiceTxOnMainHandle = false;
     /** Invalida callbacks onTalkData tardíos tras StopVoiceCom. */
     private volatile int voicePlaybackGeneration = 0;
     private final Object nativeLock = new Object();
@@ -72,6 +74,7 @@ public class DvrSdkManager {
                 return;
             }
             voiceBytesReceived += frameLen;
+            voiceRxSeen = true;
             if (voiceBytesReceived <= frameLen || voiceBytesReceived % 8000 < frameLen) {
                 Log.i(TAG, "onTalkData flag=" + byAudioFlag + " bytes=" + frameLen
                         + " total=" + voiceBytesReceived + " needNoEncode=" + voiceNeedNoEncodeData);
@@ -87,6 +90,8 @@ public class DvrSdkManager {
     private static final int PCM_CHUNK_BYTES_LEGACY = 3200;
     /** PCM 8 kHz mono 16-bit, 40 ms (compatible encoder G711 candidato 6). */
     private static final int PCM_CHUNK_BYTES_8K = 640;
+    /** Igual que test_audio.py TEST_SECONDS=10. */
+    private static final int VOICE_RX_WAIT_MS = 10000;
     private static final int TALK_SAMPLE_RATE_G711 = 8000;
     private static final int TALK_SAMPLE_RATE_PCM = 16000;
     private static final int MIC_CHANNEL_CONFIG = AudioFormat.CHANNEL_IN_MONO;
@@ -157,6 +162,7 @@ public class DvrSdkManager {
             if (resultUserId > 0) {
                 userId = resultUserId;
                 serverAddress = server;
+                logDeviceTalkCapability();
                 Log.d(TAG, "Login exitoso, userId: " + userId);
                 return userId;
             } else {
@@ -217,6 +223,23 @@ public class DvrSdkManager {
         } catch (Exception e) {
             Log.e(TAG, "Excepción al obtener información del dispositivo", e);
             return null;
+        }
+    }
+
+    public boolean isVoiceSendEnabled() {
+        return voiceSendEnabled;
+    }
+
+    private void logDeviceTalkCapability() {
+        try {
+            NET_SDK_DEVICEINFO info = getDeviceInfo();
+            if (info != null) {
+                Log.i(TAG, "Dispositivo talkAudio=" + (info.talkAudio & 0xFF)
+                        + " audioInputNum=" + (info.audioInputNum & 0xFF)
+                        + " (talkAudio=0 → la cámara puede ser solo escucha)");
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "No se pudo leer talkAudio del dispositivo", e);
         }
     }
 
@@ -361,34 +384,26 @@ public class DvrSdkManager {
             lastVoiceChannel = channel;
             nvrSdk.SetNativelog(true);
 
-            int[] channelsToTry = channel == -1
-                    ? new int[] { -1, 0 }
-                    : new int[] { channel, -1, 0 };
+            int[] channelsToTry = buildVoiceChannelsToTry(channel);
 
+            Log.i(TAG, "Diagnóstico talkback: canales a probar="
+                    + java.util.Arrays.toString(channelsToTry));
             for (int ch : channelsToTry) {
                 if (sessionGen != voiceSessionGeneration) {
                     Log.w(TAG, "startVoiceIntercom cancelado (sesión superseded)");
                     return -1;
                 }
-                if (tryStartVoiceMrPcmFalse(ch)
-                        || tryStartVoiceDuplexMr(ch)
-                        || tryStartVoiceMrG711Symmetric(ch)
-                        || tryStartVoiceComWithSend(ch)
-                        || tryStartVoiceMrPcmFalse16k(ch)
-                        || tryStartVoiceMrRaw(ch)
-                        || tryStartVoiceMrRawSmall(ch)
-                        || tryStartVoiceComReceiveOnly(ch)) {
+                Log.i(TAG, "Diagnóstico talkback: === canal=" + ch + " ===");
+                if (tryActivateVoiceMode(ch)) {
                     Log.i(TAG, "Intercom activo: " + voiceModeLabel + " canal=" + ch
                             + " handle=" + voiceHandle
+                            + " tx=" + voiceSendEnabled
+                            + " rx=" + voiceRxSeen
                             + (isValidNativeHandle(voiceSendHandle)
                                     ? " sendHandle=" + voiceSendHandle : ""));
                     return voiceHandle;
                 }
-                voiceSessionGeneration++;
-                stopVoiceIntercomInternal();
-                cooldownAfterVoiceStop();
-                voiceBytesSent = 0;
-                voiceSendFailures = 0;
+                cleanupVoiceBetweenChannelAttempts();
             }
 
             Log.e(TAG, "Ningún modo de voz funcionó, err=" + nvrSdk.GetLastError());
@@ -399,6 +414,461 @@ public class DvrSdkManager {
             voiceHandle = -1;
             return -1;
         }
+    }
+
+    /** test_audio.py usa -1; en Android MR(false) RX funcionó en canal 1. */
+    private static int[] buildVoiceChannelsToTry(int configured) {
+        java.util.LinkedHashSet<Integer> order = new java.util.LinkedHashSet<>();
+        order.add(-1);
+        order.add(1);
+        if (configured != -1 && configured != 1) {
+            order.add(configured);
+        }
+        int[] out = new int[order.size()];
+        int i = 0;
+        for (int ch : order) {
+            out[i++] = ch;
+        }
+        return out;
+    }
+
+    private void ensureVoiceCallbackRegistered() {
+        if (nvrSdk != null) {
+            nvrSdk.SetCallback(sdkCallback);
+        }
+    }
+
+    /** Limpia voz entre canales sin invalidar voiceSessionGeneration (evita "superseded"). */
+    private void cleanupVoiceBetweenChannelAttempts() throws InterruptedException {
+        voiceSendEnabled = false;
+        voicePlaybackGeneration++;
+        stopMicStreamingInternal();
+        mainHandler.removeCallbacksAndMessages(null);
+        synchronized (talkAudioLock) {
+            releaseTalkAudioTrackInternal();
+        }
+        stopVoiceComBlocking(false);
+        releaseAudioEncoderInternal();
+        voiceHandle = -1;
+        voiceSendHandle = -1;
+        voiceBytesSent = 0;
+        voiceSendFailures = 0;
+        voiceBytesReceived = 0;
+        voiceRxSeen = false;
+        cooldownAfterVoiceStop();
+    }
+
+    /**
+     * Códec G711A 8 kHz ANTES de StartVoiceComMR (handshake). Si SetAudioInfo llega tarde,
+     * el firmware TD-E3110 descarta TX.
+     */
+    private boolean prepareTalkbackCodecBeforeSession() {
+        byte[] g711Wave = buildWaveFormatEx((short) 6, (short) 1, 8000, 8000, (short) 1, (short) 8);
+        byte[] g711Info = safeSetAudioInfo(nvrsdk.CODEC_AUDIO_G711a);
+        byte[] g711Fmt = safeSetAudioInfo(nvrsdk.AUDIO_FORMAT_G711);
+        boolean encoderOk = initAudioEncoderInternal(true);
+        applyEncoderTimingFromCandidate();
+        Log.i(TAG, "Talkback pre-session: G711A waveLen=" + g711Wave.length
+                + " SetAudioInfo(G711a)=" + (g711Info != null ? g711Info.length : 0)
+                + " SetAudioInfo(G711)=" + (g711Fmt != null ? g711Fmt.length : 0)
+                + " InitAudioEncoder=" + encoderOk);
+        voiceSendSymmetricG711 = true;
+        micSampleRate = MIC_SAMPLE_RATE_LEGACY;
+        pcmChunkBytes = PCM_CHUNK_BYTES_8K;
+        talkSampleRate = TALK_SAMPLE_RATE_G711;
+        return g711Info != null || g711Fmt != null || encoderOk;
+    }
+
+    /** SetAudioInfo / getAudioInfo tras abrir handle (algunos firmwares solo negocian aquí). */
+    private void prepareTalkbackCodecAfterSession(String label) {
+        byte[] g711a = safeSetAudioInfo(nvrsdk.CODEC_AUDIO_G711a);
+        byte[] g711 = safeSetAudioInfo(nvrsdk.AUDIO_FORMAT_G711);
+        byte[] pcm = safeSetAudioInfo(nvrsdk.CODEC_AUDIO_PCM);
+        byte[] fromHandle = fetchAudioInfoFromVoiceHandle();
+        Log.i(TAG, "Talkback post-session [" + label + "]: G711a="
+                + (g711a != null ? g711a.length : 0) + " G711="
+                + (g711 != null ? g711.length : 0) + " PCM="
+                + (pcm != null ? pcm.length : 0) + " getAudioInfo="
+                + (fromHandle != null ? fromHandle.length : 0));
+        if (fromHandle != null || g711a != null || g711 != null) {
+            initAudioEncoderInternal(true);
+            applyEncoderTimingFromCandidate();
+        }
+    }
+
+    private void logTalkbackPrerequisites() {
+        Log.i(TAG, "Talkback TVT: 1 sesión activa (cerrar SuperCam/NVMS); usuario con permiso "
+                + "Two-way Audio/Intercom; payload G711A 8kHz o PCM según modo MR");
+    }
+
+    /**
+     * Réplica test_audio.py (Windows OK en TD-E3110): StartVoiceCom(FALSE, canal=-1).
+     * Fallback Android TX: StartVoiceCom_MR(TRUE)+PCM 3200 B (voice_forward.cpp).
+     */
+    private boolean tryActivateVoiceMode(int channel) throws InterruptedException {
+        logTalkbackPrerequisites();
+        Log.i(TAG, "Flujo voz canal=" + channel + " (MR false RX → test_audio → MR true TX)");
+        if (tryStartVoiceMrFalseRx(channel)) {
+            return true;
+        }
+        voiceRxSeen = false;
+        if (tryStartVoiceComTestAudio(channel)) {
+            return true;
+        }
+        voiceRxSeen = false;
+        return tryStartVoiceComMrPcmTx(channel);
+    }
+
+    /**
+     * test_audio.py: StartVoiceCom(FALSE, -1). En Windows el callback va en la llamada;
+     * en Android JAR solo SetCallback global — si el handle abre, activamos TX con mic real.
+     */
+    private boolean tryStartVoiceComTestAudio(int channel) throws InterruptedException {
+        resetVoiceSendState();
+        voiceSendSymmetricG711 = false;
+        stopLivePreviewIfActive();
+        ensureVoiceCallbackRegistered();
+        if (!openStartVoiceComOnMain(channel, false)) {
+            return false;
+        }
+        configureVoiceSession("StartVoiceCom(false) test_audio", MIC_SAMPLE_RATE_LEGACY,
+                PCM_CHUNK_BYTES_LEGACY, MIC_SAMPLE_RATE_LEGACY, false);
+        voiceNeedNoEncodeData = false;
+        Log.i(TAG, "Sesión test_audio abierta handle=" + voiceHandle + " canal=" + channel);
+        applyPostVoiceComSetup();
+        markVoiceSessionReady();
+        waitForVoiceRx(VOICE_RX_WAIT_MS);
+        if (!voiceRxSeen) {
+            Log.w(TAG, "StartVoiceCom(false) sin onTalkData en Android; no es equivalente a Windows");
+            closeEvalVoiceSession();
+            return false;
+        }
+        voiceTxOnMainHandle = true;
+        voiceSendEnabled = runSendProbePcmSync();
+        Log.i(TAG, "test_audio activo rx=" + voiceRxSeen + " bytes=" + voiceBytesReceived
+                + " txProbe=" + voiceSendEnabled);
+        return true;
+    }
+
+    /** Android: onTalkData suele llegar con MR(false)+G711 (canal 1 confirmado en logs). */
+    private boolean tryStartVoiceMrFalseRx(int channel) throws InterruptedException {
+        resetVoiceSendState();
+        voiceSendSymmetricG711 = false;
+        stopLivePreviewIfActive();
+        ensureVoiceCallbackRegistered();
+        if (!openVoiceSessionOnMain(channel, false)) {
+            return false;
+        }
+        configureVoiceSession("StartVoiceComMR(false) RX Android", MIC_SAMPLE_RATE_LEGACY,
+                PCM_CHUNK_BYTES_8K, TALK_SAMPLE_RATE_G711, false);
+        voiceNeedNoEncodeData = true;
+        Log.i(TAG, "Sesión MR(false) RX abierta handle=" + voiceHandle + " canal=" + channel);
+        applyPostVoiceComSetup();
+        markVoiceSessionReady();
+        waitForVoiceRx(VOICE_RX_WAIT_MS);
+        if (voiceRxSeen) {
+            voiceTxOnMainHandle = true;
+            voiceSendSymmetricG711 = false;
+            boolean txPcm = runSendProbePcmSync();
+            if (txPcm) {
+                voiceSendEnabled = true;
+                voiceModeLabel = "StartVoiceComMR(false) RX+PCM TX";
+                Log.i(TAG, "MR(false) RX+PCM TX canal=" + channel + " rx bytes="
+                        + voiceBytesReceived + " chunk=" + pcmChunkBytes);
+                return true;
+            }
+            Log.i(TAG, "MR(false) RX OK sin TX en mismo handle; probando MR(true) TX paralelo...");
+            if (openVoiceTxSessionOnMain(channel)) {
+                voiceTxOnMainHandle = false;
+                markVoiceSessionReady();
+                txPcm = runSendProbePcmSync();
+                voiceSendEnabled = txPcm;
+                voiceModeLabel = "MR(false)RX + MR(true)TX PCM";
+                Log.i(TAG, "Duplex paralelo canal=" + channel + " txProbe=" + txPcm
+                        + " rxHandle=" + voiceHandle + " txHandle=" + voiceSendHandle);
+                if (!txPcm) {
+                    Log.w(TAG, "MR(true) TX abierto pero probe PCM falló; sin micrófono");
+                }
+                return true;
+            }
+            voiceSendEnabled = false;
+            voiceTxOnMainHandle = false;
+            voiceModeLabel = "StartVoiceComMR(false) RX-only (TX vía puente)";
+            Log.w(TAG, "MR(false) RX-only canal=" + channel + " bytes=" + voiceBytesReceived
+                    + " (TX nativo imposible: 1 sesión, sin VoiceComSendData en MR false)");
+            return true;
+        }
+        Log.w(TAG, "MR(false) sin onTalkData en " + VOICE_RX_WAIT_MS + "ms canal=" + channel);
+        closeEvalVoiceSession();
+        return false;
+    }
+
+    private boolean tryStartVoiceComMrPcmTx(int channel) throws InterruptedException {
+        resetVoiceSendState();
+        voiceSendSymmetricG711 = false;
+        stopLivePreviewIfActive();
+        ensureVoiceCallbackRegistered();
+        if (!openVoiceSessionOnMain(channel, true)) {
+            return false;
+        }
+        configureVoiceSession("StartVoiceComMR(true)+PCM8k/3200", MIC_SAMPLE_RATE_LEGACY,
+                PCM_CHUNK_BYTES_LEGACY, MIC_SAMPLE_RATE_LEGACY, true);
+        voiceNeedNoEncodeData = true;
+        Log.i(TAG, "Sesión MR+PCM abierta handle=" + voiceHandle + " canal=" + channel);
+        applyPostVoiceComSetup();
+        markVoiceSessionReady();
+        waitForVoiceRx(VOICE_RX_WAIT_MS);
+        voiceTxOnMainHandle = true;
+        boolean txPcm = runSendProbePcmSync();
+        voiceSendEnabled = txPcm;
+        Log.i(TAG, "MR(true) activo canal=" + channel + " rx=" + voiceRxSeen + " txProbe=" + txPcm);
+        return txPcm || voiceRxSeen;
+    }
+
+    private void stopLivePreviewIfActive() {
+        if (isValidNativeHandle(liveHandle)) {
+            Log.i(TAG, "LivePlay detenido antes de voz (test_audio no usa preview)");
+            stopLivePreview();
+        }
+    }
+
+    /** GetAudioInfo + volumen, como test_audio.py tras StartVoiceCom. */
+    private void applyPostVoiceComSetup() {
+        byte[] info = fetchAudioInfoFromVoiceHandle();
+        Log.i(TAG, "GetAudioInfo post-StartVoiceCom len=" + (info != null ? info.length : 0));
+        trySetVoiceComClientVolume(1);
+    }
+
+    private void trySetVoiceComClientVolume(int volume) {
+        if (!isValidNativeHandle(voiceHandle) || nvrSdk == null) {
+            return;
+        }
+        try {
+            Method m = nvrSdk.getClass().getMethod("SetVoiceComClientVolume", long.class, int.class);
+            Object ok = m.invoke(nvrSdk, voiceHandle, volume);
+            Log.i(TAG, "SetVoiceComClientVolume(" + volume + ")=" + ok);
+            return;
+        } catch (Exception ignored) {
+            // instancia sin método
+        }
+        try {
+            Method m = nvrsdk.class.getMethod("SetVoiceComClientVolume", long.class, int.class);
+            Object ok = m.invoke(null, voiceHandle, volume);
+            Log.i(TAG, "SetVoiceComClientVolume static(" + volume + ")=" + ok);
+        } catch (Exception e) {
+            Log.w(TAG, "SetVoiceComClientVolume no disponible en JAR");
+        }
+    }
+
+    private boolean evaluateAndKeepVoiceMode(int channel, String label, int micRate, int chunkBytes,
+            int talkRate, boolean mrNeedNoEncode, boolean useStartVoiceCom,
+            boolean startVoiceComNeedNoEnc, boolean g711Symmetric, boolean acceptRxOnly)
+            throws InterruptedException {
+        resetVoiceSendState();
+        voiceSendSymmetricG711 = g711Symmetric;
+        boolean liveOk = ensureLivePlayForVoice(channel);
+        Log.i(TAG, "Pre-voz LivePlay voz canal=" + channel + " ok=" + liveOk);
+        boolean opened;
+        if (useStartVoiceCom) {
+            opened = openStartVoiceComOnMain(channel, startVoiceComNeedNoEnc);
+        } else {
+            opened = openVoiceSessionOnMain(channel, mrNeedNoEncode);
+        }
+        if (!opened) {
+            Log.w(TAG, "No abrió " + label + " canal=" + channel + " err=" + nvrSdk.GetLastError());
+            return false;
+        }
+        configureVoiceSession(label, micRate, chunkBytes, talkRate, mrNeedNoEncode);
+        Log.i(TAG, "Sesión abierta " + label + " handle=" + voiceHandle + " canal=" + channel);
+        markVoiceSessionReady();
+        waitForVoiceRx(VOICE_RX_WAIT_MS);
+        boolean rx = voiceRxSeen;
+        prepareTalkbackCodecAfterSession(label);
+        boolean tx = runSendProbePcmSync();
+        int score = (rx ? 2 : 0) | (tx ? 4 : 0);
+        Log.i(TAG, "Eval " + label + " canal=" + channel + " rx=" + rx + " tx=" + tx
+                + " score=" + score + " err=" + nvrSdk.GetLastError());
+        if (rx && !tx) {
+            Log.w(TAG, "DIAG canal=" + channel + " " + label + ": RX OK (onTalkData) pero TX rechazado");
+        } else if (!rx && !tx) {
+            Log.w(TAG, "DIAG canal=" + channel + " " + label + ": sin RX ni TX en "
+                    + VOICE_RX_WAIT_MS + "ms");
+        }
+
+        if (tx) {
+            voiceSendEnabled = true;
+            if (!rx) {
+                Log.w(TAG, "TX OK sin onTalkData en " + label
+                        + "; RX puede llegar después — habla y comprueba altavoz cámara");
+            }
+            return true;
+        }
+        if (acceptRxOnly && rx) {
+            voiceSendEnabled = false;
+            Log.w(TAG, "Modo RX-only activo: " + label + " canal=" + channel
+                    + " (escucha OK; TX pendiente de demo fabricante)");
+            return true;
+        }
+        Log.e(TAG, "TX rechazado " + label + " canal=" + channel
+                + " rx=" + rx + " err=" + nvrSdk.GetLastError());
+        closeEvalVoiceSession();
+        return false;
+    }
+
+    private boolean ensureLivePlayForVoice(int channel) {
+        if (channel == 0 && isValidNativeHandle(liveHandle)) {
+            Log.i(TAG, "LivePlay detenido antes de voz en canal 0 (evita conflicto SDK)");
+            stopLivePreview();
+        }
+        if (channel != 0 && isValidNativeHandle(liveHandle)) {
+            Log.d(TAG, "LivePlay activo en preview canal=0 (voz canal=" + channel + ")");
+            return true;
+        }
+        if (isValidNativeHandle(liveHandle)) {
+            return true;
+        }
+        Log.i(TAG, "LivePlay pre-voz: preview canal=0 (voz canal=" + channel + ")");
+        long handle = startLivePreview(0, 0);
+        if (isValidNativeHandle(handle)) {
+            Log.i(TAG, "LivePlay auxiliar OK canal=0 handle=" + handle);
+            return true;
+        }
+        Log.w(TAG, "LivePlay falló canal=0 err=" + nvrSdk.GetLastError());
+        return false;
+    }
+
+    private void closeEvalVoiceSession() throws InterruptedException {
+        voiceSendEnabled = false;
+        voicePlaybackGeneration++;
+        mainHandler.removeCallbacksAndMessages(null);
+        synchronized (talkAudioLock) {
+            releaseTalkAudioTrackInternal();
+        }
+        stopVoiceComBlocking(false);
+        cooldownAfterVoiceStop();
+    }
+
+    /** StopVoiceCom puede bloquear segundos; no usar el main looper del UI. */
+    private boolean stopVoiceComBlocking(boolean logResult) throws InterruptedException {
+        if (!isValidNativeHandle(voiceHandle) && !isValidNativeHandle(voiceSendHandle)) {
+            return true;
+        }
+        final boolean[] result = { false };
+        final CountDownLatch latch = new CountDownLatch(1);
+        new Thread(() -> {
+            try {
+                result[0] = stopVoiceComInline(logResult);
+            } finally {
+                latch.countDown();
+            }
+        }, "DvrSdkVoiceStop").start();
+        if (!latch.await(8, TimeUnit.SECONDS)) {
+            Log.e(TAG, "Timeout StopVoiceCom");
+            voiceHandle = -1;
+            voiceSendHandle = -1;
+            return false;
+        }
+        return result[0];
+    }
+
+    private void waitForVoiceRx(int timeoutMs) throws InterruptedException {
+        long deadline = System.currentTimeMillis() + timeoutMs;
+        while (System.currentTimeMillis() < deadline) {
+            if (voiceRxSeen) {
+                return;
+            }
+            Thread.sleep(50);
+        }
+    }
+
+    /** Probe G711 320 B — mismo formato que onTalkData entrante (MR false, flag=1). */
+    private boolean runSendProbeG711Sync() throws InterruptedException {
+        byte[] pcm640 = new byte[PCM_CHUNK_BYTES_8K];
+        byte[] g711 = encodeG711ALaw(pcm640);
+        if (trySendProbePayload(g711, "g711/320")) {
+            voiceSendSymmetricG711 = true;
+            pcmChunkBytes = PCM_CHUNK_BYTES_8K;
+            micSampleRate = MIC_SAMPLE_RATE_LEGACY;
+            talkSampleRate = TALK_SAMPLE_RATE_G711;
+            return true;
+        }
+        return false;
+    }
+
+    /** Doc SDK: VoiceComSendData = PCM sin codificar (voice_forward.cpp usa 3200 B @ 8 kHz). */
+    private boolean runSendProbePcmSync() throws InterruptedException {
+        byte[] pcm3200 = new byte[PCM_CHUNK_BYTES_LEGACY];
+        if (trySendProbePayload(pcm3200, "pcm/3200")) {
+            voiceSendSymmetricG711 = false;
+            pcmChunkBytes = PCM_CHUNK_BYTES_LEGACY;
+            micSampleRate = MIC_SAMPLE_RATE_LEGACY;
+            talkSampleRate = MIC_SAMPLE_RATE_LEGACY;
+            return true;
+        }
+        byte[] pcm640 = new byte[PCM_CHUNK_BYTES_8K];
+        if (trySendProbePayload(pcm640, "pcm/640")) {
+            voiceSendSymmetricG711 = false;
+            pcmChunkBytes = PCM_CHUNK_BYTES_8K;
+            micSampleRate = MIC_SAMPLE_RATE_LEGACY;
+            talkSampleRate = MIC_SAMPLE_RATE_LEGACY;
+            return true;
+        }
+        return false;
+    }
+
+    private boolean trySendProbePayload(byte[] payload, String tag) throws InterruptedException {
+        if (payload == null || payload.length == 0) {
+            return false;
+        }
+        final int probeGen = voiceSessionGeneration;
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            boolean ok = sendRawVoiceProbeOnMain(payload);
+            if (ok) {
+                Log.i(TAG, "Probe TX OK " + tag + " len=" + payload.length);
+            }
+            return ok;
+        }
+        final CountDownLatch latch = new CountDownLatch(1);
+        final boolean[] ok = { false };
+        mainHandler.post(() -> {
+            if (probeGen != voiceSessionGeneration) {
+                latch.countDown();
+                return;
+            }
+            ok[0] = sendRawVoiceProbeOnMain(payload);
+            if (ok[0]) {
+                Log.i(TAG, "Probe TX OK " + tag + " len=" + payload.length);
+            }
+            latch.countDown();
+        });
+        if (!latch.await(2, TimeUnit.SECONDS)) {
+            Log.w(TAG, "Timeout probe TX " + tag);
+            return false;
+        }
+        return ok[0];
+    }
+
+    private boolean sendRawVoiceProbeOnMain(byte[] payload) {
+        if (!isVoiceSendReady() || nvrSdk == null) {
+            return false;
+        }
+        long sendHandle = getActiveSendHandle();
+        if (!isValidNativeHandle(sendHandle) || payload == null || payload.length == 0) {
+            return false;
+        }
+        try {
+            if (nvrSdk.VoiceComSendData(sendHandle, payload, payload.length)) {
+                return true;
+            }
+        } catch (Throwable t) {
+            Log.w(TAG, "Probe VoiceComSendData Java excepción", t);
+        }
+        try {
+            return DvrSdkAudioBridge.voiceComSendData(sendHandle, payload);
+        } catch (Throwable t) {
+            Log.w(TAG, "Probe VoiceComSendData JNI excepción", t);
+        }
+        return false;
     }
 
     /**
@@ -441,7 +911,7 @@ public class DvrSdkManager {
     private void resetVoiceSendState() {
         voiceSendHandle = -1;
         voiceSendSymmetricG711 = false;
-        txAttachAttempted = false;
+        voiceTxOnMainHandle = false;
     }
 
     /**
@@ -555,19 +1025,9 @@ public class DvrSdkManager {
         return System.currentTimeMillis() >= voiceSessionReadyAt;
     }
 
-    /** Probe informativo (no bloquea la selección de modo). */
+    /** Probe informativo tras activar modo (la evaluación síncrona ya probó TX). */
     private void logOptionalSendProbe() {
-        mainHandler.postDelayed(() -> {
-            if (!isValidNativeHandle(voiceHandle)) {
-                return;
-            }
-            byte[] silence = new byte[pcmChunkBytes];
-            boolean ok = sendVoicePayloadOnMain(silence, true);
-            if (!ok) {
-                Log.w(TAG, "Probe send opcional falló en modo " + voiceModeLabel
-                        + " (se intentará envío real con micrófono)");
-            }
-        }, 850);
+        // no-op
     }
 
     private void cooldownAfterVoiceStop() {
@@ -594,7 +1054,7 @@ public class DvrSdkManager {
             }
             latch.countDown();
         });
-        if (!latch.await(3, TimeUnit.SECONDS)) {
+        if (!latch.await(8, TimeUnit.SECONDS)) {
             Log.e(TAG, "Timeout esperando StartVoiceCom");
             voiceHandle = -1;
             return false;
@@ -662,27 +1122,18 @@ public class DvrSdkManager {
     }
 
     private long getActiveSendHandle() {
-        return isValidNativeHandle(voiceSendHandle) ? voiceSendHandle : voiceHandle;
+        if (isValidNativeHandle(voiceSendHandle)) {
+            return voiceSendHandle;
+        }
+        if (voiceTxOnMainHandle && isValidNativeHandle(voiceHandle)) {
+            return voiceHandle;
+        }
+        return -1;
     }
 
-    /** Si el envío falla, intenta abrir MR(true) TX sin cerrar MR(false) RX. */
+    /** @deprecated la cámara no admite MR(true) en paralelo con MR(false). */
     private void maybeAttachTxSession() {
-        if (txAttachAttempted || isValidNativeHandle(voiceSendHandle)) {
-            return;
-        }
-        if (voiceSendFailures != 3 && voiceSendFailures != 25) {
-            return;
-        }
-        txAttachAttempted = true;
-        final int ch = lastVoiceChannel;
-        mainHandler.post(() -> {
-            if (openVoiceTxSessionInline(ch)) {
-                Log.i(TAG, "TX MR(true) adjunto en caliente handle=" + voiceSendHandle
-                        + " (RX handle=" + voiceHandle + ")");
-            } else {
-                Log.w(TAG, "TX MR(true) adjunto en caliente falló err=" + nvrSdk.GetLastError());
-            }
-        });
+        // no-op: TD-E3110 rechaza segunda sesión StartVoiceComMR mientras MR(false) está activo
     }
     private boolean openVoiceSessionOnMain(int channel, boolean needNoEncode) throws InterruptedException {
         if (Looper.myLooper() == Looper.getMainLooper()) {
@@ -732,27 +1183,14 @@ public class DvrSdkManager {
     }
 
     private boolean stopVoiceComOnMain(boolean logResult) {
-        if (Looper.myLooper() == Looper.getMainLooper()) {
-            return stopVoiceComInline(logResult);
-        }
-        final CountDownLatch latch = new CountDownLatch(1);
-        final boolean[] result = { false };
-        mainHandler.post(() -> {
-            result[0] = stopVoiceComInline(logResult);
-            latch.countDown();
-        });
         try {
-            if (!latch.await(2, TimeUnit.SECONDS)) {
-                Log.e(TAG, "Timeout esperando StopVoiceCom");
-                voiceHandle = -1;
-                return false;
-            }
+            return stopVoiceComBlocking(logResult);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             voiceHandle = -1;
+            voiceSendHandle = -1;
             return false;
         }
-        return result[0];
     }
 
     private boolean stopVoiceComInline(boolean logResult) {
@@ -797,10 +1235,15 @@ public class DvrSdkManager {
         if (!voiceSendEnabled) {
             return false;
         }
+        final int sendGen = voiceSessionGeneration;
         if (Looper.myLooper() != Looper.getMainLooper()) {
             final CountDownLatch latch = new CountDownLatch(1);
             final boolean[] ok = { false };
             mainHandler.post(() -> {
+                if (sendGen != voiceSessionGeneration || !voiceSendEnabled) {
+                    latch.countDown();
+                    return;
+                }
                 ok[0] = sendVoicePayloadOnMain(pcmData, probe);
                 latch.countDown();
             });
@@ -811,15 +1254,19 @@ public class DvrSdkManager {
             }
             return ok[0];
         }
+        if (sendGen != voiceSessionGeneration) {
+            return false;
+        }
         return sendVoicePayloadOnMain(pcmData, probe);
     }
 
     /** VoiceComSendData debe ejecutarse en el hilo principal (igual que StartVoiceComMR). */
     private boolean sendVoicePayloadOnMain(byte[] pcmData, boolean probe) {
-        if (!isVoiceSendReady()) {
+        if (!voiceSendEnabled || !isVoiceSendReady()) {
             return false;
         }
-        if (nvrSdk == null || !isValidNativeHandle(voiceHandle) || pcmData == null
+        long sendHandle = getActiveSendHandle();
+        if (nvrSdk == null || !isValidNativeHandle(sendHandle) || pcmData == null
                 || pcmData.length == 0) {
             return false;
         }
@@ -851,13 +1298,18 @@ public class DvrSdkManager {
                 }
             } else if (!probe) {
                 voiceSendFailures++;
-                maybeAttachTxSession();
                 if (voiceSendFailures == 1 || voiceSendFailures % 50 == 0) {
                     Log.w(TAG, "VoiceComSendData falló x" + voiceSendFailures
                             + " payload=" + payload.length
                             + " modo=" + voiceModeLabel
-                            + " sendHandle=" + getActiveSendHandle()
+                            + " sendHandle=" + sendHandle
                             + " err=" + nvrSdk.GetLastError());
+                }
+                if (voiceSendFailures >= 8) {
+                    Log.e(TAG, "TX detenido: VoiceComSendData falló "
+                            + voiceSendFailures + " veces en handle inválido para envío");
+                    voiceSendEnabled = false;
+                    stopMicStreamingInternal();
                 }
             } else {
                 Log.w(TAG, "Probe VoiceComSendData falló modo=" + voiceModeLabel
@@ -871,42 +1323,34 @@ public class DvrSdkManager {
     }
 
     private boolean invokeVoiceComSendData(byte[] payload) {
+        if (!voiceSendEnabled) {
+            return false;
+        }
         long sendHandle = getActiveSendHandle();
         if (!isValidNativeHandle(sendHandle)) {
             return false;
         }
         try {
-            if (nvrSdk.VoiceComSendData(sendHandle, payload, payload.length)) {
-                return true;
-            }
+            return nvrSdk.VoiceComSendData(sendHandle, payload, payload.length);
         } catch (Throwable t) {
-            Log.w(TAG, "VoiceComSendData Java excepción", t);
+            Log.w(TAG, "VoiceComSendData excepción handle=" + sendHandle, t);
+            return false;
         }
-        try {
-            if (DvrSdkAudioBridge.voiceComSendData(sendHandle, payload)) {
-                if (voiceSendFailures > 0 || voiceBytesSent == 0) {
-                    Log.i(TAG, "VoiceComSendData OK vía JNI directo payload=" + payload.length
-                            + " handle=" + sendHandle);
-                }
-                return true;
-            }
-        } catch (Throwable t) {
-            Log.w(TAG, "VoiceComSendData JNI excepción", t);
-        }
-        return false;
     }
     public boolean stopVoiceIntercom() {
-        voiceSessionGeneration++;
         return stopVoiceIntercomInternal();
     }
 
     private boolean stopVoiceIntercomInternal() {
         voicePlaybackGeneration++;
         voiceSendEnabled = false;
-        resetVoiceSendState();
+        voiceSessionGeneration++;
         stopMicStreamingInternal();
+        mainHandler.removeCallbacksAndMessages(null);
+        resetVoiceSendState();
         releaseAudioEncoderInternal();
         voiceBytesReceived = 0;
+        voiceRxSeen = false;
         stopVoiceComOnMain(true);
         synchronized (talkAudioLock) {
             releaseTalkAudioTrackInternal();
@@ -924,7 +1368,7 @@ public class DvrSdkManager {
             return false;
         }
         if (!voiceSendEnabled) {
-            Log.i(TAG, "Modo RX-only: micrófono no se envía al SDK (usa StartVoiceCom sin MR)");
+            Log.i(TAG, "Modo RX-only: sesión de escucha activa (micrófono no requerido)");
             return true;
         }
         if (isMicStreaming) {
@@ -941,7 +1385,7 @@ public class DvrSdkManager {
 
             int recordBuffer = Math.max(minBufferSize * 2, pcmChunkBytes * 2);
             audioRecord = new AudioRecord(
-                MediaRecorder.AudioSource.VOICE_COMMUNICATION,
+                MediaRecorder.AudioSource.MIC,
                 micSampleRate,
                 MIC_CHANNEL_CONFIG,
                 MIC_AUDIO_FORMAT,
@@ -1270,8 +1714,13 @@ public class DvrSdkManager {
         }
     }
 
-    /** flag=1 en TD-E3110 suele ser G711 aunque la sesión sea MR(false). */
     private byte[] talkDataToPcm(byte[] data, int len, int byAudioFlag) {
+        if (!voiceNeedNoEncodeData) {
+            // test_audio.py bNeedCBNoEncData=FALSE → PCM decodificado en callback
+            byte[] pcm = new byte[len];
+            System.arraycopy(data, 0, pcm, 0, len);
+            return pcm;
+        }
         boolean encoded = byAudioFlag == nvrsdk.AUDIO_FORMAT_G711
                 || byAudioFlag == 1
                 || (len > 0 && len <= PCM_CHUNK_BYTES / 2 && len % 160 == 0);

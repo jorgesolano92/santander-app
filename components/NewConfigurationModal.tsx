@@ -1,6 +1,6 @@
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, Modal, ScrollView, Switch, Platform, Alert } from 'react-native';
 import { useState, useEffect, useRef } from 'react';
-import { ArrowLeft, Save, X, Wifi, RefreshCw, Settings } from 'lucide-react-native';
+import { Save, X, Wifi, RefreshCw, Settings } from 'lucide-react-native';
 import { useWindowDimensions } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { doorControlService, ApiResponse } from '@/services/DoorControlService';
@@ -82,6 +82,8 @@ export default function NewConfigurationModal({
                   sdkUsername: door.intercom.sdkUsername ?? 'admin',
                   sdkPassword: door.intercom.sdkPassword ?? '',
                   voiceChannel: door.intercom.voiceChannel ?? -1,
+                  intercomMode: door.intercom.intercomMode ?? 'bridge',
+                  bridgeUrl: door.intercom.bridgeUrl ?? 'ws://192.168.1.10:8765',
                 }
               };
             }
@@ -413,12 +415,20 @@ export default function NewConfigurationModal({
       elevation: 3,
     },
     headerTitle: {
+      flex: 1,
+      flexShrink: 1,
       fontSize: isSmallTablet ? 14 : isLargeTablet ? 18 : 16,
       fontWeight: '600',
       color: '#FFFFFF',
       letterSpacing: 0.5,
+      marginRight: 8,
     },
-    closeButton: {
+    headerActions: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+    },
+    headerIconButton: {
       padding: 8,
     },
     sandboxModeContainer: {
@@ -962,9 +972,14 @@ export default function NewConfigurationModal({
             />
           </View> */}
           
-          <TouchableOpacity style={styles.closeButton} onPress={onClose}>
-            <X size={24} color="#FFFFFF" />
-          </TouchableOpacity>
+          <View style={styles.headerActions}>
+            <TouchableOpacity style={styles.headerIconButton} onPress={handleSave}>
+              <Save size={22} color="#FFFFFF" />
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.headerIconButton} onPress={onClose}>
+              <X size={24} color="#FFFFFF" />
+            </TouchableOpacity>
+          </View>
         </View>
 
         <ScrollView style={styles.scrollView} contentContainerStyle={styles.content}>
@@ -1465,21 +1480,11 @@ export default function NewConfigurationModal({
             </View>
           </View>
 
-          {/* Botones */}
+          {/* Botón reset */}
           <View style={styles.bottomButtons}>
-            <TouchableOpacity style={styles.backButton} onPress={onClose}>
-              <ArrowLeft size={20} color="#FFFFFF" />
-              <Text style={styles.backButtonText}>VOLVER</Text>
-            </TouchableOpacity>
-
             <TouchableOpacity style={styles.resetButton} onPress={handleResetConfiguration}>
               <RefreshCw size={20} color="#FFFFFF" />
               <Text style={styles.resetButtonText}>RESET</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
-              <Save size={20} color="#FFFFFF" />
-              <Text style={styles.saveButtonText}>GUARDAR</Text>
             </TouchableOpacity>
           </View>
         </ScrollView>

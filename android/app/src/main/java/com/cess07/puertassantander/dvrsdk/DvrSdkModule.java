@@ -130,6 +130,7 @@ public class DvrSdkModule extends ReactContextBaseJavaModule {
                 result.putString("deviceName", new String(deviceInfo.deviceName).trim());
                 result.putString("firmwareVersion", new String(deviceInfo.firmwareVersion).trim());
                 result.putString("deviceProduct", new String(deviceInfo.deviceProduct).trim());
+                result.putInt("talkAudio", deviceInfo.talkAudio & 0xFF);
                 promise.resolve(result);
             } else {
                 long errorCode = sdkManager.getLastError();
@@ -273,6 +274,15 @@ public class DvrSdkModule extends ReactContextBaseJavaModule {
         } catch (Exception e) {
             Log.e(TAG, "Error en startMicStreaming", e);
             promise.reject("MIC_STREAM_START_ERROR", e.getMessage(), e);
+        }
+    }
+
+    @ReactMethod
+    public void isVoiceSendEnabled(Promise promise) {
+        try {
+            promise.resolve(sdkManager.isVoiceSendEnabled());
+        } catch (Exception e) {
+            promise.reject("VOICE_TX_CHECK_ERROR", e.getMessage(), e);
         }
     }
 

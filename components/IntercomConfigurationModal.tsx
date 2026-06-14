@@ -1,6 +1,6 @@
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, Modal, ScrollView, Switch, Platform } from 'react-native';
 import { useState, useEffect } from 'react';
-import { ArrowLeft, Save, X, Camera, Phone } from 'lucide-react-native';
+import { Save, X, Camera, Phone } from 'lucide-react-native';
 import { Picker } from '@react-native-picker/picker';
 import { useWindowDimensions } from 'react-native';
 export interface IntercomConfig {
@@ -24,6 +24,12 @@ export interface IntercomConfig {
   sdkPassword?: string;
   /** Canal de voz/intercom en el SDK (-1 = IPC/videoportero, 0/1 = canal NVR). */
   voiceChannel?: number;
+  /** bridge = PC industrial + audio_bridge.py; sdk = SDK nativo Android (TX suele fallar). */
+  intercomMode?: 'bridge' | 'sdk';
+  /** URL WebSocket del puente (ej. ws://192.168.1.10:8765 o IP ZeroTier). */
+  bridgeUrl?: string;
+  /** Micrófono tablet en modo puente: voice_communication (AGC) o mic (más crudo). */
+  bridgeMicSource?: 'voice_communication' | 'mic';
   sipUri: string;
   sipUsername: string;
   sipPassword: string;
@@ -74,6 +80,9 @@ const defaultIntercomConfig: IntercomConfig = {
   sdkUsername: 'admin',
   sdkPassword: '',
   voiceChannel: -1,
+  intercomMode: 'bridge',
+  bridgeUrl: 'ws://192.168.1.10:8765',
+  bridgeMicSource: 'voice_communication',
   sipUri: '',
   sipUsername: '',
   sipPassword: '',
@@ -107,16 +116,19 @@ export default function IntercomConfigurationModal({
   const isLargeTablet = width >= 1200;
 
   const [config, setConfig] = useState<IntercomConfig>(defaultIntercomConfig);
+  const [voiceChannelText, setVoiceChannelText] = useState('-1');
 
   useEffect(() => {
     if (visible) {
       if (initialConfig) {
         setConfig(initialConfig);
+        setVoiceChannelText(String(initialConfig.voiceChannel ?? -1));
       } else {
         setConfig({
           ...defaultIntercomConfig,
           name: `Intercomunicador ${doorName}`,
         });
+        setVoiceChannelText('-1');
       }
     }
   }, [visible, initialConfig, doorName]);
@@ -149,12 +161,20 @@ export default function IntercomConfigurationModal({
       elevation: 3,
     },
     headerTitle: {
+      flex: 1,
+      flexShrink: 1,
       fontSize: isSmallTablet ? 14 : isLargeTablet ? 18 : 16,
       fontWeight: '600',
       color: '#FFFFFF',
       letterSpacing: 0.5,
+      marginRight: 8,
     },
-    closeButton: {
+    headerActions: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+    },
+    headerIconButton: {
       padding: 8,
     },
     scrollView: {
@@ -246,8 +266,19 @@ export default function IntercomConfigurationModal({
       minHeight: isSmallTablet ? 32 : isLargeTablet ? 40 : 36,
     },
     picker: {
+      width: '100%',
+      height: isSmallTablet ? 48 : isLargeTablet ? 52 : 50,
       fontSize: isSmallTablet ? 11 : isLargeTablet ? 13 : 12,
       color: '#212529',
+    },
+    pickerRowVertical: {
+      marginBottom: isSmallTablet ? 8 : isLargeTablet ? 12 : 10,
+    },
+    pickerLabel: {
+      fontSize: isSmallTablet ? 11 : isLargeTablet ? 13 : 12,
+      fontWeight: '600',
+      color: '#495057',
+      marginBottom: 4,
     },
     switchRow: {
       flexDirection: 'row',
@@ -260,55 +291,6 @@ export default function IntercomConfigurationModal({
       fontWeight: '600',
       color: '#495057',
       flex: 1,
-    },
-    bottomButtons: {
-      flexDirection: 'row',
-      gap: isSmallTablet ? 8 : isLargeTablet ? 16 : 12,
-      marginTop: isSmallTablet ? 16 : isLargeTablet ? 24 : 20,
-    },
-    backButton: {
-      flex: 1,
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'center',
-      backgroundColor: '#6C757D',
-      paddingHorizontal: isSmallTablet ? 16 : isLargeTablet ? 24 : 20,
-      paddingVertical: isSmallTablet ? 10 : isLargeTablet ? 14 : 12,
-      borderRadius: 8,
-      gap: isSmallTablet ? 4 : isLargeTablet ? 8 : 6,
-      shadowColor: '#6C757D',
-      shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.2,
-      shadowRadius: 8,
-      elevation: 4,
-    },
-    backButtonText: {
-      fontSize: isSmallTablet ? 12 : isLargeTablet ? 14 : 13,
-      fontWeight: '700',
-      color: '#FFFFFF',
-      letterSpacing: 0.5,
-    },
-    saveButton: {
-      flex: 1,
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'center',
-      backgroundColor: '#28A745',
-      paddingHorizontal: isSmallTablet ? 16 : isLargeTablet ? 24 : 20,
-      paddingVertical: isSmallTablet ? 10 : isLargeTablet ? 14 : 12,
-      borderRadius: 8,
-      gap: isSmallTablet ? 4 : isLargeTablet ? 8 : 6,
-      shadowColor: '#28A745',
-      shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.2,
-      shadowRadius: 8,
-      elevation: 4,
-    },
-    saveButtonText: {
-      fontSize: isSmallTablet ? 12 : isLargeTablet ? 14 : 13,
-      fontWeight: '700',
-      color: '#FFFFFF',
-      letterSpacing: 0.5,
     },
   });
 
@@ -323,9 +305,14 @@ export default function IntercomConfigurationModal({
         {/* Header */}
         <View style={styles.header}>
           <Text style={styles.headerTitle}>CONFIGURACIÓN INTERCOMUNICADOR - {doorName.toUpperCase()}</Text>
-          <TouchableOpacity style={styles.closeButton} onPress={onClose}>
-            <X size={24} color="#FFFFFF" />
-          </TouchableOpacity>
+          <View style={styles.headerActions}>
+            <TouchableOpacity style={styles.headerIconButton} onPress={handleSave}>
+              <Save size={22} color="#FFFFFF" />
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.headerIconButton} onPress={onClose}>
+              <X size={24} color="#FFFFFF" />
+            </TouchableOpacity>
+          </View>
         </View>
 
         <ScrollView style={styles.scrollView} contentContainerStyle={styles.content}>
@@ -459,6 +446,32 @@ export default function IntercomConfigurationModal({
               {/* Ruta Snapshot oculta - no se usa */}
 
               <View style={styles.inputRow}>
+                <Text style={styles.inputLabel}>URL puente WS:</Text>
+                <TextInput
+                  style={styles.textInput}
+                  value={config.bridgeUrl || ''}
+                  onChangeText={(text) => updateConfig('bridgeUrl', text)}
+                  placeholder="ws://192.168.1.10:8765"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+              </View>
+              <View style={styles.pickerRowVertical}>
+                <Text style={styles.pickerLabel}>Micrófono tablet:</Text>
+                <View style={styles.pickerContainer}>
+                  <Picker
+                    mode={Platform.OS === 'android' ? 'dropdown' : 'dialog'}
+                    selectedValue={config.bridgeMicSource ?? 'voice_communication'}
+                    onValueChange={(v) => updateConfig('bridgeMicSource', v)}
+                    style={styles.picker}
+                  >
+                    <Picker.Item label="Voz (AGC / anti-eco)" value="voice_communication" />
+                    <Picker.Item label="Mic crudo (menos procesado)" value="mic" />
+                  </Picker>
+                </View>
+              </View>
+
+              <View style={styles.inputRow}>
                 <Text style={styles.inputLabel}>Puerto SDK:</Text>
                 <TextInput
                   style={styles.textInput}
@@ -499,17 +512,28 @@ export default function IntercomConfigurationModal({
                 <Text style={styles.inputLabel}>Canal voz SDK:</Text>
                 <TextInput
                   style={styles.textInput}
-                  value={String(config.voiceChannel ?? -1)}
+                  value={voiceChannelText}
                   onChangeText={(text) => {
+                    setVoiceChannelText(text);
                     const t = text.trim();
-                    if (t === '' || t === '-') {
-                      updateConfig('voiceChannel', -1);
-                      return;
-                    }
+                    if (t === '' || t === '-') return;
                     if (!/^-?\d+$/.test(t)) return;
                     const n = parseInt(t, 10);
                     if (Number.isFinite(n)) {
                       updateConfig('voiceChannel', n);
+                    }
+                  }}
+                  onBlur={() => {
+                    const t = voiceChannelText.trim();
+                    if (t === '' || t === '-') {
+                      updateConfig('voiceChannel', -1);
+                      setVoiceChannelText('-1');
+                      return;
+                    }
+                    if (/^-?\d+$/.test(t)) {
+                      const n = parseInt(t, 10);
+                      updateConfig('voiceChannel', n);
+                      setVoiceChannelText(String(n));
                     }
                   }}
                   placeholder="-1 (IPC)"
@@ -793,18 +817,6 @@ export default function IntercomConfigurationModal({
             </View>
           </View>
 
-          {/* Botones */}
-          <View style={styles.bottomButtons}>
-            <TouchableOpacity style={styles.backButton} onPress={onClose}>
-              <ArrowLeft size={20} color="#FFFFFF" />
-              <Text style={styles.backButtonText}>CANCELAR</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
-              <Save size={20} color="#FFFFFF" />
-              <Text style={styles.saveButtonText}>GUARDAR</Text>
-            </TouchableOpacity>
-          </View>
         </ScrollView>
       </View>
     </Modal>

@@ -16,6 +16,7 @@ import com.facebook.react.defaults.DefaultReactNativeHost
 import expo.modules.ApplicationLifecycleDispatcher
 import expo.modules.ReactNativeHostWrapper
 import com.cess07.puertassantander.dvrsdk.DvrSdkPackage
+import com.cess07.puertassantander.intercombridge.IntercomBridgePackage
 
 class MainApplication : Application(), ReactApplication {
 
@@ -25,6 +26,7 @@ class MainApplication : Application(), ReactApplication {
         override fun getPackages(): List<ReactPackage> =
             PackageList(this).packages.apply {
               add(DvrSdkPackage())
+              add(IntercomBridgePackage())
             }
 
           override fun getJSMainModuleName(): String = ".expo/.virtual-metro-entry"

@@ -218,17 +218,26 @@ export async function startSdkIntercom(doorId: string, config: IntercomConfig): 
 
 
 
-    const micStarted = await DvrSdkService.startMicStreaming();
+    const txEnabled = await DvrSdkService.isVoiceSendEnabled();
 
-    if (!micStarted) {
-
-      await DvrSdkService.stopVoiceIntercom();
-
-      throw new Error('No se pudo abrir el micrófono de la tablet.');
-
+    if (txEnabled) {
+      const micStarted = await DvrSdkService.startMicStreaming();
+      if (!micStarted) {
+        await DvrSdkService.stopVoiceIntercom();
+        throw new Error('No se pudo abrir el micrófono de la tablet.');
+      }
+    } else {
+      console.log('[SDK intercom] modo RX-only: escucha activa sin micrófono TX');
     }
 
-
+    if (!txEnabled) {
+      Alert.alert(
+        'Intercom — solo escucha',
+        'Se recibe audio de la cámara pero no se pudo activar el micrófono (TX).\n\n' +
+          'Comprueba: permiso de micrófono, una sola sesión talkback (cerrar SuperCam/NVMS) ' +
+          'y canal de voz -1 en la configuración.',
+      );
+    }
 
     activeDoorId = doorId;
 

@@ -265,6 +265,13 @@ class DvrSdkService {
     return await DvrSdk.stopMicStreaming();
   }
 
+  async isVoiceSendEnabled(): Promise<boolean> {
+    if (!this.isAvailable()) {
+      return false;
+    }
+    return await DvrSdk.isVoiceSendEnabled();
+  }
+
   /**
    * Suscribirse a eventos del SDK
    * 

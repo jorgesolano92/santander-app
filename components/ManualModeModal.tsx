@@ -18,7 +18,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useDoorControl } from '@/hooks/useDoorControl';
 import DoorVideoStream from './DoorVideoStream';
 import { testDvrSdkLogin } from '@/services/testDvrSdkLogin';
-import { startSdkIntercom, stopSdkIntercom } from '@/services/dvrSdkIntercom';
+import { startIntercom, stopIntercom } from '@/services/intercom';
 import { IntercomConfig } from './IntercomConfigurationModal';
 
 interface DoorConfig {
@@ -332,7 +332,7 @@ export default function ManualModeModal({
 
   useEffect(() => {
     if (!visible && sdkIntercomDoorId) {
-      void stopSdkIntercom().finally(() => setSdkIntercomDoorId(null));
+      void stopIntercom().finally(() => setSdkIntercomDoorId(null));
     }
   }, [visible, sdkIntercomDoorId]);
 
@@ -349,7 +349,7 @@ export default function ManualModeModal({
     if (sdkIntercomDoorId === doorId) {
       setSdkIntercomLoading(doorId);
       try {
-        await stopSdkIntercom();
+        await stopIntercom();
         setSdkIntercomDoorId(null);
       } finally {
         setSdkIntercomLoading(null);
@@ -359,7 +359,7 @@ export default function ManualModeModal({
 
     setSdkIntercomLoading(doorId);
     try {
-      const ok = await startSdkIntercom(doorId, intercom);
+      const ok = await startIntercom(doorId, intercom);
       if (ok) {
         setSdkIntercomDoorId(doorId);
       }
@@ -921,6 +921,10 @@ export default function ManualModeModal({
                 return null;
               }
               const isDoorExpanded = expandedVideoDoorId === doorId;
+              const intercomEstablished = sdkIntercomDoorId === doorId;
+              const intercomBusyOnDoor =
+                intercomEstablished || sdkIntercomLoading === doorId;
+              const intercomUsesNativeSdk = door.intercom?.intercomMode === 'sdk';
               return (
                 <View
                   key={doorId}
@@ -940,8 +944,9 @@ export default function ManualModeModal({
                         <DoorVideoStream
                           intercomConfig={door.intercom}
                           doorName={door.name}
-                          suspendStream={
-                            sdkIntercomDoorId === doorId || sdkIntercomLoading === doorId
+                          suspendStream={intercomBusyOnDoor && intercomUsesNativeSdk}
+                          muteAmbientDuringIntercom={
+                            intercomEstablished && !intercomUsesNativeSdk
                           }
                           isExpanded={isDoorExpanded}
                           expandedVideoHeight={expandedVideoHeight}

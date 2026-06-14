@@ -33,8 +33,10 @@ interface DoorVideoStreamProps {
   intercomConfig: IntercomConfig;
   doorName: string;
   voiceOutboundOnly?: boolean;
-  /** Pausa RTSP mientras el intercom SDK usa la cámara (evita timeout código 20). */
+  /** Detiene RTSP solo en intercom SDK nativo (misma sesión cámara). No aplica en modo puente. */
   suspendStream?: boolean;
+  /** Silencia audio ambiente RTSP con intercom activo (vídeo sigue; audio va por el intercom). */
+  muteAmbientDuringIntercom?: boolean;
   isExpanded?: boolean;
   onExpandedChange?: (expanded: boolean) => void;
   /** Alto del área de vídeo en pantalla completa (px). */
@@ -97,6 +99,7 @@ export default function DoorVideoStream({
   intercomConfig,
   doorName,
   suspendStream = false,
+  muteAmbientDuringIntercom = false,
   isExpanded = false,
   onExpandedChange,
   expandedVideoHeight,
@@ -265,6 +268,30 @@ export default function DoorVideoStream({
     }
   }, [suspendStream, streamActive]);
 
+  // La cámara TVT suele expulsar RTSP al abrir StartVoiceCom_MR en el PC.
+  // Cuando el intercom queda activo, forzamos una reconexión limpia del vídeo.
+  const intercomRtspBumpRef = useRef(false);
+  useEffect(() => {
+    if (muteAmbientDuringIntercom && streamActive) {
+      if (!intercomRtspBumpRef.current) {
+        intercomRtspBumpRef.current = true;
+        clearRetryTimer();
+        retryCountRef.current = 0;
+        const timer = setTimeout(() => {
+          if (streamActive) {
+            connectedRef.current = false;
+            setConnectionState('connecting');
+            setError(null);
+            setPlayerSession((n) => n + 1);
+          }
+        }, 600);
+        return () => clearTimeout(timer);
+      }
+      return;
+    }
+    intercomRtspBumpRef.current = false;
+  }, [muteAmbientDuringIntercom, streamActive, clearRetryTimer]);
+
   const enterExpanded = () => {
     if (!isConnected || !streamActive) return;
     onExpandedChange?.(true);
@@ -381,9 +408,8 @@ export default function DoorVideoStream({
   const showAmbientAudioToggle =
     showAndroidPlayer && isConnected && intercomConfig.hasAudio !== false && !isExpanded;
 
-  const androidAudioTrack = ambientAudioOn
-    ? undefined
-    : { type: 'disabled' as const };
+  const rtspAudioMuted =
+    suspendStream || muteAmbientDuringIntercom || !ambientAudioOn;
 
   const activeVideoHeight = isExpanded ? fullscreenVideoHeight : inlineVideoHeight;
 
@@ -411,9 +437,8 @@ export default function DoorVideoStream({
                 style={nativeVideoStyle}
                 resizeMode="contain"
                 paused={suspendStream}
-                muted={suspendStream || !ambientAudioOn}
-                volume={suspendStream || !ambientAudioOn ? 0 : 1.0}
-                selectedAudioTrack={suspendStream ? { type: 'disabled' as const } : androidAudioTrack}
+                muted={rtspAudioMuted}
+                volume={rtspAudioMuted ? 0 : 1.0}
                 ignoreSilentSwitch="ignore"
                 playInBackground={false}
                 controls={false}
