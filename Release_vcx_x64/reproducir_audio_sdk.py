@@ -31,7 +31,7 @@ except Exception:
 # ----------------------------------------------------------------------------
 # CONFIGURACION
 # ----------------------------------------------------------------------------
-SDK_DIR   = r"C:\Users\Javier Iglesias\Desktop\prueba audio"
+SDK_DIR   = r"h:\Users\Jorge\proyectos\test\santander-app\Release_vcx_x64"
 DLL_NAME  = "DVR_NET_SDK.dll"
 DLL_PATH  = os.path.join(SDK_DIR, DLL_NAME)
 
@@ -42,6 +42,8 @@ PASSWORD  = b"Santander@01"
 CHANNEL   = -1
 
 # Audio a reproducir: PCM crudo (s16le). Convierte antes con ffmpeg (ver cabecera).
+# Para probar, puedes convertir un archivo MP3 con:
+# ffmpeg -i mensaje.mp3 -ar 8000 -ac 1 -f s16le mensaje.raw
 AUDIO_RAW = "mensaje.raw"
 
 # Parametros del PCM (deben coincidir con la conversion de ffmpeg y con el equipo)
