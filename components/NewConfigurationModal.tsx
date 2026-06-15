@@ -9,6 +9,7 @@ import IntercomConfigurationModal, { IntercomConfig } from './IntercomConfigurat
 import { Picker } from '@react-native-picker/picker';
 import { emergencyService } from '@/services/EmergencyService';
 import { cloneDefaultDoorAppConfig } from '@/config/defaultDoorAppConfig';
+import { INTERCOM_BRIDGE_ONLY } from '@/config/intercomFeatures';
 import type { ConfigurationData, ModeConfig } from '@/types/configurationData';
 
 export type { ConfigurationData, ModeConfig, DoorConfig, ModesConfig } from '@/types/configurationData';
@@ -82,8 +83,20 @@ export default function NewConfigurationModal({
                   sdkUsername: door.intercom.sdkUsername ?? 'admin',
                   sdkPassword: door.intercom.sdkPassword ?? '',
                   voiceChannel: door.intercom.voiceChannel ?? -1,
-                  intercomMode: door.intercom.intercomMode ?? 'bridge',
+                  intercomMode: INTERCOM_BRIDGE_ONLY ? 'bridge' : (door.intercom.intercomMode ?? 'bridge'),
                   bridgeUrl: door.intercom.bridgeUrl ?? 'ws://192.168.1.10:8765',
+                  sipServer: door.intercom.sipServer ?? '',
+                  sipCallDestination: door.intercom.sipCallDestination ?? '',
+                  csipApiHost: door.intercom.csipApiHost ?? '',
+                  csipApiUseHttps: door.intercom.csipApiUseHttps ?? false,
+                  csipApiKey: door.intercom.csipApiKey ?? '',
+                  csipBearerToken: door.intercom.csipBearerToken ?? '',
+                  csipCallTargetType: door.intercom.csipCallTargetType ?? 'default',
+                  csipCallTarget: door.intercom.csipCallTarget ?? '',
+                  csipCallUser: door.intercom.csipCallUser ?? '',
+                  csipCallRecording: door.intercom.csipCallRecording ?? false,
+                  csipButtonId:
+                    door.intercom.csipButtonId ?? (index === 1 ? 'p2' : 'p1'),
                 }
               };
             }

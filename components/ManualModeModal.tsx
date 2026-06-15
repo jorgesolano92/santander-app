@@ -10,14 +10,13 @@ import {
   Platform,
   Alert,
 } from 'react-native';
-import { X, MessageCircle, DoorOpen, PhoneCall, PhoneOff, Mic, MicOff, Volume2, Camera, Minimize2 } from 'lucide-react-native';
+import { X, DoorOpen, Mic, MicOff, Minimize2 } from 'lucide-react-native';
 import { ScrollView } from 'react-native';
 import { useWindowDimensions } from 'react-native';
 import { useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useDoorControl } from '@/hooks/useDoorControl';
 import DoorVideoStream from './DoorVideoStream';
-import { testDvrSdkLogin } from '@/services/testDvrSdkLogin';
 import { startIntercom, stopIntercom } from '@/services/intercom';
 import { IntercomConfig } from './IntercomConfigurationModal';
 
@@ -74,7 +73,6 @@ export default function ManualModeModal({
   const [sendingPulse, setSendingPulse] = useState<Set<string>>(new Set()); // Track puertas con pulso en proceso
   const [manualOutputState, setManualOutputState] = useState<Record<string, boolean>>({});
   const [expandedVideoDoorId, setExpandedVideoDoorId] = useState<string | null>(null);
-  const [sdkTestingDoorId, setSdkTestingDoorId] = useState<string | null>(null);
   const [sdkIntercomDoorId, setSdkIntercomDoorId] = useState<string | null>(null);
   const [sdkIntercomLoading, setSdkIntercomLoading] = useState<string | null>(null);
   
@@ -177,12 +175,6 @@ export default function ManualModeModal({
 
   const { 
     controlDoor, 
-    sipCallState, 
-    startIntercomCall, 
-    endIntercomCall, 
-    muteMicrophone, 
-    setSpeakerphone, 
-    activeSipCallDoorId 
   } = useDoorControl();
 
   // Obtener configuraciones de intercomunicador para cada puerta
@@ -191,39 +183,6 @@ export default function ManualModeModal({
       return intercomConfigs[doorIndex].intercom;
     }
     return null;
-  };
-
-  const handleCommunicate = async (doorId: string, doorName: string) => {
-    // Find the door configuration by doorId
-    const doorIndex = parseInt(doorId.replace('P', '')) - 1;
-    const door = enabledDoors[doorIndex];
-    const intercomConfig = door?.intercom;
-    
-    if (!intercomConfig) {
-      console.error('❌ No hay configuración de intercomunicador para', doorName);
-      return;
-    }
-    
-    // Check if there's already an active call
-    if (sipCallState?.isActive) {
-      if (activeSipCallDoorId === doorId) {
-        // End the current call
-        console.log('📞 Finalizando llamada con', doorName);
-        await endIntercomCall();
-      } else {
-        console.log('❌ Ya hay una llamada activa con otra puerta');
-        return;
-      }
-    } else {
-      // Start a new call
-      console.log('📞 Iniciando llamada SIP con', doorName);
-      const success = await startIntercomCall(intercomConfig);
-      if (success) {
-        console.log('✅ Llamada SIP iniciada con', doorName);
-      } else {
-        console.error('❌ Error iniciando llamada SIP con', doorName);
-      }
-    }
   };
 
   const handleOpenDoor = async (doorId: 'P1' | 'P2', doorName: string) => {
@@ -240,14 +199,11 @@ export default function ManualModeModal({
       console.log(
         `🚪 ${nextAction === 'open' ? 'Abriendo' : 'Cerrando'} ${doorName} (${actionKind}/${outputMode})`
       );
-      
-      // Agregar puerta al set para mostrar feedback mientras se envía el comando
+
       setSendingPulse(prev => new Set(prev).add(doorId));
-      
-      // Usar controlDoor vía panel (/api/v1/set_mode con action=set_output)
+
       const success = await controlDoor(doorId, nextAction);
 
-      // Remover puerta del set después de un delay (feedback visual)
       setTimeout(() => {
         setSendingPulse(prev => {
           const newSet = new Set(prev);
@@ -266,7 +222,6 @@ export default function ManualModeModal({
         console.log(`✅ ${doorName} - comando enviado correctamente`);
       } else {
         console.error(`❌ Error enviando comando en ${doorName}`);
-        // Remover inmediatamente en caso de error
         setSendingPulse(prev => {
           const newSet = new Set(prev);
           newSet.delete(doorId);
@@ -275,7 +230,6 @@ export default function ManualModeModal({
       }
     } catch (error) {
       console.error(`❌ Error en handleOpenDoor:`, error);
-      // Limpiar estado de pulso en caso de error
       setSendingPulse(prev => {
         const newSet = new Set(prev);
         newSet.delete(doorId);
@@ -317,39 +271,24 @@ export default function ManualModeModal({
     return 'ABRIR PUERTA';
   };
 
-  const handleTestSdk = async (doorId: string, intercom: IntercomConfig) => {
-    if (Platform.OS !== 'android') {
-      Alert.alert('SDK', 'La prueba SDK solo está disponible en Android.');
-      return;
-    }
-    setSdkTestingDoorId(doorId);
-    try {
-      await testDvrSdkLogin(intercom);
-    } finally {
-      setSdkTestingDoorId(null);
-    }
-  };
-
   useEffect(() => {
     if (!visible && sdkIntercomDoorId) {
-      void stopIntercom().finally(() => setSdkIntercomDoorId(null));
+      const doorIndex = parseInt(sdkIntercomDoorId.replace('P', ''), 10) - 1;
+      const intercom = currentIntercomConfigs[doorIndex]?.intercom;
+      void stopIntercom(intercom).finally(() => setSdkIntercomDoorId(null));
     }
   }, [visible, sdkIntercomDoorId]);
 
-  const handleToggleSdkIntercom = async (doorId: string, intercom: IntercomConfig) => {
+  const handleToggleBridgeIntercom = async (doorId: string, intercom: IntercomConfig) => {
     if (Platform.OS !== 'android') {
-      Alert.alert('Intercom SDK', 'Solo disponible en Android.');
-      return;
-    }
-    if (sipCallState?.isActive) {
-      Alert.alert('Intercom SDK', 'Hay una llamada SIP activa. Finalízala antes.');
+      Alert.alert('Intercom puente', 'Solo disponible en Android.');
       return;
     }
 
     if (sdkIntercomDoorId === doorId) {
       setSdkIntercomLoading(doorId);
       try {
-        await stopIntercom();
+        await stopIntercom(intercom);
         setSdkIntercomDoorId(null);
       } finally {
         setSdkIntercomLoading(null);
@@ -416,47 +355,6 @@ export default function ManualModeModal({
       )}
     </TouchableOpacity>
   );
-
-  const handleMuteMicrophone = async () => {
-    if (sipCallState) {
-      await muteMicrophone(!sipCallState.isMuted);
-    }
-  };
-
-  const handleToggleSpeaker = async () => {
-    if (sipCallState) {
-      await setSpeakerphone(!sipCallState.isSpeakerOn);
-    }
-  };
-
-  const getCallButtonText = (doorId: string) => {
-    if (activeSipCallDoorId === doorId && sipCallState?.isActive) {
-      if (sipCallState.isConnected) {
-        return `FINALIZAR (${Math.floor(sipCallState.duration / 60)}:${(sipCallState.duration % 60).toString().padStart(2, '0')})`;
-      } else {
-        return 'CONECTANDO...';
-      }
-    }
-    return 'COMUNICAR';
-  };
-
-  const getCallButtonStyle = (doorId: string) => {
-    if (activeSipCallDoorId === doorId && sipCallState?.isActive) {
-      if (sipCallState.isConnected) {
-        return [styles.doorControlButton, styles.doorControlButtonConnected];
-      } else {
-        return [styles.doorControlButton, styles.doorControlButtonConnecting];
-      }
-    }
-    return styles.doorControlButton;
-  };
-
-  const getCallButtonTextStyle = (doorId: string) => {
-    if (activeSipCallDoorId === doorId && sipCallState?.isActive) {
-      return [styles.doorControlButtonText, styles.doorControlButtonConnectedText];
-    }
-    return styles.doorControlButtonText;
-  };
 
   const styles = StyleSheet.create({
     modalRoot: {
@@ -924,7 +822,6 @@ export default function ManualModeModal({
               const intercomEstablished = sdkIntercomDoorId === doorId;
               const intercomBusyOnDoor =
                 intercomEstablished || sdkIntercomLoading === doorId;
-              const intercomUsesNativeSdk = door.intercom?.intercomMode === 'sdk';
               return (
                 <View
                   key={doorId}
@@ -944,10 +841,8 @@ export default function ManualModeModal({
                         <DoorVideoStream
                           intercomConfig={door.intercom}
                           doorName={door.name}
-                          suspendStream={intercomBusyOnDoor && intercomUsesNativeSdk}
-                          muteAmbientDuringIntercom={
-                            intercomEstablished && !intercomUsesNativeSdk
-                          }
+                          suspendStream={false}
+                          muteAmbientDuringIntercom={intercomEstablished}
                           isExpanded={isDoorExpanded}
                           expandedVideoHeight={expandedVideoHeight}
                           onExpandedChange={(expanded) =>
@@ -981,52 +876,32 @@ export default function ManualModeModal({
                     )}
                     
                     {!isDoorExpanded && door.intercom && Platform.OS === 'android' ? (
-                      <>
-                        <TouchableOpacity
-                          style={styles.sdkTestButton}
-                          onPress={() => handleTestSdk(doorId, door.intercom)}
-                          disabled={
-                            sdkTestingDoorId === doorId ||
-                            sdkIntercomDoorId === doorId ||
-                            sdkIntercomLoading === doorId
-                          }
-                        >
-                          {sdkTestingDoorId === doorId ? (
-                            <ActivityIndicator color="#FFFFFF" />
-                          ) : (
+                      <TouchableOpacity
+                        style={[
+                          styles.sdkTestButton,
+                          sdkIntercomDoorId === doorId && styles.sdkIntercomButtonActive,
+                        ]}
+                        onPress={() => handleToggleBridgeIntercom(doorId, door.intercom)}
+                        disabled={
+                          sdkIntercomLoading === doorId ||
+                          (sdkIntercomDoorId !== null && sdkIntercomDoorId !== doorId)
+                        }
+                      >
+                        {sdkIntercomLoading === doorId ? (
+                          <ActivityIndicator color="#FFFFFF" />
+                        ) : (
+                          <>
+                            {sdkIntercomDoorId === doorId ? (
+                              <MicOff size={16} color="#FFFFFF" />
+                            ) : (
+                              <Mic size={16} color="#FFFFFF" />
+                            )}
                             <Text style={styles.sdkTestButtonText}>
-                              PROBAR SDK ({door.intercom.sdkPort ?? 9008})
+                              {sdkIntercomDoorId === doorId ? 'DETENER INTERCOM' : 'INTERCOM PUENTE'}
                             </Text>
-                          )}
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          style={[
-                            styles.sdkTestButton,
-                            sdkIntercomDoorId === doorId && styles.sdkIntercomButtonActive,
-                          ]}
-                          onPress={() => handleToggleSdkIntercom(doorId, door.intercom)}
-                          disabled={
-                            sdkIntercomLoading === doorId ||
-                            sdkTestingDoorId === doorId ||
-                            (sdkIntercomDoorId !== null && sdkIntercomDoorId !== doorId)
-                          }
-                        >
-                          {sdkIntercomLoading === doorId ? (
-                            <ActivityIndicator color="#FFFFFF" />
-                          ) : (
-                            <>
-                              {sdkIntercomDoorId === doorId ? (
-                                <MicOff size={16} color="#FFFFFF" />
-                              ) : (
-                                <Mic size={16} color="#FFFFFF" />
-                              )}
-                              <Text style={styles.sdkTestButtonText}>
-                                {sdkIntercomDoorId === doorId ? 'DETENER INTERCOM' : 'INTERCOM SDK'}
-                              </Text>
-                            </>
-                          )}
-                        </TouchableOpacity>
-                      </>
+                          </>
+                        )}
+                      </TouchableOpacity>
                     ) : null}
 
                     {!isDoorExpanded ? (

@@ -1,4 +1,5 @@
 import { EventEmitter } from 'events';
+import { Platform } from 'react-native';
 
 export interface SipConfig {
   sipUri: string;
@@ -6,6 +7,8 @@ export interface SipConfig {
   sipPassword: string;
   sipDomain: string;
   enableTLS: boolean;
+  /** Servidor SIP explícito (host:puerto). Si vacío, se deriva de sipDomain. */
+  sipServer?: string;
 }
 
 export interface SipCallState {
@@ -19,9 +22,99 @@ export interface SipCallState {
 
 export type SipEventType = 'callStarted' | 'callConnected' | 'callEnded' | 'callFailed' | 'error';
 
+type SimpleUserLike = {
+  connect: () => Promise<void>;
+  disconnect: () => Promise<void>;
+  call: (destination: string) => Promise<void>;
+  hangup: () => Promise<void>;
+  mute: () => void;
+  unmute: () => void;
+  hold: () => Promise<void>;
+  unhold: () => Promise<void>;
+  isConnected: () => boolean;
+  stateChange: { addListener: (cb: (state: string) => void) => void };
+};
+
+let webrtcGlobalsReady = false;
+
+function ensureWebRtcGlobals(): void {
+  if (webrtcGlobalsReady || Platform.OS === 'web') {
+    webrtcGlobalsReady = true;
+    return;
+  }
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const webrtc = require('react-native-webrtc');
+    const g = global as typeof globalThis & {
+      RTCPeerConnection?: unknown;
+      RTCSessionDescription?: unknown;
+      RTCIceCandidate?: unknown;
+      MediaStream?: unknown;
+      navigator?: { mediaDevices?: unknown };
+    };
+    g.RTCPeerConnection = webrtc.RTCPeerConnection;
+    g.RTCSessionDescription = webrtc.RTCSessionDescription;
+    g.RTCIceCandidate = webrtc.RTCIceCandidate;
+    g.MediaStream = webrtc.MediaStream;
+    g.navigator = g.navigator ?? {};
+    g.navigator.mediaDevices = webrtc.mediaDevices;
+    webrtcGlobalsReady = true;
+  } catch (error) {
+    console.warn('[SIP] react-native-webrtc no disponible:', error);
+  }
+}
+
+function parseSipTarget(uri: string): { user: string; host: string } {
+  const trimmed = uri.trim();
+  const withoutScheme = trimmed.replace(/^sips?:\/\//i, '');
+  const atIndex = withoutScheme.indexOf('@');
+  if (atIndex < 0) {
+    return { user: withoutScheme, host: '' };
+  }
+  return {
+    user: withoutScheme.slice(0, atIndex),
+    host: withoutScheme.slice(atIndex + 1).split(/[;:]/)[0],
+  };
+}
+
+function buildAor(config: SipConfig): string {
+  const parsed = parseSipTarget(config.sipUri);
+  const domain = config.sipDomain?.trim() || parsed.host;
+  const user = config.sipUsername?.trim() || parsed.user;
+  if (!user || !domain) {
+    throw new Error('SIP URI, usuario o dominio incompletos.');
+  }
+  const scheme = config.enableTLS ? 'sips' : 'sip';
+  return `${scheme}:${user}@${domain}`;
+}
+
+function buildWebSocketServer(config: SipConfig): string {
+  if (config.sipServer?.trim()) {
+    const raw = config.sipServer.trim().replace(/^wss?:\/\//i, '');
+    const scheme = config.enableTLS ? 'wss' : 'ws';
+    return `${scheme}://${raw}`;
+  }
+  const domain = config.sipDomain?.trim() || parseSipTarget(config.sipUri).host;
+  if (!domain) {
+    throw new Error('No se puede determinar el servidor SIP (sipDomain o sipServer).');
+  }
+  const scheme = config.enableTLS ? 'wss' : 'ws';
+  return `${scheme}://${domain}`;
+}
+
+function isSipConfigured(config: SipConfig): boolean {
+  return Boolean(
+    config.sipUri?.trim() &&
+      config.sipUsername?.trim() &&
+      config.sipPassword?.trim() &&
+      (config.sipDomain?.trim() || parseSipTarget(config.sipUri).host),
+  );
+}
+
 class SipService extends EventEmitter {
-  private isInitialized: boolean = false;
+  private isInitialized = false;
   private currentConfig: SipConfig | null = null;
+  private simpleUser: SimpleUserLike | null = null;
   private callState: SipCallState = {
     isActive: false,
     isConnected: false,
@@ -31,22 +124,64 @@ class SipService extends EventEmitter {
   };
   private callDurationInterval: ReturnType<typeof setInterval> | null = null;
 
-  constructor() {
-    super();
-  }
-
   async initialize(config: SipConfig): Promise<boolean> {
     try {
-      console.log('🔊 Inicializando servicio SIP...', config);
-      
-      // Simular inicialización SIP
+      if (!isSipConfigured(config)) {
+        throw new Error('Configuración SIP incompleta.');
+      }
+
+      ensureWebRtcGlobals();
       this.currentConfig = config;
+
+      if (this.simpleUser) {
+        try {
+          await this.simpleUser.disconnect();
+        } catch {
+          // ignore
+        }
+        this.simpleUser = null;
+      }
+
+      const { Web } = await import('sip.js');
+      const aor = buildAor(config);
+      const server = buildWebSocketServer(config);
+
+      const options = {
+        aor,
+        media: {
+          constraints: { audio: true, video: false },
+        },
+        userAgentOptions: {
+          authorizationUsername: config.sipUsername.trim(),
+          authorizationPassword: config.sipPassword,
+          transportOptions: {
+            server,
+          },
+        },
+      };
+
+      const user = new Web.SimpleUser(server, options) as SimpleUserLike;
+      user.stateChange.addListener((state) => {
+        console.log('[SIP] estado SimpleUser:', state);
+        if (state === 'Established' && this.callState.isActive) {
+          this.callState.isConnected = true;
+          this.startCallDuration();
+          this.emit('callConnected', { remoteUri: this.callState.remoteUri });
+        }
+      });
+
+      await user.connect();
+      this.simpleUser = user;
       this.isInitialized = true;
-      
-      console.log('✅ Servicio SIP inicializado correctamente');
+      console.log('[SIP] Registrado/conectado a', server, 'como', aor);
       return true;
     } catch (error) {
-      console.error('❌ Error inicializando servicio SIP:', error);
+      console.error('[SIP] Error inicializando:', error);
+      this.isInitialized = false;
+      this.simpleUser = null;
+      this.emit('error', {
+        error: error instanceof Error ? error.message : 'Error inicializando SIP',
+      });
       return false;
     }
   }
@@ -57,90 +192,106 @@ class SipService extends EventEmitter {
 
   async startCall(remoteUri: string): Promise<boolean> {
     try {
-      if (!this.isInitialized) {
+      if (!this.isInitialized || !this.simpleUser) {
         throw new Error('Servicio SIP no inicializado');
       }
 
-      console.log(`📞 Iniciando llamada SIP a: ${remoteUri}`);
-      
-      // Simular inicio de llamada
+      const destination = remoteUri.trim();
+      if (!destination) {
+        throw new Error('Destino SIP vacío');
+      }
+
+      console.log('[SIP] Iniciando llamada a:', destination);
       this.callState = {
         isActive: true,
         isConnected: false,
         isMuted: false,
-        isSpeakerOn: false,
+        isSpeakerOn: true,
         duration: 0,
-        remoteUri,
+        remoteUri: destination,
       };
+      this.emit('callStarted', { remoteUri: destination });
 
-      this.emit('callStarted', { remoteUri });
-
-      // Simular conexión después de 2 segundos
-      setTimeout(() => {
-        if (this.callState.isActive) {
-          this.callState.isConnected = true;
-          this.startCallDuration();
-          this.emit('callConnected', { remoteUri });
-        }
-      }, 2000);
-
+      await this.simpleUser.call(destination);
       return true;
     } catch (error) {
-      console.error('❌ Error iniciando llamada SIP:', error);
-      this.emit('callFailed', { error: error instanceof Error ? error.message : 'Error desconocido' });
+      console.error('[SIP] Error iniciando llamada:', error);
+      this.callState.isActive = false;
+      this.emit('callFailed', {
+        error: error instanceof Error ? error.message : 'Error desconocido',
+      });
       return false;
     }
   }
 
   async endCall(): Promise<void> {
     try {
-      console.log('📞 Finalizando llamada SIP');
-      
-      this.callState = {
-        isActive: false,
-        isConnected: false,
-        isMuted: false,
-        isSpeakerOn: false,
-        duration: 0,
-      };
-
-      if (this.callDurationInterval) {
-        clearInterval(this.callDurationInterval);
-        this.callDurationInterval = null;
+      console.log('[SIP] Finalizando llamada');
+      if (this.simpleUser) {
+        await this.simpleUser.hangup();
       }
-
+      this.resetCallState();
       this.emit('callEnded', {});
     } catch (error) {
-      console.error('❌ Error finalizando llamada SIP:', error);
-      this.emit('error', { error: error instanceof Error ? error.message : 'Error desconocido' });
+      console.error('[SIP] Error finalizando llamada:', error);
+      this.resetCallState();
+      this.emit('error', {
+        error: error instanceof Error ? error.message : 'Error finalizando llamada',
+      });
     }
   }
 
   async muteMicrophone(mute: boolean): Promise<void> {
-    try {
-      console.log(`🔇 ${mute ? 'Silenciando' : 'Activando'} micrófono`);
-      this.callState.isMuted = mute;
-    } catch (error) {
-      console.error('❌ Error controlando micrófono:', error);
-      this.emit('error', { error: error instanceof Error ? error.message : 'Error controlando micrófono' });
+    if (!this.simpleUser) return;
+    if (mute) {
+      this.simpleUser.mute();
+    } else {
+      this.simpleUser.unmute();
     }
+    this.callState.isMuted = mute;
   }
 
   async setSpeakerphone(enabled: boolean): Promise<void> {
-    try {
-      console.log(`🔊 ${enabled ? 'Activando' : 'Desactivando'} altavoz`);
-      this.callState.isSpeakerOn = enabled;
-    } catch (error) {
-      console.error('❌ Error controlando altavoz:', error);
-      this.emit('error', { error: error instanceof Error ? error.message : 'Error controlando altavoz' });
-    }
+    // El enrutamiento de altavoz depende del SO; se deja el flag para la UI.
+    this.callState.isSpeakerOn = enabled;
   }
 
   getCallState(): SipCallState {
     return { ...this.callState };
   }
 
+  async shutdown(): Promise<void> {
+    await this.endCall();
+    if (this.simpleUser) {
+      try {
+        await this.simpleUser.disconnect();
+      } catch {
+        // ignore
+      }
+      this.simpleUser = null;
+    }
+    this.isInitialized = false;
+    this.currentConfig = null;
+  }
+
+  private resetCallState(): void {
+    this.callState = {
+      isActive: false,
+      isConnected: false,
+      isMuted: false,
+      isSpeakerOn: false,
+      duration: 0,
+    };
+    if (this.callDurationInterval) {
+      clearInterval(this.callDurationInterval);
+      this.callDurationInterval = null;
+    }
+  }
+
   private startCallDuration(): void {
+    if (this.callDurationInterval) {
+      clearInterval(this.callDurationInterval);
+    }
     this.callDurationInterval = setInterval(() => {
       if (this.callState.isActive && this.callState.isConnected) {
         this.callState.duration += 1;
@@ -154,6 +305,5 @@ class SipService extends EventEmitter {
   }
 }
 
-// Crear y exportar instancia singleton
 const sipService = new SipService();
-export { sipService };
+export { sipService, isSipConfigured };

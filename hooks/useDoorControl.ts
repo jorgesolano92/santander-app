@@ -5,7 +5,8 @@ import {
   SystemStatus,
   type PanelApiResult,
 } from '../services/DoorControlService';
-import { sipService, SipConfig, SipCallState, SipEventType } from '../services/SipService';
+import { sipService, SipCallState, SipEventType } from '../services/SipService';
+import { startSipIntercom, stopSipIntercom } from '../services/intercomSip';
 import { IntercomConfig } from '../components/IntercomConfigurationModal';
 import { emergencyService } from '../services/EmergencyService';
 
@@ -324,45 +325,19 @@ export function useDoorControl(): UseDoorControlReturn {
   const startIntercomCall = useCallback(async (intercomConfig: IntercomConfig): Promise<boolean> => {
     try {
       if (!isMountedRef.current) return false;
-      
+
       setIsLoading(true);
       setError(null);
-      
-      // Check if SIP is configured
-      if (!intercomConfig.sipUri || !intercomConfig.sipUsername || !intercomConfig.sipPassword) {
-        setError('Configuración SIP incompleta para este intercomunicador');
-        return false;
-      }
-      
-      // Prepare SIP configuration
-      const sipConfig: SipConfig = {
-        sipUri: intercomConfig.sipUri,
-        sipUsername: intercomConfig.sipUsername,
-        sipPassword: intercomConfig.sipPassword,
-        sipDomain: intercomConfig.sipDomain || 'localhost',
-        enableTLS: intercomConfig.enableTLS || false,
-      };
-      
-      // Initialize SIP service if not already initialized
-      if (!sipService.isServiceInitialized()) {
-        const initialized = await sipService.initialize(sipConfig);
-        if (!initialized) {
-          setError('Error inicializando servicio SIP');
-          return false;
-        }
-      }
-      
-      // Start the call
-      const callStarted = await sipService.startCall(intercomConfig.sipUri);
-      
-      if (callStarted && isMountedRef.current) {
-        // Determine door ID from intercom name
-        const doorId = intercomConfig.name.includes('P1') || intercomConfig.name.includes('Calle') ? 'P1' : 'P2';
+
+      const doorId =
+        intercomConfig.name.includes('P1') || intercomConfig.name.includes('Calle') ? 'P1' : 'P2';
+
+      const ok = await startSipIntercom(doorId, intercomConfig);
+      if (ok && isMountedRef.current) {
         setActiveSipCallDoorId(doorId);
         setSipCallState(sipService.getCallState());
       }
-      
-      return callStarted;
+      return ok;
     } catch (err) {
       if (isMountedRef.current) {
         setError(err instanceof Error ? err.message : 'Error iniciando llamada SIP');
@@ -378,12 +353,12 @@ export function useDoorControl(): UseDoorControlReturn {
   const endIntercomCall = useCallback(async (): Promise<void> => {
     try {
       if (!isMountedRef.current) return;
-      
+
       setIsLoading(true);
       setError(null);
-      
-      await sipService.endCall();
-      
+
+      await stopSipIntercom();
+
       if (isMountedRef.current) {
         setSipCallState(null);
         setActiveSipCallDoorId(null);

@@ -1,0 +1,159 @@
+openapi: 3.0.3
+info:
+  title: API custom1 (CSIP)
+  version: '1.0.0'
+  description: >-
+    Documentacion tecnica para integradores del API custom1. Describe los endpoints
+    que deben usar los clientes y el formato de notificaciones. No incluye
+    detalles internos.
+    Autenticación: la API requiere autenticación. Puede usarse Bearer token
+    (`Authorization: Bearer <token>`) o una API Key en el header
+    `X-API-KEY` según la integración del cliente.
+servers:
+  - url: https://{host}/api/custom1
+    variables:
+      host:
+        default: 192.168.1.50:8090
+        description: Host donde está desplegado el API
+security:
+  - bearerAuth: []
+  - ApiKeyHeader: []
+paths:
+  /button_event.php:
+    post:
+      summary: Evento de pulsador (p1/p2)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ButtonEvent'
+      responses:
+        '200':
+          description: Evento aceptado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+  /call_start.php:
+    post:
+      summary: Iniciar marcación remota
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CallStartRequest'
+      responses:
+        '200':
+          description: Resultado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CallStartResponse'
+  /led_control.php:
+    post:
+      summary: Control de LEDs (p1/p2)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LedControlRequest'
+      responses:
+        '200':
+          description: Resultado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LedControlResponse'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    ApiKeyHeader:
+      type: apiKey
+      in: header
+      name: X-API-KEY
+  schemas:
+    ButtonEvent:
+      type: object
+      properties:
+        button_id:
+          type: string
+          description: "Identificador del pulsador. Valores permitidos: 'p1' o 'p2'."
+          enum: [p1, p2]
+          example: p1
+        meta:
+          type: object
+          additionalProperties: true
+        led_state:
+          type: object
+          properties:
+            p1:
+              type: string
+            p2:
+              type: string
+      required: [button_id]
+    CallStartRequest:
+      type: object
+      properties:
+        target_type:
+          type: string
+          enum: [number, ip, default]
+        target:
+          type: string
+        user:
+          type: string
+        recording:
+          type: boolean
+      required: [target_type]
+    CallStartResponse:
+      type: object
+      properties:
+        status:
+          type: string
+        method:
+          type: string
+        target_type:
+          type: string
+        direction:
+          type: string
+    LedControlRequest:
+      type: object
+      properties:
+        cmd:
+          type: string
+          description: "Comando compacto: 'LED:ACCION' o 'LED:ACCION:VALOR'. Ej: 'p1:green' o 'ALL:efectovuelta:red'"
+          example: p1:green
+        led:
+          type: string
+          description: "Canal objetivo. Puede ser 'p1' o 'p2' (también A/B/ALL para conveniencia)."
+          enum: [p1, p2, A, B, ALL]
+          example: p1
+        estado:
+          type: string
+          description: "Estado lógico para asignar al LED. Valores permitidos: 'libre','ocupado','abriendo','apagado'. También se aceptan colores/alias: 'green','red','orange'."
+          enum: [libre, ocupado, abriendo, apagado, green, red, orange]
+          example: libre
+    LedControlResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        results:
+          type: array
+          items:
+            type: object
+        led_state:
+          type: object
+          properties:
+            p1:
+              type: string
+            p2:
+              type: string

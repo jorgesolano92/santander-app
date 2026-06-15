@@ -1,6 +1,7 @@
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, Modal, ScrollView, Switch, Platform } from 'react-native';
 import { useState, useEffect } from 'react';
-import { Save, X, Camera, Phone } from 'lucide-react-native';
+import { Save, X, Camera } from 'lucide-react-native';
+import { INTERCOM_BRIDGE_ONLY } from '@/config/intercomFeatures';
 import { Picker } from '@react-native-picker/picker';
 import { useWindowDimensions } from 'react-native';
 export interface IntercomConfig {
@@ -24,8 +25,8 @@ export interface IntercomConfig {
   sdkPassword?: string;
   /** Canal de voz/intercom en el SDK (-1 = IPC/videoportero, 0/1 = canal NVR). */
   voiceChannel?: number;
-  /** bridge = PC industrial + audio_bridge.py; sdk = SDK nativo Android (TX suele fallar). */
-  intercomMode?: 'bridge' | 'sdk';
+  /** bridge = PC + audio_bridge.py; sdk = SDK nativo Android; sip = CSIP API + cuenta SIP. */
+  intercomMode?: 'bridge' | 'sdk' | 'sip';
   /** URL WebSocket del puente (ej. ws://192.168.1.10:8765 o IP ZeroTier). */
   bridgeUrl?: string;
   /** Micrófono tablet en modo puente: voice_communication (AGC) o mic (más crudo). */
@@ -34,6 +35,21 @@ export interface IntercomConfig {
   sipUsername: string;
   sipPassword: string;
   sipDomain: string;
+  /** Servidor SIP WebSocket (host:puerto). Ej. pbx.local:5066 */
+  sipServer?: string;
+  /** Destino al marcar desde la tablet (si distinto de sipUri). */
+  sipCallDestination?: string;
+  /** API CSIP custom1 — host:puerto del dispositivo. Ej. 192.168.1.50:8090 */
+  csipApiHost?: string;
+  csipApiUseHttps?: boolean;
+  csipApiKey?: string;
+  csipBearerToken?: string;
+  csipCallTargetType?: 'number' | 'ip' | 'default';
+  csipCallTarget?: string;
+  csipCallUser?: string;
+  csipCallRecording?: boolean;
+  /** Canal CSIP asociado a esta puerta (p1 / p2). */
+  csipButtonId?: 'p1' | 'p2';
   enableOnvifEvents: boolean;
   enableTLS: boolean;
   preferredResolution: string;
@@ -87,6 +103,17 @@ const defaultIntercomConfig: IntercomConfig = {
   sipUsername: '',
   sipPassword: '',
   sipDomain: '',
+  sipServer: '',
+  sipCallDestination: '',
+  csipApiHost: '',
+  csipApiUseHttps: false,
+  csipApiKey: '',
+  csipBearerToken: '',
+  csipCallTargetType: 'default',
+  csipCallTarget: '',
+  csipCallUser: '',
+  csipCallRecording: false,
+  csipButtonId: 'p1',
   enableOnvifEvents: true,
   enableTLS: false,
   preferredResolution: '1920x1080',
@@ -134,7 +161,10 @@ export default function IntercomConfigurationModal({
   }, [visible, initialConfig, doorName]);
 
   const handleSave = () => {
-    onSave(config);
+    onSave({
+      ...config,
+      intercomMode: INTERCOM_BRIDGE_ONLY ? 'bridge' : (config.intercomMode ?? 'bridge'),
+    });
     onClose();
   };
 
@@ -445,6 +475,9 @@ export default function IntercomConfigurationModal({
 
               {/* Ruta Snapshot oculta - no se usa */}
 
+              <Text style={{ fontSize: 11, color: '#6C757D', marginBottom: 8, marginTop: 4 }}>
+                Voz bidireccional vía puente PC (audio_bridge.py en el industrial).
+              </Text>
               <View style={styles.inputRow}>
                 <Text style={styles.inputLabel}>URL puente WS:</Text>
                 <TextInput
@@ -584,60 +617,6 @@ export default function IntercomConfigurationModal({
                 </Text>
               </View>
 
-              </View>
-            </View>
-          </View>
-
-          {/* Configuración SIP */}
-          <View style={styles.section}>
-            <View style={styles.sectionTitle}>
-              <Phone size={20} color="#495057" />
-              <Text style={styles.sectionTitle}>CONFIGURACIÓN SIP (VOZ BIDIRECCIONAL)</Text>
-            </View>
-            <View style={styles.sectionCard}>
-              <View style={styles.inputRow}>
-                <Text style={styles.inputLabel}>SIP URI:</Text>
-                <TextInput
-                  style={styles.textInput}
-                  value={config.sipUri}
-                  onChangeText={(text) => updateConfig('sipUri', text)}
-                  placeholder="sip:intercom1@pbx.local"
-                  autoCapitalize="none"
-                />
-              </View>
-              
-              <View style={styles.inputRow}>
-                <Text style={styles.inputLabel}>Usuario SIP:</Text>
-                <TextInput
-                  style={styles.textInput}
-                  value={config.sipUsername}
-                  onChangeText={(text) => updateConfig('sipUsername', text)}
-                  placeholder="intercom1"
-                  autoCapitalize="none"
-                />
-              </View>
-              
-              <View style={styles.inputRow}>
-                <Text style={styles.inputLabel}>Contraseña SIP:</Text>
-                <TextInput
-                  style={styles.textInput}
-                  value={config.sipPassword}
-                  onChangeText={(text) => updateConfig('sipPassword', text)}
-                  placeholder="sippassword"
-                  secureTextEntry={true}
-                  autoCapitalize="none"
-                />
-              </View>
-              
-              <View style={styles.inputRow}>
-                <Text style={styles.inputLabel}>Dominio SIP:</Text>
-                <TextInput
-                  style={styles.textInput}
-                  value={config.sipDomain}
-                  onChangeText={(text) => updateConfig('sipDomain', text)}
-                  placeholder="pbx.local"
-                  autoCapitalize="none"
-                />
               </View>
             </View>
           </View>
