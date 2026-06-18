@@ -6,7 +6,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { doorControlService, ApiResponse } from '@/services/DoorControlService';
 import ApiResponseDisplayModal from './ApiResponseDisplayModal';
 import IntercomConfigurationModal, { IntercomConfig } from './IntercomConfigurationModal';
-import { Picker } from '@react-native-picker/picker';
+import ActionSelector from './ActionSelector';
 import { emergencyService } from '@/services/EmergencyService';
 import {
   markLocalConfigOverrides,
@@ -14,7 +14,7 @@ import {
 } from '@/services/tabletPanelConfigService';
 import { cloneDefaultDoorAppConfig } from '@/config/defaultDoorAppConfig';
 import { INTERCOM_BRIDGE_ONLY } from '@/config/intercomFeatures';
-import type { ConfigurationData, ModeConfig } from '@/types/configurationData';
+import type { ConfigurationData, ModeConfig, ModesConfig } from '@/types/configurationData';
 
 export type { ConfigurationData, ModeConfig, DoorConfig, ModesConfig } from '@/types/configurationData';
 
@@ -390,40 +390,7 @@ export default function NewConfigurationModal({
     setConfig(prev => ({
       ...prev,
       api: { ...prev.api, [field]: value }
-    })    );
-  };
-
-  const handleRestorePanelDefaults = () => {
-    Alert.alert(
-      'Restaurar datos del panel',
-      'Se descartarán los cambios locales de esta tablet y se importará la configuración por defecto de la sucursal desde el panel. ¿Continuar?',
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Restaurar',
-          onPress: async () => {
-            try {
-              const restored = await restorePanelDefaultsOnDevice();
-              if (!restored) {
-                Alert.alert(
-                  'Error',
-                  'No se pudo importar la configuración del panel. Comprueba red, IP de consola y credenciales API.',
-                );
-                return;
-              }
-              setConfig(restored);
-              defaultConfigRef.current = restored;
-              await emergencyService.setEmergencyConfig(restored.emergency);
-              onSave(restored);
-              Alert.alert('Listo', 'Configuración del panel importada en esta tablet.');
-            } catch (error) {
-              console.error('❌ Error restaurando defaults del panel:', error);
-              Alert.alert('Error', 'No se pudo restaurar la configuración del panel.');
-            }
-          },
-        },
-      ],
-    );
+    }));
   };
 
   const updateSchedule = (type: keyof typeof config.schedules, field: keyof ScheduleConfig, value: string) => {
@@ -900,21 +867,33 @@ export default function NewConfigurationModal({
       color: '#495057',
       minHeight: 36,
     },
-    modePickerContainer: {
-      width: '100%',
-      height: 36,
-      backgroundColor: '#FFFFFF',
+    actionToggleRow: {
+      flexDirection: 'row',
+      gap: isSmallTablet ? 4 : 6,
+    },
+    actionToggleBtn: {
+      flex: 1,
+      paddingVertical: isSmallTablet ? 6 : 8,
+      paddingHorizontal: isSmallTablet ? 4 : 6,
+      borderRadius: 4,
       borderWidth: 1,
       borderColor: '#CED4DA',
-      borderRadius: 4,
-      overflow: 'hidden',
+      backgroundColor: '#FFFFFF',
+      alignItems: 'center',
       justifyContent: 'center',
     },
-    modePicker: {
-      width: '100%',
-      height: 36,
+    actionToggleBtnActive: {
+      backgroundColor: '#E7F1FF',
+      borderColor: '#0D6EFD',
+    },
+    actionToggleText: {
+      fontSize: isSmallTablet ? 10 : isLargeTablet ? 12 : 11,
       color: '#495057',
-      backgroundColor: 'transparent',
+      fontWeight: '500',
+    },
+    actionToggleTextActive: {
+      color: '#0D6EFD',
+      fontWeight: '700',
     },
     bottomButtons: {
       flexDirection: 'row',
@@ -1410,29 +1389,22 @@ export default function NewConfigurationModal({
                     {config.modes[key as keyof ModesConfig].enabled && (
                       <View style={styles.modeFieldBlock}>
                         <Text style={styles.modeFieldLabel}>action:</Text>
-                        <View style={styles.modePickerContainer}>
-                          <Picker
-                            selectedValue={config.modes[key as keyof ModesConfig].action}
-                            onValueChange={(value) =>
-                              setConfig((prev) => ({
-                                ...prev,
-                                modes: {
-                                  ...prev.modes,
-                                  [key]: {
-                                    ...prev.modes[key as keyof ModesConfig],
-                                    action: value as 'set_rule' | 'set_output',
-                                  },
+                        <ActionSelector
+                          value={config.modes[key as keyof ModesConfig].action}
+                          onChange={(action) =>
+                            setConfig((prev) => ({
+                              ...prev,
+                              modes: {
+                                ...prev.modes,
+                                [key]: {
+                                  ...prev.modes[key as keyof ModesConfig],
+                                  action,
                                 },
-                              }))
-                            }
-                            style={styles.modePicker}
-                            mode="dropdown"
-                            dropdownIconColor="#495057"
-                          >
-                            <Picker.Item label="set_rule" value="set_rule" />
-                            <Picker.Item label="set_output" value="set_output" />
-                          </Picker>
-                        </View>
+                              },
+                            }))
+                          }
+                          styles={styles}
+                        />
                       </View>
                     )}
                     {config.modes[key as keyof ModesConfig].enabled &&
@@ -1523,26 +1495,19 @@ export default function NewConfigurationModal({
                     autoCapitalize="none"
                   />
                   <Text style={[styles.modeFieldLabel, { marginTop: 10 }]}>action</Text>
-                  <View style={styles.modePickerContainer}>
-                    <Picker
-                      selectedValue={config.emergency.action || 'set_rule'}
-                      onValueChange={(value) =>
-                        setConfig((prev) => ({
-                          ...prev,
-                          emergency: {
-                            ...prev.emergency,
-                            action: value as 'set_rule' | 'set_output',
-                          },
-                        }))
-                      }
-                      style={styles.modePicker}
-                      mode="dropdown"
-                      dropdownIconColor="#495057"
-                    >
-                      <Picker.Item label="set_rule" value="set_rule" />
-                      <Picker.Item label="set_output" value="set_output" />
-                    </Picker>
-                  </View>
+                  <ActionSelector
+                    value={config.emergency.action}
+                    onChange={(action) =>
+                      setConfig((prev) => ({
+                        ...prev,
+                        emergency: {
+                          ...prev.emergency,
+                          action,
+                        },
+                      }))
+                    }
+                    styles={styles}
+                  />
                   {config.emergency.action === 'set_output' && (
                     <>
                       <Text style={[styles.modeFieldLabel, { marginTop: 10 }]}>Código salida</Text>
