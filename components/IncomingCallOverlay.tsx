@@ -9,7 +9,6 @@ import {
   Platform,
   BackHandler,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Phone, PhoneOff } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 
@@ -26,7 +25,6 @@ type Props = {
 };
 
 export default function IncomingCallOverlay({ call, onAnswer, onReject, onExpired }: Props) {
-  const insets = useSafeAreaInsets();
   const [remaining, setRemaining] = useState(0);
   const vibrateTimer = useRef<ReturnType<typeof setInterval> | null>(null);
   const expiredRef = useRef(false);
@@ -101,8 +99,8 @@ export default function IncomingCallOverlay({ call, onAnswer, onReject, onExpire
       contentContainerStyle={[
         styles.scrollContent,
         {
-          paddingTop: Math.max(insets.top, 16) + 24,
-          paddingBottom: Math.max(insets.bottom, 16) + 24,
+          paddingTop: 40,
+          paddingBottom: 32,
         },
       ]}
       keyboardShouldPersistTaps="handled"

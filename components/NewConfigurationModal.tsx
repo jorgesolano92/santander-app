@@ -393,16 +393,6 @@ export default function NewConfigurationModal({
     }));
   };
 
-  const updateSchedule = (type: keyof typeof config.schedules, field: keyof ScheduleConfig, value: string) => {
-    setConfig(prev => ({
-      ...prev,
-      schedules: {
-        ...prev.schedules,
-        [type]: { ...prev.schedules[type], [field]: value }
-      }
-    }));
-  };
-
   const testConnection = async (type: string, ip: string) => {
     const key = `${type}_${ip}`;
     setConnectionStatus(prev => ({ ...prev, [key]: 'testing' }));
@@ -648,74 +638,6 @@ export default function NewConfigurationModal({
       paddingHorizontal: isSmallTablet ? 8 : isLargeTablet ? 12 : 10,
       paddingVertical: isSmallTablet ? 6 : isLargeTablet ? 8 : 7,
       fontFamily: 'monospace',
-    },
-    scheduleCard: {
-      backgroundColor: '#FFFFFF',
-      borderRadius: 8,
-      padding: isSmallTablet ? 12 : isLargeTablet ? 20 : 16,
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.08,
-      shadowRadius: 8,
-      elevation: 3,
-      borderWidth: 1,
-      borderColor: '#E9ECEF',
-    },
-    scheduleHeaderRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      marginBottom: isSmallTablet ? 6 : isLargeTablet ? 10 : 8,
-      paddingBottom: isSmallTablet ? 4 : isLargeTablet ? 6 : 5,
-      borderBottomWidth: 1,
-      borderBottomColor: '#E9ECEF',
-    },
-    scheduleHeaderLabel: {
-      flex: 1,
-      fontSize: isSmallTablet ? 10 : isLargeTablet ? 12 : 11,
-      fontWeight: '700',
-      color: '#495057',
-    },
-    scheduleHeaderTime: {
-      fontSize: isSmallTablet ? 10 : isLargeTablet ? 12 : 11,
-      fontWeight: '700',
-      color: '#495057',
-      width: isSmallTablet ? 50 : isLargeTablet ? 70 : 60,
-      textAlign: 'center',
-    },
-    scheduleHeaderSeparator: {
-      width: isSmallTablet ? 16 : isLargeTablet ? 24 : 20,
-    },
-    scheduleRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      marginBottom: isSmallTablet ? 6 : isLargeTablet ? 10 : 8,
-      gap: isSmallTablet ? 6 : isLargeTablet ? 10 : 8,
-    },
-    scheduleLabel: {
-      flex: 1,
-      fontSize: isSmallTablet ? 11 : isLargeTablet ? 13 : 12,
-      fontWeight: '600',
-      color: '#495057',
-    },
-    timeInput: {
-      fontSize: isSmallTablet ? 11 : isLargeTablet ? 13 : 12,
-      color: '#212529',
-      backgroundColor: '#F8F9FA',
-      borderWidth: 1,
-      borderColor: '#CED4DA',
-      borderRadius: 4,
-      paddingHorizontal: isSmallTablet ? 6 : isLargeTablet ? 10 : 8,
-      paddingVertical: isSmallTablet ? 4 : isLargeTablet ? 6 : 5,
-      width: isSmallTablet ? 50 : isLargeTablet ? 70 : 60,
-      textAlign: 'center',
-      fontFamily: 'monospace',
-    },
-    timeSeparator: {
-      fontSize: isSmallTablet ? 11 : isLargeTablet ? 13 : 12,
-      fontWeight: '600',
-      color: '#495057',
-      width: isSmallTablet ? 16 : isLargeTablet ? 24 : 20,
-      textAlign: 'center',
     },
     officeCard: {
       backgroundColor: '#FFFFFF',
@@ -1033,6 +955,7 @@ export default function NewConfigurationModal({
       visible={visible}
       animationType="slide"
       transparent={false}
+      statusBarTranslucent
       onRequestClose={onClose}
     >
       <View style={styles.container}>
@@ -1180,9 +1103,11 @@ export default function NewConfigurationModal({
                   </TouchableOpacity>
                 </View>
               </View>
-              
-              {/* Configuración API */}
-              <Text style={[styles.sectionTitle, { marginTop: 16 }]}>CONFIGURACIÓN API</Text>
+            </View>
+
+            {/* Columna Derecha - Configuración API */}
+            <View style={styles.rightColumn}>
+              <Text style={styles.sectionTitle}>CONFIGURACIÓN API</Text>
               <View style={styles.networkCard}>
                 <View style={styles.networkRow}>
                   <Text style={styles.networkLabel}>Puerto:</Text>
@@ -1194,7 +1119,7 @@ export default function NewConfigurationModal({
                     keyboardType="numeric"
                   />
                 </View>
-                
+
                 <View style={styles.networkRow}>
                   <Text style={styles.networkLabel}>Usuario:</Text>
                   <TextInput
@@ -1205,7 +1130,7 @@ export default function NewConfigurationModal({
                     autoCapitalize="none"
                   />
                 </View>
-                
+
                 <View style={styles.networkRow}>
                   <Text style={styles.networkLabel}>Contraseña:</Text>
                   <TextInput
@@ -1217,7 +1142,7 @@ export default function NewConfigurationModal({
                     secureTextEntry={true}
                   />
                 </View>
-                
+
                 <View style={styles.networkRow}>
                   <Text style={styles.networkLabel}>URL TOKEN:</Text>
                   <TextInput
@@ -1239,7 +1164,7 @@ export default function NewConfigurationModal({
                     autoCapitalize="none"
                   />
                 </View>
-                
+
                 <View style={styles.networkRow}>
                   <Text style={styles.networkLabel}>URL POST:</Text>
                   <TextInput
@@ -1250,7 +1175,7 @@ export default function NewConfigurationModal({
                     autoCapitalize="none"
                   />
                 </View>
-                
+
                 <View style={styles.networkRow}>
                   <Text style={styles.networkLabel}>URL MODES:</Text>
                   <TextInput
@@ -1261,51 +1186,6 @@ export default function NewConfigurationModal({
                     autoCapitalize="none"
                   />
                 </View>
-                
-                {/* Botón de prueba de API deshabilitado */}
-                {/* <TouchableOpacity 
-                  style={[styles.testApiButton, isTestingApi && styles.testApiButtonDisabled]}
-                  onPress={handleTestApiConnection}
-                  disabled={isTestingApi}
-                >
-                  <RefreshCw size={16} color="#FFFFFF" />
-                  <Text style={styles.testApiButtonText}>
-                    {isTestingApi ? 'PROBANDO...' : 'PROBAR CONEXIÓN API'}
-                  </Text>
-                </TouchableOpacity> */}
-              </View>
-            </View>
-
-            {/* Columna Derecha - Horarios */}
-            <View style={styles.rightColumn}>
-              <Text style={styles.sectionTitle}>HORARIOS</Text>
-              <View style={styles.scheduleCard}>
-                <View style={styles.scheduleHeaderRow}>
-                  <Text style={styles.scheduleHeaderLabel}></Text>
-                  <Text style={styles.scheduleHeaderTime}>INI 1</Text>
-                  <Text style={styles.scheduleHeaderSeparator}></Text>
-                  <Text style={styles.scheduleHeaderTime}>INI 2</Text>
-                </View>
-                {Object.entries(config.schedules).map(([type, schedule]) => (
-                  <View key={type} style={styles.scheduleRow}>
-                    <Text style={styles.scheduleLabel}>
-                      {type.charAt(0).toUpperCase() + type.slice(1)}:
-                    </Text>
-                    <TextInput
-                      style={styles.timeInput}
-                      value={schedule.ini1}
-                      onChangeText={(text) => updateSchedule(type as keyof typeof config.schedules, 'ini1', text)}
-                      placeholder="00:00"
-                    />
-                    <Text style={styles.timeSeparator}>-</Text>
-                    <TextInput
-                      style={styles.timeInput}
-                      value={schedule.ini2}
-                      onChangeText={(text) => updateSchedule(type as keyof typeof config.schedules, 'ini2', text)}
-                      placeholder="00:00"
-                    />
-                  </View>
-                ))}
               </View>
             </View>
           </View>

@@ -50,6 +50,16 @@
     },
     "android": {
       "package": "com.cess07.puertassantander",
+      "softwareKeyboardLayoutMode": "pan",
+      "statusBar": {
+        "hidden": true,
+        "translucent": true,
+        "backgroundColor": "#00000000"
+      },
+      "navigationBar": {
+        "visible": "immersive",
+        "backgroundColor": "#00000000"
+      },
       "permissions": [
         "android.permission.READ_EXTERNAL_STORAGE",
         "android.permission.WRITE_EXTERNAL_STORAGE",

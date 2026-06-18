@@ -9,7 +9,6 @@ import {
 } from 'react-native';
 import { useWindowDimensions } from 'react-native';
 import { useState, useEffect, useCallback } from 'react';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Settings, MessageCircle, DoorOpen, HardHat, Wifi, Phone } from 'lucide-react-native';
 import { Image } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -96,7 +95,6 @@ const formatModeForDisplay = (mode: string): string => {
 export default function MainScreen() {
   // Get window dimensions reactively
   const { width = 0, height = 0 } = useWindowDimensions();
-  const insets = useSafeAreaInsets();
   
   // Responsive breakpoints
   const isSmallTablet = width < 900; // 8" tablets like Oukitel RT3 Pro
@@ -430,7 +428,7 @@ export default function MainScreen() {
       alignItems: 'center',
       justifyContent: 'space-between',
       paddingHorizontal: isSmallTablet ? 16 : isLargeTablet ? 32 : 24,
-      paddingTop: (isSmallTablet ? 12 : isLargeTablet ? 20 : 16) + insets.top,
+      paddingTop: isSmallTablet ? 12 : isLargeTablet ? 20 : 16,
       paddingBottom: isSmallTablet ? 12 : isLargeTablet ? 20 : 16,
       shadowColor: '#000',
       shadowOffset: { width: 0, height: 2 },
