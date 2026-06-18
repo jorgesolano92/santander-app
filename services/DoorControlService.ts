@@ -2227,6 +2227,35 @@ class DoorControlService {
     const wsHost = `ws://${host}:${port}`;
     return `${wsHost}${path}?token=${encodeURIComponent(token)}`;
   }
+
+  /** Defaults de sucursal configurados en el panel web. */
+  async fetchTabletPanelConfig(sourceConfig?: any): Promise<{
+    revision: string;
+    updated_at: string | null;
+    config: any;
+  } | null> {
+    const config = sourceConfig ?? (await this.getSavedAppConfig());
+    if (!config?.network?.consoleIP) {
+      console.warn('⚠️ fetchTabletPanelConfig: sin consoleIP');
+      return null;
+    }
+    const response = await this.authenticatedRequest(config, 'GET', '/api/v1/tablet-config');
+    if (!response?.ok) {
+      const errText = await response?.text().catch(() => '');
+      console.error(`❌ fetchTabletPanelConfig (${response?.status}): ${errText}`);
+      return null;
+    }
+    const data = await response.json();
+    if (!data?.config) {
+      console.error('❌ fetchTabletPanelConfig: respuesta sin config');
+      return null;
+    }
+    return {
+      revision: String(data.revision ?? 'unknown'),
+      updated_at: data.updated_at ?? null,
+      config: data.config,
+    };
+  }
 }
 
 // Create and export singleton instance

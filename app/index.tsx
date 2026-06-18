@@ -29,7 +29,7 @@ import {
   tabletCallService,
   type IncomingCallPayload,
 } from '@/services/tabletCallService';
-import { cloneDefaultDoorAppConfig } from '@/config/defaultDoorAppConfig';
+import { initializeTabletConfigOnBoot } from '@/services/tabletPanelConfigService';
 import { showOperationError } from '@/utils/showOperationError';
 // (Eliminar) import * as FileSystem from 'expo-file-system';
 
@@ -177,22 +177,14 @@ export default function MainScreen() {
   useEffect(() => {
     const loadSystemConfig = async () => {
       try {
-        const savedConfig = await AsyncStorage.getItem('new_door_config');
-        if (savedConfig) {
-          const parsedConfig = JSON.parse(savedConfig);
-          setSystemConfig(parsedConfig);
-          console.log('📋 Configuración del sistema cargada:', parsedConfig);
-        } else {
-          const defaults = cloneDefaultDoorAppConfig();
-          await AsyncStorage.setItem('new_door_config', JSON.stringify(defaults));
-          setSystemConfig(defaults);
-          console.log('📋 Configuración por defecto aplicada al iniciar');
-        }
+        const config = await initializeTabletConfigOnBoot();
+        setSystemConfig(config);
+        console.log('📋 Configuración del sistema cargada:', config);
       } catch (error) {
         console.error('❌ Error cargando configuración del sistema:', error);
       }
     };
-    
+
     loadSystemConfig();
   }, []);
 

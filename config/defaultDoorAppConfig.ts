@@ -274,6 +274,12 @@ export const DEFAULT_DOOR_APP_CONFIGURATION: ConfigurationData = {
       output_on: true,
     },
   },
+  tabletCall: {
+    enabled: true,
+    timeoutSeconds: 30,
+    modes: 'horario_manual,horario_carga_cajero',
+    pulsadores: 'p1',
+  },
 };
 
 export function cloneDefaultDoorAppConfig(): ConfigurationData {

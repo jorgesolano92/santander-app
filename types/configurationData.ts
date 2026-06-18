@@ -57,4 +57,13 @@ export interface ConfigurationData {
   officeWithATM: boolean;
   emergency: EmergencyConfig;
   modes: ModesConfig;
+  /** Configuración de llamadas P1 → tablets (defaults de sucursal en panel). */
+  tabletCall?: TabletCallConfig;
+}
+
+export interface TabletCallConfig {
+  enabled: boolean;
+  timeoutSeconds: number;
+  modes: string;
+  pulsadores: string;
 }

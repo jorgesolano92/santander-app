@@ -8,6 +8,10 @@ import ApiResponseDisplayModal from './ApiResponseDisplayModal';
 import IntercomConfigurationModal, { IntercomConfig } from './IntercomConfigurationModal';
 import { Picker } from '@react-native-picker/picker';
 import { emergencyService } from '@/services/EmergencyService';
+import {
+  markLocalConfigOverrides,
+  restorePanelDefaultsOnDevice,
+} from '@/services/tabletPanelConfigService';
 import { cloneDefaultDoorAppConfig } from '@/config/defaultDoorAppConfig';
 import { INTERCOM_BRIDGE_ONLY } from '@/config/intercomFeatures';
 import type { ConfigurationData, ModeConfig } from '@/types/configurationData';
@@ -218,6 +222,7 @@ export default function NewConfigurationModal({
   const handleSave = async () => {
     try {
       await saveConfiguration(config);
+      await markLocalConfigOverrides();
       
       // Guardar configuración de emergencia
       console.log('💾 Guardando configuración de emergencia:', config.emergency);
@@ -256,8 +261,8 @@ export default function NewConfigurationModal({
 
   const handleResetConfiguration = () => {
     Alert.alert(
-      'Restablecer configuración',
-      'Se eliminarán los datos guardados en la tablet y se cargarán los valores por defecto de la app. ¿Continuar?',
+      'Restablecer configuración local',
+      'Se eliminarán los datos guardados en esta tablet y se cargarán los valores de fábrica embebidos en la app (solo si falla la conexión al panel). ¿Continuar?',
       [
         { text: 'Cancelar', style: 'cancel' },
         {
@@ -272,6 +277,7 @@ export default function NewConfigurationModal({
               setConfig(resetConfig);
               await AsyncStorage.setItem('new_door_config', JSON.stringify(resetConfig));
               await emergencyService.setEmergencyConfig(resetConfig.emergency);
+              await markLocalConfigOverrides();
               console.log('✅ Configuración restablecida a valores por defecto');
             } catch (error) {
               console.error('❌ Error restableciendo configuración:', error);
@@ -279,6 +285,39 @@ export default function NewConfigurationModal({
           },
         },
       ]
+    );
+  };
+
+  const handleRestorePanelDefaults = () => {
+    Alert.alert(
+      'Restaurar datos del panel',
+      'Se descartarán los cambios locales de esta tablet y se importará la configuración por defecto de la sucursal desde el panel. ¿Continuar?',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Restaurar',
+          onPress: async () => {
+            try {
+              const restored = await restorePanelDefaultsOnDevice();
+              if (!restored) {
+                Alert.alert(
+                  'Error',
+                  'No se pudo importar la configuración del panel. Comprueba red, IP de consola y credenciales API.',
+                );
+                return;
+              }
+              setConfig(restored);
+              defaultConfigRef.current = restored;
+              await emergencyService.setEmergencyConfig(restored.emergency);
+              onSave(restored);
+              Alert.alert('Listo', 'Configuración del panel importada en esta tablet.');
+            } catch (error) {
+              console.error('❌ Error restaurando defaults del panel:', error);
+              Alert.alert('Error', 'No se pudo restaurar la configuración del panel.');
+            }
+          },
+        },
+      ],
     );
   };
 
@@ -351,9 +390,42 @@ export default function NewConfigurationModal({
     setConfig(prev => ({
       ...prev,
       api: { ...prev.api, [field]: value }
-    }));
+    })    );
   };
-  
+
+  const handleRestorePanelDefaults = () => {
+    Alert.alert(
+      'Restaurar datos del panel',
+      'Se descartarán los cambios locales de esta tablet y se importará la configuración por defecto de la sucursal desde el panel. ¿Continuar?',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Restaurar',
+          onPress: async () => {
+            try {
+              const restored = await restorePanelDefaultsOnDevice();
+              if (!restored) {
+                Alert.alert(
+                  'Error',
+                  'No se pudo importar la configuración del panel. Comprueba red, IP de consola y credenciales API.',
+                );
+                return;
+              }
+              setConfig(restored);
+              defaultConfigRef.current = restored;
+              await emergencyService.setEmergencyConfig(restored.emergency);
+              onSave(restored);
+              Alert.alert('Listo', 'Configuración del panel importada en esta tablet.');
+            } catch (error) {
+              console.error('❌ Error restaurando defaults del panel:', error);
+              Alert.alert('Error', 'No se pudo restaurar la configuración del panel.');
+            }
+          },
+        },
+      ],
+    );
+  };
+
   const updateSchedule = (type: keyof typeof config.schedules, field: keyof ScheduleConfig, value: string) => {
     setConfig(prev => ({
       ...prev,
@@ -904,6 +976,22 @@ export default function NewConfigurationModal({
       borderRadius: 8,
       gap: isSmallTablet ? 4 : isLargeTablet ? 8 : 6,
       shadowColor: '#DC3545',
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.2,
+      shadowRadius: 8,
+      elevation: 4,
+    },
+    panelDefaultsButton: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: '#0D6EFD',
+      paddingHorizontal: isSmallTablet ? 16 : isLargeTablet ? 24 : 20,
+      paddingVertical: isSmallTablet ? 10 : isLargeTablet ? 14 : 12,
+      borderRadius: 8,
+      gap: isSmallTablet ? 4 : isLargeTablet ? 8 : 6,
+      shadowColor: '#0D6EFD',
       shadowOffset: { width: 0, height: 4 },
       shadowOpacity: 0.2,
       shadowRadius: 8,
@@ -1493,11 +1581,15 @@ export default function NewConfigurationModal({
             </View>
           </View>
 
-          {/* Botón reset */}
+          {/* Botones reset / restaurar panel */}
           <View style={styles.bottomButtons}>
+            <TouchableOpacity style={styles.panelDefaultsButton} onPress={handleRestorePanelDefaults}>
+              <RefreshCw size={20} color="#FFFFFF" />
+              <Text style={styles.resetButtonText}>DATOS PANEL</Text>
+            </TouchableOpacity>
             <TouchableOpacity style={styles.resetButton} onPress={handleResetConfiguration}>
               <RefreshCw size={20} color="#FFFFFF" />
-              <Text style={styles.resetButtonText}>RESET</Text>
+              <Text style={styles.resetButtonText}>RESET APP</Text>
             </TouchableOpacity>
           </View>
         </ScrollView>
