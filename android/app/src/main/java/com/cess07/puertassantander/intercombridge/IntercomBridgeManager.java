@@ -222,7 +222,9 @@ public class IntercomBridgeManager {
             return;
         }
         if (!playbackQueue.offer(pcm)) {
-            playbackQueue.poll();
+            while (playbackQueue.size() >= 48) {
+                playbackQueue.poll();
+            }
             playbackQueue.offer(pcm);
         }
     }
@@ -274,7 +276,7 @@ public class IntercomBridgeManager {
             int playBuf = Math.max(bufSize * 4, rxChunkBytes * 6);
             audioTrack = new AudioTrack.Builder()
                     .setAudioAttributes(new AudioAttributes.Builder()
-                            .setUsage(AudioAttributes.USAGE_MEDIA)
+                            .setUsage(AudioAttributes.USAGE_VOICE_COMMUNICATION) // USAGE_MEDIA o USAGE_VOICE_COMMUNICATION
                             .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
                             .build())
                     .setAudioFormat(new AudioFormat.Builder()

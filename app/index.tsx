@@ -21,6 +21,14 @@ import ManualModeModal from '@/components/ManualModeModal';
 import EmergencyConfirmationModal from '@/components/EmergencyConfirmationModal';
 import { useDoorControl } from '@/hooks/useDoorControl';
 import { doorControlService } from '@/services/DoorControlService';
+import {
+  registerIncomingCallUi,
+  unregisterIncomingCallUi,
+} from '@/services/incomingCallUiBridge';
+import {
+  tabletCallService,
+  type IncomingCallPayload,
+} from '@/services/tabletCallService';
 import { cloneDefaultDoorAppConfig } from '@/config/defaultDoorAppConfig';
 import { showOperationError } from '@/utils/showOperationError';
 // (Eliminar) import * as FileSystem from 'expo-file-system';
@@ -142,6 +150,7 @@ export default function MainScreen() {
   const [showModeModal, setShowModeModal] = useState(false);
   const [showTechnicianModal, setShowTechnicianModal] = useState(false);
   const [showManualModeModal, setShowManualModeModal] = useState(false);
+  const [autoStartIntercomDoorId, setAutoStartIntercomDoorId] = useState<string | null>(null);
   const [showEmergencyConfirmModal, setShowEmergencyConfirmModal] = useState(false);
   const [currentDateTime, setCurrentDateTime] = useState(new Date());
   const [communicatingDoors, setCommunicatingDoors] = useState<Set<string>>(new Set());
@@ -185,6 +194,34 @@ export default function MainScreen() {
     };
     
     loadSystemConfig();
+  }, []);
+
+  useEffect(() => {
+    if (!systemConfig?.network?.consoleIP) return;
+    void tabletCallService.start();
+    return () => {
+      tabletCallService.stop();
+    };
+  }, [systemConfig?.network?.consoleIP]);
+
+  useEffect(() => {
+    registerIncomingCallUi({
+      onAnswer: (call: IncomingCallPayload) => {
+        console.log('[TabletCall] handler contestar', call.callId);
+        void tabletCallService.answerCall(call.callId);
+        const doorId = tabletCallService.doorToAppId(call.door);
+        setAutoStartIntercomDoorId(doorId);
+        setShowManualModeModal(true);
+      },
+      onReject: (call: IncomingCallPayload) => {
+        console.log('[TabletCall] handler rechazar', call.callId);
+        tabletCallService.rejectCall(call.callId);
+      },
+      onExpired: (call: IncomingCallPayload) => {
+        console.log('[TabletCall] handler timeout', call.callId);
+      },
+    });
+    return () => unregisterIncomingCallUi();
   }, []);
 
   // Recargar configuración cuando se cierra el modal de configuración
@@ -1237,6 +1274,8 @@ export default function MainScreen() {
         isDoorVerifying={(doorId: string) => isDoorVerifying(doorId)}
         refreshAllDoorsStatus={refreshAllDoorsStatus}
         intercomConfigs={systemConfig?.doors || []}
+        autoStartIntercomDoorId={autoStartIntercomDoorId}
+        onAutoStartIntercomDone={() => setAutoStartIntercomDoorId(null)}
       />
 
       <EmergencyConfirmationModal

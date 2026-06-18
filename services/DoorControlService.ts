@@ -2204,6 +2204,29 @@ class DoorControlService {
       return { isConfigured: false, isActive: false, switchesStatus: emptySwitches };
     }
   }
+
+  /** Token JWT para WebSocket de llamadas (autentica si hace falta). */
+  async getAuthTokenForCalls(): Promise<string | null> {
+    const config = await this.getSavedAppConfig();
+    let token = await this.getBearerToken();
+    if (!token && config) {
+      token = await this.authenticateWithConfiguredCredentials(config);
+    }
+    return token;
+  }
+
+  /** URL ws://…/api/v1/ws/calls?token=… */
+  async buildCallsWebSocketUrl(): Promise<string | null> {
+    const config = await this.getSavedAppConfig();
+    const host = String(config?.network?.consoleIP || '').trim();
+    if (!host) return null;
+    const token = await this.getAuthTokenForCalls();
+    if (!token) return null;
+    const port = Number(config?.api?.port || 8000);
+    const path = this.normalizeApiPath('/api/v1/ws/calls');
+    const wsHost = `ws://${host}:${port}`;
+    return `${wsHost}${path}?token=${encodeURIComponent(token)}`;
+  }
 }
 
 // Create and export singleton instance

@@ -46,6 +46,9 @@ interface ManualModeModalProps {
   isDoorVerifying: (doorId: string) => boolean;
   refreshAllDoorsStatus: () => Promise<boolean>;
   intercomConfigs: DoorConfig[];
+  /** Tras contestar llamada P1: abrir visualización y conectar intercom automáticamente. */
+  autoStartIntercomDoorId?: string | null;
+  onAutoStartIntercomDone?: () => void;
 }
 
 export default function ManualModeModal({ 
@@ -60,7 +63,9 @@ export default function ManualModeModal({
   getDoorButtonText,
   isDoorVerifying,
   refreshAllDoorsStatus,
-  intercomConfigs
+  intercomConfigs,
+  autoStartIntercomDoorId,
+  onAutoStartIntercomDone,
 }: ManualModeModalProps) {
   const MANUAL_OUTPUT_STATE_KEY = 'door_manual_output_state';
   const { width = 0 } = useWindowDimensions();
@@ -278,6 +283,37 @@ export default function ManualModeModal({
       void stopIntercom(intercom).finally(() => setSdkIntercomDoorId(null));
     }
   }, [visible, sdkIntercomDoorId]);
+
+  useEffect(() => {
+    if (!visible || !autoStartIntercomDoorId) return;
+    const doorId = autoStartIntercomDoorId;
+    const doorIndex = parseInt(doorId.replace('P', ''), 10) - 1;
+    const intercom = currentIntercomConfigs[doorIndex]?.intercom;
+    if (!intercom) {
+      onAutoStartIntercomDone?.();
+      return;
+    }
+
+    let cancelled = false;
+    const run = async () => {
+      setSdkIntercomLoading(doorId);
+      try {
+        const ok = await startIntercom(doorId, intercom);
+        if (!cancelled && ok) {
+          setSdkIntercomDoorId(doorId);
+        }
+      } finally {
+        if (!cancelled) {
+          setSdkIntercomLoading(null);
+          onAutoStartIntercomDone?.();
+        }
+      }
+    };
+    void run();
+    return () => {
+      cancelled = true;
+    };
+  }, [visible, autoStartIntercomDoorId]);
 
   const handleToggleBridgeIntercom = async (doorId: string, intercom: IntercomConfig) => {
     if (Platform.OS !== 'android') {

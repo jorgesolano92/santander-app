@@ -1,5 +1,6 @@
 import type { IntercomConfig } from '@/components/IntercomConfigurationModal';
 import { INTERCOM_BRIDGE_ONLY } from '@/config/intercomFeatures';
+import { Alert } from 'react-native';
 
 import {
   isBridgeIntercomActive,
@@ -16,6 +17,7 @@ import {
   startSipIntercom,
   stopSipIntercom,
 } from '@/services/intercomSip';
+import { tabletCallService } from '@/services/tabletCallService';
 
 export type IntercomMode = 'bridge' | 'sdk' | 'sip';
 
@@ -47,20 +49,50 @@ export function usesSipMode(config: IntercomConfig): boolean {
 
 /** Inicia intercom según intercomMode: bridge (PC), sdk (nativo) o sip (CSIP + sip.js). */
 export async function startIntercom(doorId: string, config: IntercomConfig): Promise<boolean> {
+  if (tabletCallService.isIntercomBusyForOthers()) {
+    const holder = tabletCallService.getIntercomHolderUsername();
+    Alert.alert(
+      'Intercom en uso',
+      holder
+        ? `El canal bidireccional ya está en uso por ${holder}.`
+        : 'El canal bidireccional ya está en uso en otra tablet.',
+    );
+    return false;
+  }
+
+  const claimed = await tabletCallService.claimIntercomChannel(doorId);
+  if (!claimed) {
+    const holder = tabletCallService.getIntercomHolderUsername();
+    Alert.alert(
+      'Intercom en uso',
+      holder
+        ? `El canal bidireccional ya está en uso por ${holder}.`
+        : 'El canal bidireccional ya está en uso en otra tablet.',
+    );
+    return false;
+  }
+
   const mode = resolveIntercomMode(config);
+  let ok = false;
   if (mode === 'sip') {
-    return startSipIntercom(doorId, config);
+    ok = await startSipIntercom(doorId, config);
+  } else if (mode === 'sdk') {
+    ok = await startSdkIntercom(doorId, config);
+  } else {
+    ok = await startBridgeIntercom(doorId, config);
   }
-  if (mode === 'sdk') {
-    return startSdkIntercom(doorId, config);
+
+  if (!ok) {
+    tabletCallService.releaseIntercomChannel();
   }
-  return startBridgeIntercom(doorId, config);
+  return ok;
 }
 
 export async function stopIntercom(config?: IntercomConfig): Promise<void> {
   await stopBridgeIntercom();
   await stopSdkIntercom();
   await stopSipIntercom(config);
+  tabletCallService.releaseIntercomChannel();
 }
 
 export function getIntercomModeLabel(mode: IntercomMode): string {

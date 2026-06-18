@@ -27,7 +27,8 @@ Uso:
 Variables de entorno (opcionales): ver BRIDGE_ENV.md en esta carpeta.
 
   SDK_DIR, BRIDGE_HOST, BRIDGE_PORT, BRIDGE_RECORD, BRIDGE_RECORD_DIR,
-  BRIDGE_SDK_MIC, BRIDGE_TX_FORMAT (g711|pcm|auto), BRIDGE_G711_CODEC (alaw|ulaw)
+  BRIDGE_SDK_MIC, BRIDGE_TX_FORMAT (g711|pcm|auto), BRIDGE_G711_CODEC (alaw|ulaw),
+  BRIDGE_RX_BUFFER_MAX_MS, BRIDGE_TX_BUFFER_MAX_MS
 """
 
 from __future__ import annotations
@@ -116,6 +117,28 @@ BRIDGE_RX_PROCESS = os.environ.get("BRIDGE_RX_PROCESS", "1").lower() not in (
     "0", "false", "off", "no",
 )
 BRIDGE_RX_HPF = os.environ.get("BRIDGE_RX_HPF", "0").lower() in ("1", "true", "yes", "on")
+BRIDGE_RX_DECLICK = os.environ.get("BRIDGE_RX_DECLICK", "1").lower() not in (
+    "0", "false", "off", "no",
+)
+try:
+  BRIDGE_RX_SLEW_MAX = int(os.environ.get("BRIDGE_RX_SLEW_MAX", "2800"))
+except ValueError:
+  BRIDGE_RX_SLEW_MAX = 2800
+try:
+  BRIDGE_RX_GAIN_ATTACK = float(os.environ.get("BRIDGE_RX_GAIN_ATTACK", "0.18"))
+except ValueError:
+  BRIDGE_RX_GAIN_ATTACK = 0.18
+try:
+  BRIDGE_RX_SOFT_LIMIT = int(os.environ.get("BRIDGE_RX_SOFT_LIMIT", "12000"))
+except ValueError:
+  BRIDGE_RX_SOFT_LIMIT = 12000
+BRIDGE_TX_SOFT_LIMIT = os.environ.get("BRIDGE_TX_SOFT_LIMIT", "1").lower() not in (
+    "0", "false", "off", "no",
+)
+try:
+  BRIDGE_TX_SOFT_LIMIT_PEAK = int(os.environ.get("BRIDGE_TX_SOFT_LIMIT_PEAK", "26000"))
+except ValueError:
+  BRIDGE_TX_SOFT_LIMIT_PEAK = 26000
 try:
   BRIDGE_SDK_RX_VOL = int(os.environ.get("BRIDGE_SDK_RX_VOL", "8"))
 except ValueError:
@@ -126,11 +149,23 @@ try:
   BRIDGE_TX_GAIN = float(os.environ.get("BRIDGE_TX_GAIN", "1.0"))
 except ValueError:
   BRIDGE_TX_GAIN = 1.0
+try:
+  BRIDGE_RX_BUFFER_MAX_MS = int(os.environ.get("BRIDGE_RX_BUFFER_MAX_MS", "400"))
+except ValueError:
+  BRIDGE_RX_BUFFER_MAX_MS = 400
+try:
+  BRIDGE_TX_BUFFER_MAX_MS = int(os.environ.get("BRIDGE_TX_BUFFER_MAX_MS", "400"))
+except ValueError:
+  BRIDGE_TX_BUFFER_MAX_MS = 400
 
 SAMPLE_RATE = 8000
+BYTES_PER_SAMPLE = 2  # PCM 16-bit mono
 PCM_CHUNK = 640  # 40 ms @ 8 kHz mono 16-bit (mic cliente WS)
 PCM_CHUNK_SDK = 3200  # 200 ms @ 8 kHz — voice_forward.cpp / doc SDK
 RX_WS_CHUNK = 1280  # 80 ms — menos paquetes WS, reproducción más estable en tablet
+RX_BUFFER_MAX_BYTES = int(SAMPLE_RATE * BYTES_PER_SAMPLE * BRIDGE_RX_BUFFER_MAX_MS / 1000)
+RX_BUFFER_WARN_BYTES = int(SAMPLE_RATE * BYTES_PER_SAMPLE * BRIDGE_RX_BUFFER_MAX_MS * 0.6 / 1000)
+TX_BUFFER_MAX_BYTES = int(SAMPLE_RATE * BYTES_PER_SAMPLE * BRIDGE_TX_BUFFER_MAX_MS / 1000)
 
 MSG_TX = 0x01
 MSG_RX = 0x02
@@ -150,6 +185,39 @@ logging.basicConfig(
     datefmt="%H:%M:%S",
 )
 log = logging.getLogger("audio_bridge")
+
+# Resolución de temporizador Windows 1 ms (sleep preciso en pacing). Se restaura al salir.
+_winmm: Any = None
+if sys.platform == "win32":
+  try:
+    _winmm = ctypes.WinDLL("winmm")
+    _winmm.timeBeginPeriod(1)
+  except OSError as ex:
+    log.warning("timeBeginPeriod(1) no disponible: %s", ex)
+    _winmm = None
+
+
+def pcm_duration_s(nbytes: int) -> float:
+  """Duración en segundos de PCM 8 kHz mono 16-bit."""
+  if nbytes <= 0:
+    return 0.0
+  return nbytes / (SAMPLE_RATE * BYTES_PER_SAMPLE)
+
+
+def align_discard_bytes(excess: int, align: int) -> int:
+  """Bytes a descartar alineados a `align` (evita fragmentos y clicks)."""
+  if excess <= 0 or align <= 0:
+    return 0
+  return ((excess + align - 1) // align) * align
+
+
+def restore_windows_timer_resolution() -> None:
+  if _winmm is not None:
+    try:
+      _winmm.timeEndPeriod(1)
+    except OSError:
+      pass
+
 
 TALK_DATA_CALLBACK = ctypes.CFUNCTYPE(
     None,
@@ -331,26 +399,70 @@ def decode_g711_to_pcm(data: bytes, codec: str) -> bytes:
   return decode_g711a_to_pcm(data)
 
 
+def soft_limit_sample(sample: float, limit: float) -> float:
+  """Compresión suave (tanh) — menos distorsión que recorte duro."""
+  if limit <= 0:
+    return sample
+  return limit * math.tanh(sample / limit)
+
+
+def slew_limit_pcm(pcm: bytes, max_step: int) -> bytes:
+  """Limita saltos muestra a muestra (de-click / anti-pico)."""
+  if not pcm or len(pcm) < 4 or max_step <= 0:
+    return pcm
+  samples = list(struct.unpack(f"<{len(pcm) // 2}h", pcm))
+  if not samples:
+    return pcm
+  out: list[int] = []
+  prev = float(samples[0])
+  out.append(samples[0])
+  for s in samples[1:]:
+    target = float(s)
+    delta = target - prev
+    if delta > max_step:
+      target = prev + max_step
+    elif delta < -max_step:
+      target = prev - max_step
+    prev = target
+    out.append(int(max(-32768, min(32767, round(target)))))
+  return struct.pack(f"<{len(out)}h", *out)
+
+
+def apply_pcm_soft_limit(pcm: bytes, peak_limit: int) -> bytes:
+  if not pcm or peak_limit <= 0:
+    return pcm
+  samples = struct.unpack(f"<{len(pcm) // 2}h", pcm)
+  out = [
+    int(max(-32768, min(32767, round(soft_limit_sample(float(s), float(peak_limit))))))
+    for s in samples
+  ]
+  return struct.pack(f"<{len(out)}h", *out)
+
+
 class RxAudioProcessor:
-  """RX adaptativo por trama: sube señal baja (.200), limita picos fuertes (.210)."""
+  """RX: AGC suavizado + compresión suave + de-click (menos picos/artefactos G711)."""
 
   FRAME = 320  # 40 ms @ 8 kHz
 
   def __init__(self) -> None:
     self._x_prev = 0.0
     self._y_prev = 0.0
+    self._smooth_gain = 1.0
     self._hpf_alpha = 1.0 / (1.0 + 2.0 * math.pi * 200.0 / SAMPLE_RATE)
 
   def reset(self) -> None:
     self._x_prev = 0.0
     self._y_prev = 0.0
+    self._smooth_gain = 1.0
 
-  def _frame_gain(self, peak: int) -> float:
+  def _target_frame_gain(self, peak: int) -> float:
     base = BRIDGE_RX_GAIN
     if peak <= 0:
       return base
     if peak >= BRIDGE_RX_HOT_THRESH:
-      return BRIDGE_RX_HOT_GAIN
+      excess = peak - BRIDGE_RX_HOT_THRESH
+      compress = BRIDGE_RX_HOT_THRESH + excess * 0.35
+      return base * min(1.0, BRIDGE_RX_TARGET_PEAK / max(1, compress))
     if peak < BRIDGE_RX_QUIET_THRESH:
       boost = min(BRIDGE_RX_MAX_BOOST, BRIDGE_RX_TARGET_PEAK / peak)
       return base * boost
@@ -361,15 +473,23 @@ class RxAudioProcessor:
   def process(self, pcm: bytes) -> bytes:
     if not pcm or len(pcm) < 2:
       return pcm
+    if BRIDGE_RX_DECLICK:
+      pcm = slew_limit_pcm(pcm, BRIDGE_RX_SLEW_MAX)
+
     samples = list(struct.unpack(f"<{len(pcm) // 2}h", pcm))
-    limit = BRIDGE_RX_LIMIT
+    soft_lim = float(BRIDGE_RX_SOFT_LIMIT)
+    attack = max(0.01, min(1.0, BRIDGE_RX_GAIN_ATTACK))
     out: list[int] = []
+
     for start in range(0, len(samples), self.FRAME):
       frame = samples[start:start + self.FRAME]
       if not frame:
         break
       peak = max(abs(s) for s in frame)
-      fg = self._frame_gain(peak)
+      target_gain = self._target_frame_gain(peak)
+      self._smooth_gain += (target_gain - self._smooth_gain) * attack
+      fg = self._smooth_gain
+
       for s in frame:
         x = float(s) * fg
         if BRIDGE_RX_HPF:
@@ -377,12 +497,13 @@ class RxAudioProcessor:
           self._x_prev = x
           self._y_prev = y
           x = y
-        if x > limit:
-          x = limit
-        elif x < -limit:
-          x = -limit
-        out.append(int(x))
-    return struct.pack(f"<{len(out)}h", *out)
+        x = soft_limit_sample(x, soft_lim)
+        out.append(int(max(-32768, min(32767, round(x)))))
+
+    result = struct.pack(f"<{len(out)}h", *out)
+    if BRIDGE_RX_DECLICK:
+      result = slew_limit_pcm(result, max(800, BRIDGE_RX_SLEW_MAX // 2))
+    return result
 
 
 def _linear_to_alaw(pcm: int) -> int:
@@ -543,6 +664,11 @@ class TvtSdk:
     self._tx_sent_frames = 0
     self._tx_payload_hook: Optional[Callable[[bytes], None]] = None
     self._rx_raw_hook: Optional[Callable[[bytes], None]] = None
+    # Pacing TX: reloj absoluto + duración acumulada de audio (válido con frames variables)
+    self._tx_pacing_start: Optional[float] = None
+    self._tx_pacing_audio_s = 0.0
+    self._tx_pacing_frame_count = 0
+    self._tx_pacing_late_frames = 0
     self._open_rx_bytes = 0
     self._rx_decode_logged = False
     self._g711_rx_buf = bytearray()
@@ -1071,45 +1197,47 @@ class TvtSdk:
           )
     return ok
 
-  def send_pcm_with_pacing(self, pcm: bytes) -> bool:
-    """Versión con pacing por reloj absoluto (evita acumulación de error)."""
-    if not pcm or self._tx_format == "sdk_mic":
-      return False
-    
-    # Inicializar timer de pacing si es la primera vez
-    if not hasattr(self, '_tx_pacing_start'):
+  def _reset_tx_pacing(self) -> None:
+    self._tx_pacing_start = None
+    self._tx_pacing_audio_s = 0.0
+    self._tx_pacing_frame_count = 0
+    self._tx_pacing_late_frames = 0
+
+  def _ensure_tx_pacing_started(self) -> None:
+    if self._tx_pacing_start is None:
       self._tx_pacing_start = time.perf_counter()
+      self._tx_pacing_audio_s = 0.0
       self._tx_pacing_frame_count = 0
       self._tx_pacing_late_frames = 0
-    
-    # Calcular tamaño de frame en segundos
-    frame_bytes = len(pcm)
-    frame_seconds = frame_bytes / (SAMPLE_RATE * 2)  # bytes / (Hz * bytes por muestra)
-    
-    # Calcular tiempo objetivo para este frame
-    target_time = self._tx_pacing_start + (self._tx_pacing_frame_count * frame_seconds)
-    
-    # Esperar hasta el momento objetivo
+      log.info("TX pacing: reloj iniciado en primer frame mic→cámara")
+
+  def send_pcm_with_pacing(self, pcm: bytes) -> bool:
+    """Pacing por reloj absoluto y duración acumulada (sin drift ni error por frame variable)."""
+    if not pcm or self._tx_format == "sdk_mic":
+      return False
+
+    frame_seconds = pcm_duration_s(len(pcm))
+    self._ensure_tx_pacing_started()
+
+    target_time = self._tx_pacing_start + self._tx_pacing_audio_s
     wait_time = target_time - time.perf_counter()
-    if wait_time > 0:
+    if wait_time > 0.0005:
       time.sleep(wait_time)
-    else:
+    elif wait_time < -0.002:
       self._tx_pacing_late_frames += 1
-    
-    # Enviar el frame
+
     ok = self.send_pcm(pcm)
-    
-    # Incrementar contador de frames
-    self._tx_pacing_frame_count += 1
-    
-    # Log cada 100 frames si hay retrasos
-    if self._tx_pacing_frame_count % 100 == 0 and self._tx_pacing_late_frames > 0:
-      log.info(
-        "TX pacing: %s frames enviados, %s con retraso (%.1f%%)",
-        self._tx_pacing_frame_count, self._tx_pacing_late_frames,
-        (self._tx_pacing_late_frames / self._tx_pacing_frame_count) * 100
-      )
-    
+    if ok:
+      self._tx_pacing_audio_s += frame_seconds
+      self._tx_pacing_frame_count += 1
+      if self._tx_pacing_frame_count % 100 == 0 and self._tx_pacing_late_frames > 0:
+        log.info(
+          "TX pacing: %s frames, %s con retraso (%.1f%%), playhead=%.2fs",
+          self._tx_pacing_frame_count,
+          self._tx_pacing_late_frames,
+          (self._tx_pacing_late_frames / self._tx_pacing_frame_count) * 100,
+          self._tx_pacing_audio_s,
+        )
     return ok
 
   def close_voice(self) -> None:
@@ -1129,6 +1257,7 @@ class TvtSdk:
     self._release_encoder_unlocked()
     self._stop_voice_handle_unlocked()
     self._cb_ref = None
+    self._reset_tx_pacing()
 
 
 # ---------------------------------------------------------------------------
@@ -1154,10 +1283,6 @@ class BridgeSession:
     self._tx_buf = bytearray()
     self._rx_pcm_buf = bytearray()
     self._active = False
-    # Variables para pacing de TX (envío a cámara)
-    self._tx_pacing_start = None
-    self._tx_pacing_frame_count = 0
-    self._tx_pacing_late_frames = 0
     self._rec_tx: Optional[PcmWavRecorder] = None
     self._rec_rx: Optional[PcmWavRecorder] = None
     self._rec_rx_raw: Optional[RawRecorder] = None
@@ -1167,15 +1292,13 @@ class BridgeSession:
     self._rx_enable = True
     self._ws_rx_alive = True
     self._ws_send_fail_logged = False
-    # Variables para jitter buffer y control de retraso creciente
     self._rx_buffer_overflows = 0
     self._rx_bytes_discarded = 0
+    self._tx_buf_overflows = 0
+    self._tx_bytes_discarded = 0
     self._last_rx_buffer_warning = 0
-    # Variables para pacing de RX (envío a WebSocket)
-    self._rx_pacing_start = None
-    self._rx_pacing_frame_count = 0
-    self._rx_pacing_late_frames = 0
-    self._rx_last_send_time = 0
+    self._last_tx_buffer_warning = 0
+    self._rx_ws_chunks_sent = 0
 
   def _parse_rx_enable(self, params: dict) -> bool:
     if "rxEnable" in params:
@@ -1226,6 +1349,57 @@ class BridgeSession:
     self._rec_rx_raw = None
     self._rec_sdk = None
 
+  def _trim_pcm_buffer(
+      self,
+      buf: bytearray,
+      max_bytes: int,
+      align_bytes: int,
+      *,
+      label: str,
+      overflow_counter_attr: str,
+      discarded_counter_attr: str,
+      warning_attr: str,
+      warn_interval_s: float = 5.0,
+  ) -> None:
+    """Descarta audio antiguo alineado a `align_bytes` si el buffer supera el tope."""
+    buf_len = len(buf)
+    if buf_len <= max_bytes:
+      return
+    excess = buf_len - max_bytes
+    discard = min(buf_len, align_discard_bytes(excess, align_bytes))
+    if discard <= 0:
+      return
+    del buf[:discard]
+    setattr(self, overflow_counter_attr, getattr(self, overflow_counter_attr) + 1)
+    setattr(self, discarded_counter_attr, getattr(self, discarded_counter_attr) + discard)
+    now = time.time()
+    last_warn = getattr(self, warning_attr)
+    if now - last_warn >= warn_interval_s:
+      setattr(self, warning_attr, now)
+      log.warning(
+        "%s jitter: descartados %s B (tenía %s B, límite %s B). "
+        "Total descartado: %s B en %s eventos",
+        label,
+        discard,
+        buf_len,
+        max_bytes,
+        getattr(self, discarded_counter_attr),
+        getattr(self, overflow_counter_attr),
+      )
+
+  def _flush_rx_to_ws(self, chunk_bytes: int) -> None:
+    """Envía chunks WS completos; el residuo queda en buffer para el siguiente callback."""
+    if not (self.loop and self.owner_ws and self._ws_rx_alive):
+      return
+    while len(self._rx_pcm_buf) >= chunk_bytes:
+      chunk = bytes(self._rx_pcm_buf[:chunk_bytes])
+      del self._rx_pcm_buf[:chunk_bytes]
+      payload = bytes([MSG_RX]) + chunk
+      asyncio.run_coroutine_threadsafe(self._send_binary(payload), self.loop)
+      self._rx_ws_chunks_sent += 1
+    if self._rx_ws_chunks_sent > 0 and self._rx_ws_chunks_sent % 100 == 0:
+      log.info("RX→WS: %s chunks enviados", self._rx_ws_chunks_sent)
+
   def start(self, ws: Any, loop: asyncio.AbstractEventLoop, params: dict) -> dict:
     self.owner_ws = ws
     self.loop = loop
@@ -1240,26 +1414,13 @@ class BridgeSession:
 
     self.sdk.login(ip, port, user, pwd)
 
-    # Configuración del jitter buffer para evitar retraso creciente
-    # RX_BUFFER_MAX_MS = máximo tamaño del buffer en milisegundos (500ms = 8000 bytes)
-    # Si el buffer supera este límite, se descartan frames viejos
-    RX_BUFFER_MAX_MS = 500  # milisegundos máximo
-    RX_BUFFER_MAX_BYTES = int(SAMPLE_RATE * 2 * RX_BUFFER_MAX_MS / 1000)  # 8000 bytes para 500ms
-    RX_BUFFER_WARNING_MS = 300  # milisegundos para advertencia
-    RX_BUFFER_WARNING_BYTES = int(SAMPLE_RATE * 2 * RX_BUFFER_WARNING_MS / 1000)  # 4800 bytes
-    
-    # Configuración de pacing para RX (envío a WebSocket)
-    RX_WS_CHUNK_MS = 80  # 80ms por chunk WebSocket
-    RX_WS_CHUNK_BYTES = RX_WS_CHUNK  # 1280 bytes para 80ms
-    
-    # Resetear contadores de jitter buffer al inicio de cada sesión
     self._rx_buffer_overflows = 0
     self._rx_bytes_discarded = 0
+    self._tx_buf_overflows = 0
+    self._tx_bytes_discarded = 0
     self._last_rx_buffer_warning = 0
-    self._rx_pacing_start = None
-    self._rx_pacing_frame_count = 0
-    self._rx_pacing_late_frames = 0
-    self._rx_last_send_time = 0
+    self._last_tx_buffer_warning = 0
+    self._rx_ws_chunks_sent = 0
 
     def on_rx(pcm: bytes) -> None:
       if not pcm or not self._rx_enable:
@@ -1271,88 +1432,30 @@ class BridgeSession:
         self._rec_rx.write(pcm)
       if not (self.loop and self.owner_ws and self._ws_rx_alive):
         return
-      
-      # JITTER BUFFER CON PACING POR RELOJ ABSOLUTO
-      # 1. Agregar nuevo audio al buffer
+
       self._rx_pcm_buf.extend(pcm)
-      
-      # 2. Verificar si el buffer supera el límite máximo
-      current_buffer_size = len(self._rx_pcm_buf)
-      if current_buffer_size > RX_BUFFER_MAX_BYTES:
-        # Buffer demasiado grande - descartar frames viejos para mantener latencia baja
-        bytes_to_discard = current_buffer_size - RX_BUFFER_MAX_BYTES
-        if bytes_to_discard > 0:
-          # Descartar del inicio (frames más viejos)
-          discard_count = min(bytes_to_discard, len(self._rx_pcm_buf))
-          discarded = bytes(self._rx_pcm_buf[:discard_count])
-          del self._rx_pcm_buf[:discard_count]
-          
-          self._rx_buffer_overflows += 1
-          self._rx_bytes_discarded += discard_count
-          
-          # Log solo una vez cada 5 segundos para no saturar
-          now = time.time()
-          if now - self._last_rx_buffer_warning > 5:
-            self._last_rx_buffer_warning = now
-            log.warning(
-              "Jitter buffer overflow: descartados %s bytes (buffer=%s bytes, límite=%s bytes). "
-              "Total descartado: %s bytes en %s overflows",
-              discard_count, current_buffer_size, RX_BUFFER_MAX_BYTES,
-              self._rx_bytes_discarded, self._rx_buffer_overflows
-            )
-      
-      # 3. PACING POR RELOJ ABSOLUTO para envío a WebSocket
-      # Inicializar timer si es la primera vez
-      if self._rx_pacing_start is None:
-        self._rx_pacing_start = time.perf_counter()
-        self._rx_pacing_frame_count = 0
-        self._rx_pacing_late_frames = 0
-      
-      # Calcular cuántos chunks completos podemos enviar
-      chunks_to_send = len(self._rx_pcm_buf) // RX_WS_CHUNK_BYTES
-      if chunks_to_send > 0:
-        for i in range(chunks_to_send):
-          # Calcular tiempo objetivo para este chunk
-          chunk_seconds = RX_WS_CHUNK_MS / 1000.0  # 0.08 segundos
-          target_time = self._rx_pacing_start + (self._rx_pacing_frame_count * chunk_seconds)
-          
-          # Esperar hasta el momento objetivo (si no estamos ya retrasados)
-          wait_time = target_time - time.perf_counter()
-          if wait_time > 0:
-            # Pequeña espera para pacing preciso
-            time.sleep(min(wait_time, 0.001))  # No dormir más de 1ms en una iteración
-          else:
-            self._rx_pacing_late_frames += 1
-          
-          # Extraer y enviar el chunk
-          chunk = bytes(self._rx_pcm_buf[:RX_WS_CHUNK_BYTES])
-          del self._rx_pcm_buf[:RX_WS_CHUNK_BYTES]
-          payload = bytes([MSG_RX]) + chunk
-          asyncio.run_coroutine_threadsafe(self._send_binary(payload), self.loop)
-          
-          # Actualizar contadores
-          self._rx_pacing_frame_count += 1
-          self._rx_last_send_time = time.time()
-        
-        # Log cada 100 chunks si hay retrasos
-        if self._rx_pacing_frame_count % 100 == 0 and self._rx_pacing_late_frames > 0:
-          log.info(
-            "RX pacing: %s chunks enviados, %s con retraso (%.1f%%)",
-            self._rx_pacing_frame_count, self._rx_pacing_late_frames,
-            (self._rx_pacing_late_frames / self._rx_pacing_frame_count) * 100
-          )
-      
-      # 4. Advertencia si el buffer está creciendo (pero aún no supera el límite)
-      current_buffer_size = len(self._rx_pcm_buf)  # Actualizar después de enviar
-      if current_buffer_size > RX_BUFFER_WARNING_BYTES and current_buffer_size <= RX_BUFFER_MAX_BYTES:
+      self._trim_pcm_buffer(
+        self._rx_pcm_buf,
+        RX_BUFFER_MAX_BYTES,
+        RX_WS_CHUNK,
+        label="RX",
+        overflow_counter_attr="_rx_buffer_overflows",
+        discarded_counter_attr="_rx_bytes_discarded",
+        warning_attr="_last_rx_buffer_warning",
+      )
+      self._flush_rx_to_ws(RX_WS_CHUNK)
+
+      residual = len(self._rx_pcm_buf)
+      if RX_BUFFER_WARN_BYTES < residual <= RX_BUFFER_MAX_BYTES:
         now = time.time()
         if now - self._last_rx_buffer_warning > 10:
           self._last_rx_buffer_warning = now
-          buffer_ms = current_buffer_size * 1000 // (SAMPLE_RATE * 2)
+          buffer_ms = int(pcm_duration_s(residual) * 1000)
           log.info(
-            "Jitter buffer creciendo: %s bytes (%s ms). "
-            "Si supera %s ms, se descartarán frames viejos.",
-            current_buffer_size, buffer_ms, RX_BUFFER_MAX_MS
+            "RX buffer: %s B (~%s ms). Tope %s ms antes de descartar audio antiguo.",
+            residual,
+            buffer_ms,
+            BRIDGE_RX_BUFFER_MAX_MS,
           )
 
     self._start_recorders()
@@ -1361,6 +1464,7 @@ class BridgeSession:
     info["rx"] = bool(self._rx_enable and info.get("rx", True))
     if "tx" not in info or not info["tx"]:
       info["tx"] = bool(info.get("txProbe", False))
+
     self._active = True
     self._ws_rx_alive = True
     self._ws_send_fail_logged = False
@@ -1399,11 +1503,19 @@ class BridgeSession:
       return
     if self._rec_tx is not None:
       self._rec_tx.write(pcm)
-    # El mic WS siempre envía 640 B; el SDK puede necesitar 3200 B (voice_forward.cpp)
     agg = self.sdk._tx_chunk
     if agg <= 0:
       agg = PCM_CHUNK
     self._tx_buf.extend(pcm)
+    self._trim_pcm_buffer(
+      self._tx_buf,
+      TX_BUFFER_MAX_BYTES,
+      agg,
+      label="TX mic",
+      overflow_counter_attr="_tx_buf_overflows",
+      discarded_counter_attr="_tx_bytes_discarded",
+      warning_attr="_last_tx_buffer_warning",
+    )
     while len(self._tx_buf) >= agg:
       frame = bytes(self._tx_buf[:agg])
       del self._tx_buf[:agg]
@@ -1413,6 +1525,8 @@ class BridgeSession:
             f"<{len(samples)}h",
             *[max(-32768, min(32767, int(s * BRIDGE_TX_GAIN))) for s in samples],
         )
+      if BRIDGE_TX_SOFT_LIMIT:
+        frame = apply_pcm_soft_limit(frame, BRIDGE_TX_SOFT_LIMIT_PEAK)
       if self.sdk.send_pcm_with_pacing(frame):
         self._tx_bytes += len(frame)
 
@@ -1428,33 +1542,36 @@ class BridgeSession:
     self.sdk.close_voice()
     self._stop_recorders()
     
-    # Log de estadísticas del jitter buffer y pacing
+    # Estadísticas RX (jitter buffer cámara → tablet)
     if self._rx_buffer_overflows > 0:
       log.warning(
-        "Jitter buffer statistics: %s overflows, %s bytes descartados "
-        "(%.1f%% del audio recibido)",
-        self._rx_buffer_overflows, self._rx_bytes_discarded,
-        (self._rx_bytes_discarded / max(1, self._rx_bytes)) * 100
+        "RX jitter: %s eventos, %s B descartados (%.1f%% del audio recibido)",
+        self._rx_buffer_overflows,
+        self._rx_bytes_discarded,
+        (self._rx_bytes_discarded / max(1, self._rx_bytes)) * 100,
       )
-    else:
-      log.info(
-        "Jitter buffer funcionó correctamente: 0 overflows, 0 bytes descartados"
+    elif self._rx_ws_chunks_sent > 0:
+      log.info("RX jitter: 0 descartes, %s chunks WS enviados", self._rx_ws_chunks_sent)
+
+    if self._tx_buf_overflows > 0:
+      log.warning(
+        "TX jitter: %s eventos, %s B descartados del micrófono tablet",
+        self._tx_buf_overflows,
+        self._tx_bytes_discarded,
       )
-    
-    # Log de estadísticas de pacing RX
-    if self._rx_pacing_frame_count > 0:
-      late_percentage = (self._rx_pacing_late_frames / self._rx_pacing_frame_count) * 100 if self._rx_pacing_frame_count > 0 else 0
-      log.info(
-        "RX pacing: %s chunks enviados, %s con retraso (%.1f%%)",
-        self._rx_pacing_frame_count, self._rx_pacing_late_frames, late_percentage
+
+    if self.sdk._tx_pacing_frame_count > 0:
+      tx_late_frames = self.sdk._tx_pacing_late_frames
+      tx_late_percentage = (
+          (tx_late_frames / self.sdk._tx_pacing_frame_count) * 100
+          if self.sdk._tx_pacing_frame_count > 0 else 0
       )
-    
-    # Log de estadísticas de pacing TX
-    if hasattr(self.sdk, '_tx_pacing_frame_count') and self.sdk._tx_pacing_frame_count > 0:
-      tx_late_percentage = (self.sdk._tx_pacing_late_frames / self.sdk._tx_pacing_frame_count) * 100 if self.sdk._tx_pacing_frame_count > 0 else 0
       log.info(
-        "TX pacing: %s frames enviados, %s con retraso (%.1f%%)",
-        self.sdk._tx_pacing_frame_count, self.sdk._tx_pacing_late_frames, tx_late_percentage
+        "TX pacing: %s frames, %s con retraso (%.1f%%), %.2fs de audio",
+        self.sdk._tx_pacing_frame_count,
+        tx_late_frames,
+        tx_late_percentage,
+        self.sdk._tx_pacing_audio_s,
       )
     
     log.info("Sesión cerrada (rx=%s tx=%s bytes)", self._rx_bytes, self._tx_bytes)
@@ -1602,10 +1719,21 @@ class BridgeServer:
     if BRIDGE_PREFER_RX_PCM:
       log.info("BRIDGE_PREFER_RX_PCM=1 → MR(enc=True) RX en PCM antes que G711")
     log.info(
-      "RX post-proc: gain=%s quiet<%s boost<=%s target=%s loud>%s hot>=%s hotGain=%s limit=%s hpf=%s sdkVol=%s",
+      "RX post-proc: gain=%s quiet<%s boost<=%s target=%s loud>%s hot>=%s softLim=%s hpf=%s sdkVol=%s",
       BRIDGE_RX_GAIN, BRIDGE_RX_QUIET_THRESH, BRIDGE_RX_MAX_BOOST,
       BRIDGE_RX_TARGET_PEAK, BRIDGE_RX_LOUD_THRESH, BRIDGE_RX_HOT_THRESH,
-      BRIDGE_RX_HOT_GAIN, BRIDGE_RX_LIMIT, BRIDGE_RX_HPF, BRIDGE_SDK_RX_VOL,
+      BRIDGE_RX_SOFT_LIMIT, BRIDGE_RX_HPF, BRIDGE_SDK_RX_VOL,
+    )
+    log.info(
+      "RX artefactos: declick=%s slewMax=%s gainAttack=%s | TX softLim=%s peak=%s",
+      BRIDGE_RX_DECLICK, BRIDGE_RX_SLEW_MAX, BRIDGE_RX_GAIN_ATTACK,
+      BRIDGE_TX_SOFT_LIMIT, BRIDGE_TX_SOFT_LIMIT_PEAK,
+    )
+    log.info(
+      "RX jitter: max=%s ms, warn~%s ms | TX jitter mic: max=%s ms",
+      BRIDGE_RX_BUFFER_MAX_MS,
+      int(BRIDGE_RX_BUFFER_MAX_MS * 0.6),
+      BRIDGE_TX_BUFFER_MAX_MS,
     )
     async with serve(self.handle_client, BRIDGE_HOST, BRIDGE_PORT, max_size=2**20):
       await asyncio.Future()
@@ -1621,6 +1749,7 @@ def main() -> None:
     log.info("Detenido por usuario")
   finally:
     TvtSdk.shutdown_shared()
+    restore_windows_timer_resolution()
 
 
 if __name__ == "__main__":
