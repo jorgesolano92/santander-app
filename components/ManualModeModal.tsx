@@ -10,7 +10,7 @@ import {
   Platform,
   Alert,
 } from 'react-native';
-import { X, DoorOpen, Mic, MicOff, Minimize2 } from 'lucide-react-native';
+import { X, DoorOpen, Mic, MicOff, Minimize2, PhoneOff } from 'lucide-react-native';
 import { ScrollView } from 'react-native';
 import { useWindowDimensions } from 'react-native';
 import { useState, useEffect } from 'react';
@@ -46,9 +46,12 @@ interface ManualModeModalProps {
   isDoorVerifying: (doorId: string) => boolean;
   refreshAllDoorsStatus: () => Promise<boolean>;
   intercomConfigs: DoorConfig[];
-  /** Tras contestar llamada P1: abrir visualización y conectar intercom automáticamente. */
+  /** Tras contestar llamada: conectar intercom bidireccional automáticamente. */
   autoStartIntercomDoorId?: string | null;
   onAutoStartIntercomDone?: () => void;
+  /** Modo videoportero: solo RTSP a pantalla completa + audio bidireccional. */
+  videoporteroDoorId?: string | null;
+  onVideoporteroHangUp?: () => void;
 }
 
 export default function ManualModeModal({ 
@@ -66,6 +69,8 @@ export default function ManualModeModal({
   intercomConfigs,
   autoStartIntercomDoorId,
   onAutoStartIntercomDone,
+  videoporteroDoorId,
+  onVideoporteroHangUp,
 }: ManualModeModalProps) {
   const MANUAL_OUTPUT_STATE_KEY = 'door_manual_output_state';
   const { width = 0 } = useWindowDimensions();
@@ -97,6 +102,9 @@ export default function ManualModeModal({
     }
   }, [visible, refreshAllDoorsStatus]);
 
+  const isVideoportero = !!videoporteroDoorId;
+  const activeExpandedDoorId = isVideoportero ? videoporteroDoorId : expandedVideoDoorId;
+
   useEffect(() => {
     if (!visible) {
       setExpandedVideoDoorId(null);
@@ -104,13 +112,22 @@ export default function ManualModeModal({
   }, [visible]);
 
   useEffect(() => {
-    if (!expandedVideoDoorId) return;
+    if (!visible || !videoporteroDoorId) return;
+    setExpandedVideoDoorId(videoporteroDoorId);
+  }, [visible, videoporteroDoorId]);
+
+  useEffect(() => {
+    if (!activeExpandedDoorId) return;
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
-      setExpandedVideoDoorId(null);
+      if (isVideoportero) {
+        void handleVideoporteroHangUp();
+      } else {
+        setExpandedVideoDoorId(null);
+      }
       return true;
     });
     return () => sub.remove();
-  }, [expandedVideoDoorId]);
+  }, [activeExpandedDoorId, isVideoportero, onVideoporteroHangUp]);
 
   const screen = Dimensions.get('window');
   /** Vídeo a pantalla completa; botones flotantes encima (no restan altura). */
@@ -149,6 +166,7 @@ export default function ManualModeModal({
                   doorControlSwitch: door.intercom.doorControlSwitch ?? (index + 1),
                   doorControlAction: door.intercom.doorControlAction || 'set_output',
                   doorControlRuleKey: door.intercom.doorControlRuleKey || '',
+                  doorControlEndpoint: door.intercom.doorControlEndpoint ?? '',
                   doorOutputMode: door.intercom.doorOutputMode || 'auto',
                   doorControlPulseTime:
                     typeof door.intercom.doorControlPulseTime === 'number'
@@ -201,6 +219,10 @@ export default function ManualModeModal({
         actionKind === 'set_output' && outputMode === 'manual' && currentlyOpen
           ? 'close'
           : 'open';
+      if (actionKind === 'door_endpoint' && nextAction === 'close') {
+        console.warn('door_endpoint no soporta cerrar puerta');
+        return;
+      }
       console.log(
         `🚪 ${nextAction === 'open' ? 'Abriendo' : 'Cerrando'} ${doorName} (${actionKind}/${outputMode})`
       );
@@ -270,6 +292,9 @@ export default function ManualModeModal({
     if (actionKind === 'set_rule') {
       return 'EJECUTAR REGLA';
     }
+    if (actionKind === 'door_endpoint') {
+      return 'ABRIR PUERTA';
+    }
     if (outputMode === 'manual') {
       return manualOutputState[doorId] ? 'CERRAR PUERTA' : 'ABRIR PUERTA';
     }
@@ -314,6 +339,22 @@ export default function ManualModeModal({
       cancelled = true;
     };
   }, [visible, autoStartIntercomDoorId]);
+
+  const handleVideoporteroHangUp = async () => {
+    if (sdkIntercomDoorId) {
+      const doorIndex = parseInt(sdkIntercomDoorId.replace('P', ''), 10) - 1;
+      const intercom = currentIntercomConfigs[doorIndex]?.intercom;
+      setSdkIntercomLoading(sdkIntercomDoorId);
+      try {
+        await stopIntercom(intercom);
+      } finally {
+        setSdkIntercomDoorId(null);
+        setSdkIntercomLoading(null);
+      }
+    }
+    setExpandedVideoDoorId(null);
+    onVideoporteroHangUp?.();
+  };
 
   const handleToggleBridgeIntercom = async (doorId: string, intercom: IntercomConfig) => {
     if (Platform.OS !== 'android') {
@@ -815,18 +856,18 @@ export default function ManualModeModal({
           style={styles.container}
           contentContainerStyle={[
             styles.scrollContent,
-            expandedVideoDoorId ? styles.scrollContentFullscreen : null,
+            activeExpandedDoorId ? styles.scrollContentFullscreen : null,
           ]}
-          scrollEnabled={!expandedVideoDoorId}
+          scrollEnabled={!activeExpandedDoorId}
         >
-        {!expandedVideoDoorId ? (
+        {!activeExpandedDoorId ? (
           <View style={styles.header}>
             <Text style={styles.headerTitle}>SAIMA SEGURIDAD – Panel de control puertas SECURA</Text>
           </View>
         ) : null}
 
-        <View style={[styles.content, expandedVideoDoorId ? styles.contentExpanded : null]}>
-          {!expandedVideoDoorId ? (
+        <View style={[styles.content, activeExpandedDoorId ? styles.contentExpanded : null]}>
+          {!activeExpandedDoorId ? (
           <View style={styles.modeHeader}>
             <View style={styles.infoIcon}>
               <Text style={styles.infoIconText}>i</Text>
@@ -846,15 +887,15 @@ export default function ManualModeModal({
           <View
             style={[
               styles.doorControlsContainer,
-              expandedVideoDoorId ? styles.doorControlsContainerExpanded : null,
+              activeExpandedDoorId ? styles.doorControlsContainerExpanded : null,
             ]}
           >
             {enabledDoors.map((door, index) => {
               const doorId = `P${index + 1}`;
-              if (expandedVideoDoorId && expandedVideoDoorId !== doorId) {
+              if (activeExpandedDoorId && activeExpandedDoorId !== doorId) {
                 return null;
               }
-              const isDoorExpanded = expandedVideoDoorId === doorId;
+              const isDoorExpanded = activeExpandedDoorId === doorId;
               const intercomEstablished = sdkIntercomDoorId === doorId;
               const intercomBusyOnDoor =
                 intercomEstablished || sdkIntercomLoading === doorId;
@@ -881,25 +922,42 @@ export default function ManualModeModal({
                           muteAmbientDuringIntercom={intercomEstablished}
                           isExpanded={isDoorExpanded}
                           expandedVideoHeight={expandedVideoHeight}
-                          onExpandedChange={(expanded) =>
-                            setExpandedVideoDoorId(expanded ? doorId : null)
+                          onExpandedChange={
+                            isVideoportero
+                              ? undefined
+                              : (expanded) => setExpandedVideoDoorId(expanded ? doorId : null)
                           }
                         />
                         {isDoorExpanded ? (
                           <View style={styles.doorControlButtonsFloating} pointerEvents="box-none">
                             {renderDoorControlButton(doorId, door.name, true)}
-                            <TouchableOpacity
-                              style={[
-                                styles.doorControlButton,
-                                styles.doorControlButtonFloating,
-                                styles.fullscreenExitButtonFloating,
-                              ]}
-                              onPress={() => setExpandedVideoDoorId(null)}
-                              accessibilityLabel="Salir de pantalla completa"
-                            >
-                              <Minimize2 size={16} color="#FFFFFF" />
-                              <Text style={styles.fullscreenExitButtonText}>SALIR</Text>
-                            </TouchableOpacity>
+                            {isVideoportero ? (
+                              <TouchableOpacity
+                                style={[
+                                  styles.doorControlButton,
+                                  styles.doorControlButtonFloating,
+                                  styles.fullscreenExitButtonFloating,
+                                ]}
+                                onPress={() => void handleVideoporteroHangUp()}
+                                accessibilityLabel="Colgar llamada"
+                              >
+                                <PhoneOff size={16} color="#FFFFFF" />
+                                <Text style={styles.fullscreenExitButtonText}>COLGAR</Text>
+                              </TouchableOpacity>
+                            ) : (
+                              <TouchableOpacity
+                                style={[
+                                  styles.doorControlButton,
+                                  styles.doorControlButtonFloating,
+                                  styles.fullscreenExitButtonFloating,
+                                ]}
+                                onPress={() => setExpandedVideoDoorId(null)}
+                                accessibilityLabel="Salir de pantalla completa"
+                              >
+                                <Minimize2 size={16} color="#FFFFFF" />
+                                <Text style={styles.fullscreenExitButtonText}>SALIR</Text>
+                              </TouchableOpacity>
+                            )}
                           </View>
                         ) : null}
                       </>
@@ -911,7 +969,7 @@ export default function ManualModeModal({
                       </View>
                     )}
                     
-                    {!isDoorExpanded && door.intercom && Platform.OS === 'android' ? (
+                    {!isDoorExpanded && door.intercom && Platform.OS === 'android' && !isVideoportero ? (
                       <TouchableOpacity
                         style={[
                           styles.sdkTestButton,
@@ -951,7 +1009,7 @@ export default function ManualModeModal({
             })}
           </View>
 
-          {!expandedVideoDoorId ? (
+          {!activeExpandedDoorId ? (
           <View style={styles.bottomButtons}>
             <TouchableOpacity 
               style={styles.emergencyButton}

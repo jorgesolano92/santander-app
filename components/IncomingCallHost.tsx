@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Modal, StyleSheet, View } from 'react-native';
 
 import IncomingCallOverlay from '@/components/IncomingCallOverlay';
 import {
@@ -7,6 +7,7 @@ import {
   invokeExpired,
   invokeReject,
 } from '@/services/incomingCallUiBridge';
+import { wakeTabletForIncomingCall } from '@/services/tabletWake';
 import {
   tabletCallService,
   type IncomingCallPayload,
@@ -19,6 +20,7 @@ export default function IncomingCallHost() {
   useEffect(() => {
     const onIncoming = (payload: IncomingCallPayload) => {
       console.log('[TabletCall] incoming_call UI', payload.callId);
+      wakeTabletForIncomingCall();
       setCall(payload);
     };
     const onClear = () => setCall(null);
@@ -34,26 +36,39 @@ export default function IncomingCallHost() {
     };
   }, []);
 
-  if (!call) return null;
-
   return (
-    <View style={styles.host} pointerEvents="auto">
-      <IncomingCallOverlay
-        call={call}
-        onAnswer={(c) => {
-          setCall(null);
-          invokeAnswer(c);
-        }}
-        onReject={(c) => {
-          setCall(null);
-          invokeReject(c);
-        }}
-        onExpired={(c) => {
-          setCall(null);
-          invokeExpired(c);
-        }}
-      />
-    </View>
+    <Modal
+      visible={!!call}
+      animationType="fade"
+      transparent={false}
+      statusBarTranslucent
+      presentationStyle="fullScreen"
+      onRequestClose={() => {
+        if (!call) return;
+        setCall(null);
+        invokeReject(call);
+      }}
+    >
+      {call ? (
+        <View style={styles.host} pointerEvents="auto">
+          <IncomingCallOverlay
+            call={call}
+            onAnswer={(c) => {
+              setCall(null);
+              invokeAnswer(c);
+            }}
+            onReject={(c) => {
+              setCall(null);
+              invokeReject(c);
+            }}
+            onExpired={(c) => {
+              setCall(null);
+              invokeExpired(c);
+            }}
+          />
+        </View>
+      ) : null}
+    </Modal>
   );
 }
 

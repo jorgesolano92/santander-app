@@ -232,7 +232,7 @@ export default function DoorVideoStream({
     };
   }, [proxyStreamUrl, useWebProxy]);
 
-  const startAndroidRtsp = () => {
+  const startAndroidRtsp = useCallback(() => {
     if (!intercomConfig.cameraIP) {
       setError('No hay IP de cámara configurada');
       setConnectionState('error');
@@ -250,9 +250,9 @@ export default function DoorVideoStream({
     setConnectionState('connecting');
     setError(null);
     setStreamActive(true);
-  };
+  }, [intercomConfig.cameraIP, clearRetryTimer]);
 
-  const stopAndroidRtsp = () => {
+  const stopAndroidRtsp = useCallback(() => {
     clearRetryTimer();
     connectedRef.current = false;
     retryCountRef.current = 0;
@@ -260,13 +260,27 @@ export default function DoorVideoStream({
     setStreamActive(false);
     setConnectionState('idle');
     setError(null);
-  };
+  }, [clearRetryTimer, onExpandedChange]);
+
+  /** Pantalla completa directa (videoportero): no hay botón INICIAR VÍDEO visible. */
+  useEffect(() => {
+    if (!isExpanded || !useAndroidRtsp || suspendStream || streamActive) return;
+    if (!intercomConfig.cameraIP?.trim()) return;
+    startAndroidRtsp();
+  }, [
+    isExpanded,
+    useAndroidRtsp,
+    suspendStream,
+    streamActive,
+    startAndroidRtsp,
+    intercomConfig.cameraIP,
+  ]);
 
   useEffect(() => {
     if (suspendStream && streamActive) {
       stopAndroidRtsp();
     }
-  }, [suspendStream, streamActive]);
+  }, [suspendStream, streamActive, stopAndroidRtsp]);
 
   // La cámara TVT suele expulsar RTSP al abrir StartVoiceCom_MR en el PC.
   // Cuando el intercom queda activo, forzamos una reconexión limpia del vídeo.
@@ -465,14 +479,26 @@ export default function DoorVideoStream({
           </>
         ) : (
           <>
-            <Camera size={30} color="#6C757D" />
-            <Text style={styles.title}>Cámara {doorName}</Text>
-            <Text style={styles.subtitle}>{intercomConfig.cameraIP || 'Sin IP'}</Text>
-            <Text style={styles.infoText}>
-              {useAndroidRtsp
-                ? 'RTSP directo (TCP) · vídeo y audio ambiente'
-                : 'Proxy HLS para pruebas en navegador'}
+            <Camera size={30} color={isExpanded ? '#ADB5BD' : '#6C757D'} />
+            <Text style={[styles.title, isExpanded && styles.titleExpanded]}>
+              Cámara {doorName}
             </Text>
+            <Text style={[styles.subtitle, isExpanded && styles.subtitleExpanded]}>
+              {intercomConfig.cameraIP || 'Sin IP'}
+            </Text>
+            <Text style={[styles.infoText, isExpanded && styles.infoTextExpanded]}>
+              {isConnecting
+                ? 'Conectando RTSP…'
+                : useAndroidRtsp
+                  ? 'RTSP directo (TCP) · vídeo y audio ambiente'
+                  : 'Proxy HLS para pruebas en navegador'}
+            </Text>
+            {isExpanded && isConnecting && (
+              <ActivityIndicator color="#FFFFFF" style={{ marginTop: 16 }} />
+            )}
+            {isExpanded && !!error && (
+              <Text style={styles.errorTextExpanded}>• {error}</Text>
+            )}
           </>
         )}
       </View>
@@ -645,10 +671,16 @@ const styles = StyleSheet.create({
     color: '#343A40',
     marginTop: 6,
   },
+  titleExpanded: {
+    color: '#F8F9FA',
+  },
   subtitle: {
     fontSize: 12,
     color: '#6C757D',
     marginTop: 4,
+  },
+  subtitleExpanded: {
+    color: '#ADB5BD',
   },
   infoText: {
     fontSize: 11,
@@ -656,6 +688,16 @@ const styles = StyleSheet.create({
     marginTop: 8,
     textAlign: 'center',
     paddingHorizontal: 8,
+  },
+  infoTextExpanded: {
+    color: '#CED4DA',
+  },
+  errorTextExpanded: {
+    marginTop: 12,
+    fontSize: 12,
+    color: '#FF6B6B',
+    textAlign: 'center',
+    paddingHorizontal: 16,
   },
   statusRow: {
     flexDirection: 'row',

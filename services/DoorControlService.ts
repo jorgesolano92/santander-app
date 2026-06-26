@@ -213,7 +213,21 @@ const modeNameToNumericValueMap: { [key: string]: string } = {
 };
 
 /** Resultado de operaciones contra el API del panel para mostrar feedback al usuario. */
-export type PanelApiResult = { ok: true } | { ok: false; errorMessage: string };
+export type PanelApiResult =
+  | { ok: true; queued?: false }
+  | {
+      ok: true;
+      queued: true;
+      pendingRuleKey: string;
+      blockedInputs?: string[];
+      queueMessage?: string;
+    }
+  | { ok: false; errorMessage: string };
+
+export type PanelModeStatus = {
+  currentRuleKey: string | null;
+  pendingRuleKey: string | null;
+};
 
 class DoorControlService {
   private baseURL: string = '';
@@ -994,22 +1008,72 @@ class DoorControlService {
   //   }
   // }
 
-  /**
-   * `current_mode` crudo del panel (rule_key), sin mapeo a etiquetas de la app.
-   */
   async getPanelCurrentModeRuleKey(): Promise<string | null> {
+    const status = await this.getPanelModeStatus();
+    return status.currentRuleKey;
+  }
+
+  /** Modo activo y modo en cola (esperando liberar entradas de bloqueo). */
+  async getPanelModeStatus(): Promise<PanelModeStatus> {
     try {
       const config = await this.getSavedAppConfig();
-      if (!config) return null;
+      if (!config) return { currentRuleKey: null, pendingRuleKey: null };
       const endpoint = config?.api?.urlGet || '/api/v1/get_mode';
       const response = await this.authenticatedRequest(config, 'GET', endpoint);
-      if (!response?.ok) return null;
+      if (!response?.ok) return { currentRuleKey: null, pendingRuleKey: null };
       const data = await response.json();
-      const rk = data?.current_mode;
-      return typeof rk === 'string' && rk.trim() ? rk.trim() : null;
+      const current = data?.current_mode;
+      const pending = data?.pending_mode;
+      return {
+        currentRuleKey: typeof current === 'string' && current.trim() ? current.trim() : null,
+        pendingRuleKey: typeof pending === 'string' && pending.trim() ? pending.trim() : null,
+      };
     } catch {
-      return null;
+      return { currentRuleKey: null, pendingRuleKey: null };
     }
+  }
+
+  /**
+   * Mapea rule_key del panel al nombre de modo mostrado en la app.
+   */
+  async mapRuleKeyToAppModeName(ruleKey: string): Promise<string | null> {
+    const key = String(ruleKey || '').trim();
+    if (!key) return null;
+    try {
+      const config = await this.getSavedAppConfig();
+      if (!config) return key;
+      const configuredModes = config?.modes || {};
+      const modeEntry = Object.entries(configuredModes).find(
+        ([, v]: [string, unknown]) =>
+          (v as { rule_key?: string })?.rule_key === key,
+      );
+      if (modeEntry) {
+        const configKey = modeEntry[0];
+        const configKeyToModeName: Record<string, string> = {
+          automatico: 'COMERCIAL AUTOMÁTICO',
+          esclusa: 'COMERCIAL ESCLUSA',
+          extendido: 'HORARIO EXTENDIDO',
+          autoservicio: 'HORARIO AUTOSERVICIO',
+          oficinaCerrada: 'OFICINA CERRADA',
+          cargaCajero: 'CARGA DE CAJERO',
+          manual: 'MANUAL',
+        };
+        return configKeyToModeName[configKey] || key;
+      }
+      return key;
+    } catch {
+      return key;
+    }
+  }
+
+  /** Actualiza el modo mostrado tras broadcast WS de otra tablet o del panel. */
+  async syncModeFromPanelRuleKey(ruleKey: string | null): Promise<void> {
+    if (!ruleKey) return;
+    const label = await this.mapRuleKeyToAppModeName(ruleKey);
+    if (!label || this.mockSystemStatus.mode === label) return;
+    this.mockSystemStatus.mode = label;
+    this.mockSystemStatus.lastSync = new Date().toISOString();
+    this.notifyStatusChange();
   }
 
   /**
@@ -1166,6 +1230,27 @@ class DoorControlService {
         };
       }
 
+      const data = (await response.json().catch(() => ({}))) as Record<string, unknown>;
+      if (data.queued === true) {
+        const result = (data.result || {}) as Record<string, unknown>;
+        const pendingRuleKey = String(
+          result.pending_manual_mode || result.rule || payload.rule_key || '',
+        ).trim();
+        const blockedInputs = Array.isArray(result.blocked_inputs)
+          ? result.blocked_inputs.map((c) => String(c))
+          : [];
+        const queueMessage =
+          typeof result.reason === 'string' ? result.reason : undefined;
+        console.log('[Tablet] Modo en cola:', pendingRuleKey, blockedInputs);
+        return {
+          ok: true,
+          queued: true,
+          pendingRuleKey: pendingRuleKey || String(payload.rule_key || ''),
+          blockedInputs,
+          queueMessage,
+        };
+      }
+
       await new Promise(resolve => setTimeout(resolve, 300));
       const currentMode = await this.getCurrentModeFromAPI2();
       if (currentMode) {
@@ -1259,7 +1344,7 @@ class DoorControlService {
   }
 
   // Control de puertas vía panel (`POST /api/v1/set_mode` + `action=set_output`)
-  async controlDoor(doorId: 'P1' | 'P2' | 'P3' | 'P4', action: 'open' | 'close'): Promise<boolean> {
+  async controlDoor(doorId: 'P1' | 'P2' | 'P3' | 'P4', action: 'open' | 'close'): Promise<PanelApiResult> {
     try {
       console.log(`🚪 Intentando ${action === 'open' ? 'abrir' : 'cerrar'} ${doorId}`);
 
@@ -1267,7 +1352,7 @@ class DoorControlService {
       const savedConfig = await AsyncStorage.getItem('new_door_config');
       if (!savedConfig) {
         console.error('❌ No hay configuración guardada');
-        return false;
+        return { ok: false, errorMessage: 'No hay configuración guardada en la tablet.' };
       }
 
       const config = JSON.parse(savedConfig);
@@ -1275,16 +1360,16 @@ class DoorControlService {
       // Verificar configuración de API global
       if (!config.network?.consoleIP || !config.api?.port || !config.api?.username || !config.api?.password) {
         console.error('❌ Configuración de API global incompleta');
-        return false;
+        return { ok: false, errorMessage: 'Configuración de API incompleta (IP, puerto o credenciales).' };
       }
 
       if (!config.doors) {
         console.error('❌ Configuración de puertas no válida');
-        return false;
+        return { ok: false, errorMessage: 'Configuración de puertas no válida.' };
       }
 
       // Obtener índice de puerta (P1 = 0, P2 = 1, etc.)
-      const doorIndex = parseInt(doorId.replace('P', '')) - 1;
+      const doorIndex = parseInt(doorId.replace('P', ''), 10) - 1;
       
       // Buscar solo entre las puertas habilitadas
       const enabledDoors = config.doors.filter((door: any) => door.enabled);
@@ -1292,17 +1377,51 @@ class DoorControlService {
 
       if (!doorConfig) {
         console.error(`❌ Configuración no encontrada para puerta habilitada ${doorId}`);
-        return false;
+        return { ok: false, errorMessage: `No hay configuración para la puerta ${doorId}.` };
       }
 
       const endpoint = config?.api?.urlPost || '/api/v1/set_mode';
       const intercom = doorConfig.intercom || {};
       const controlAction = intercom.doorControlAction || 'set_output';
+
+      if (controlAction === 'door_endpoint') {
+        if (action === 'close') {
+          console.warn(`⚠️ door_endpoint no soporta cerrar puerta (${doorId})`);
+          return { ok: false, errorMessage: 'Este tipo de apertura no permite cerrar la puerta desde la tablet.' };
+        }
+        let path = String(intercom.doorControlEndpoint || '').trim();
+        if (!path) {
+          path = `/api/v1/door/open/p${doorId.replace('P', '').toLowerCase()}`;
+        }
+        if (!path.startsWith('/')) {
+          path = `/${path}`;
+        }
+        console.log(`🔧 Apertura ${doorId} vía endpoint pulsadores:`, path);
+        const response = await this.authenticatedRequest(config, 'POST', path, {});
+        if (!response) {
+          console.error('❌ Sin respuesta del panel al llamar endpoint pulsadores');
+          return { ok: false, errorMessage: 'No se pudo conectar con el panel.' };
+        }
+        if (!response.ok) {
+          const errorText = await response.text().catch(() => '');
+          const errorMessage = this.formatPanelApiErrorMessage(response.status, errorText);
+          if (response.status === 409) {
+            console.warn(`⚠️ Conflicto abriendo puerta (409): ${errorText}`);
+          } else {
+            console.error(`❌ Error HTTP ${response.status} en endpoint pulsadores: ${errorText}`);
+          }
+          return { ok: false, errorMessage };
+        }
+        await response.json().catch(() => ({}));
+        this.notifyStatusChange();
+        return { ok: true };
+      }
+
       if (controlAction === 'set_rule') {
         const ruleKey = String(intercom.doorControlRuleKey || '').trim();
         if (!ruleKey) {
           console.error(`❌ Falta doorControlRuleKey para ${doorId} (set_rule)`);
-          return false;
+          return { ok: false, errorMessage: `Falta la regla de apertura configurada para ${doorId}.` };
         }
         const payload = {
           action: 'set_rule',
@@ -1316,22 +1435,23 @@ class DoorControlService {
         const response = await this.authenticatedRequest(config, 'POST', endpoint, payload);
         if (!response) {
           console.error('❌ Sin respuesta del panel al ejecutar regla');
-          return false;
+          return { ok: false, errorMessage: 'No se pudo conectar con el panel.' };
         }
         if (!response.ok) {
           const errorText = await response.text().catch(() => '');
+          const errorMessage = this.formatPanelApiErrorMessage(response.status, errorText);
           console.error(`❌ Error HTTP ${response.status} ejecutando regla: ${errorText}`);
-          return false;
+          return { ok: false, errorMessage };
         }
         await response.json().catch(() => ({}));
         this.notifyStatusChange();
-        return true;
+        return { ok: true };
       }
 
       // set_output: puede ser auto (pulso) o manual (queda ON hasta "cerrar puerta")
       if (!intercom?.doorControlPCB || !intercom?.doorControlSwitch) {
         console.error(`❌ Configuración de PCB/Switch incompleta para ${doorId}`);
-        return false;
+        return { ok: false, errorMessage: `Falta PCB/Switch de control para ${doorId}.` };
       }
       const outputCode = `OUT_${String(intercom.doorControlPCB).padStart(2, '0')}_${String(
         intercom.doorControlSwitch
@@ -1342,46 +1462,53 @@ class DoorControlService {
         ? Math.max(0.1, Math.min(30, pulseSecondsRaw))
         : 1.0;
 
-      const sendSetOutput = async (on: boolean): Promise<boolean> => {
+      const sendSetOutput = async (on: boolean): Promise<PanelApiResult> => {
         const payload = { action: 'set_output', code: outputCode, on };
         const response = await this.authenticatedRequest(config, 'POST', endpoint, payload);
         if (!response) {
           console.error('❌ Sin respuesta del panel al controlar salida');
-          return false;
+          return { ok: false, errorMessage: 'No se pudo conectar con el panel.' };
         }
         if (!response.ok) {
           const errorText = await response.text().catch(() => '');
           console.error(`❌ Error HTTP ${response.status} controlando salida: ${errorText}`);
-          return false;
+          return {
+            ok: false,
+            errorMessage: this.formatPanelApiErrorMessage(response.status, errorText),
+          };
         }
         await response.json().catch(() => ({}));
-        return true;
+        return { ok: true };
       };
 
       if (action === 'close') {
-        const ok = await sendSetOutput(false);
-        if (!ok) return false;
+        const result = await sendSetOutput(false);
+        if (!result.ok) return result;
         console.log(`✅ Puerta ${doorId} cerrada vía set_output`);
       } else if (outputMode === 'manual') {
-        const ok = await sendSetOutput(true);
-        if (!ok) return false;
+        const result = await sendSetOutput(true);
+        if (!result.ok) return result;
         console.log(`✅ Puerta ${doorId} abierta en modo manual (queda ON)`);
       } else {
         // Auto: abre y apaga automáticamente tras doorControlPulseTime segundos.
         const opened = await sendSetOutput(true);
-        if (!opened) return false;
+        if (!opened.ok) return opened;
         console.log(`✅ Puerta ${doorId} abierta (auto), esperando ${pulseSeconds}s`);
         await new Promise((resolve) => setTimeout(resolve, pulseSeconds * 1000));
         const closed = await sendSetOutput(false);
-        if (!closed) return false;
+        if (!closed.ok) return closed;
         console.log(`✅ Puerta ${doorId} cerrada automáticamente`);
       }
 
       this.notifyStatusChange();
-      return true;
+      return { ok: true };
     } catch (error) {
       console.error(`❌ Error controlando puerta ${doorId}:`, error);
-      return false;
+      return {
+        ok: false,
+        errorMessage:
+          error instanceof Error ? error.message : 'Error inesperado al controlar la puerta.',
+      };
     }
   }
 

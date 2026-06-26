@@ -1,6 +1,7 @@
 import { EventEmitter } from 'events';
 
 import { doorControlService } from '@/services/DoorControlService';
+import { wakeTabletForIncomingCall } from '@/services/tabletWake';
 
 export type IncomingCallPayload = {
   callId: string;
@@ -10,6 +11,15 @@ export type IncomingCallPayload = {
   mode: string;
   timeoutSeconds: number;
   remainingSeconds: number;
+};
+
+export type ModeChangedPayload = {
+  currentMode: string | null;
+};
+
+export type ModeQueuedPayload = {
+  pendingMode: string | null;
+  blockedInputs: string[];
 };
 
 export type CallAcceptedPayload = {
@@ -174,6 +184,7 @@ class TabletCallService extends EventEmitter {
           console.log('[TabletCall] Ignorar llamada expirada', data.call_id);
           break;
         }
+        wakeTabletForIncomingCall();
         this.emit('incoming_call', {
           callId: String(data.call_id),
           door: String(data.door),
@@ -236,6 +247,27 @@ class TabletCallService extends EventEmitter {
         };
         this.emit('intercom_busy', this.intercomStatus);
         break;
+      case 'mode_changed': {
+        const currentMode =
+          data.current_mode === null || data.current_mode === undefined
+            ? null
+            : String(data.current_mode);
+        console.log('[TabletCall] mode_changed WS', currentMode);
+        this.emit('mode_changed', { currentMode } satisfies ModeChangedPayload);
+        break;
+      }
+      case 'mode_queued': {
+        const pendingMode =
+          data.pending_mode === null || data.pending_mode === undefined
+            ? null
+            : String(data.pending_mode);
+        const blockedInputs = Array.isArray(data.blocked_inputs)
+          ? data.blocked_inputs.map((c) => String(c))
+          : [];
+        console.log('[TabletCall] mode_queued WS', pendingMode);
+        this.emit('mode_queued', { pendingMode, blockedInputs } satisfies ModeQueuedPayload);
+        break;
+      }
       default:
         break;
     }

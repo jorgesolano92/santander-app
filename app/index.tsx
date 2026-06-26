@@ -8,7 +8,7 @@ import {
   ScrollView,
 } from 'react-native';
 import { useWindowDimensions } from 'react-native';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Settings, MessageCircle, DoorOpen, HardHat, Wifi, Phone } from 'lucide-react-native';
 import { Image } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -27,44 +27,13 @@ import {
 import {
   tabletCallService,
   type IncomingCallPayload,
+  type ModeChangedPayload,
+  type ModeQueuedPayload,
 } from '@/services/tabletCallService';
 import { initializeTabletConfigOnBoot } from '@/services/tabletPanelConfigService';
-import { showOperationError } from '@/utils/showOperationError';
+import { showOperationError, showOperationInfo } from '@/utils/showOperationError';
+import type { ConfigurationData } from '@/types/configurationData';
 // (Eliminar) import * as FileSystem from 'expo-file-system';
-
-interface SystemConfig {
-  doors: Array<{
-    id: string;
-    name: string;
-    status: string;
-    enabled: boolean;
-    ipExterior: string;
-    ipInterior: string;
-    intercom: {
-      name: string;
-      cameraIP: string;
-      httpPort: number;
-      httpsPort: number;
-      onvifUsername: string;
-      onvifPassword: string;
-      rtspPort: number;
-      videoProfile: 'MainStream' | 'SubStream' | 'Auto';
-      sipUri: string;
-      sipUsername: string;
-      sipPassword: string;
-      sipDomain: string;
-      enableOnvifEvents: boolean;
-      enableTLS: boolean;
-      preferredResolution: string;
-      preferredFPS: number;
-      defaultOpenTime: number;
-      doorControlUsername: string;
-      doorControlPassword: string;
-      doorControlPCB: number;
-      doorControlSwitch: number;
-    };
-  }>;
-}
 
 // Function to format mode names for display
 const formatModeForDisplay = (mode: string): string => {
@@ -149,12 +118,27 @@ export default function MainScreen() {
   const [showTechnicianModal, setShowTechnicianModal] = useState(false);
   const [showManualModeModal, setShowManualModeModal] = useState(false);
   const [autoStartIntercomDoorId, setAutoStartIntercomDoorId] = useState<string | null>(null);
+  const [videoporteroDoorId, setVideoporteroDoorId] = useState<string | null>(null);
+  const showManualModeModalRef = useRef(showManualModeModal);
+  const manualModeOpenBeforeCallRef = useRef(false);
   const [showEmergencyConfirmModal, setShowEmergencyConfirmModal] = useState(false);
   const [currentDateTime, setCurrentDateTime] = useState(new Date());
   const [communicatingDoors, setCommunicatingDoors] = useState<Set<string>>(new Set());
   // const [isSandboxMode, setIsSandboxMode] = useState(false); // Modo sandbox deshabilitado permanentemente
-  const [systemConfig, setSystemConfig] = useState<SystemConfig | null>(null);
+  const [systemConfig, setSystemConfig] = useState<ConfigurationData | null>(null);
   const [emergencyFlashColor, setEmergencyFlashColor] = useState<string>('#F8F9FA');
+  const [pendingModeRuleKey, setPendingModeRuleKey] = useState<string | null>(null);
+  const [pendingModeLabel, setPendingModeLabel] = useState<string | null>(null);
+
+  const applyPendingMode = useCallback(async (ruleKey: string | null) => {
+    setPendingModeRuleKey(ruleKey);
+    if (!ruleKey) {
+      setPendingModeLabel(null);
+      return;
+    }
+    const label = await doorControlService.mapRuleKeyToAppModeName(ruleKey);
+    setPendingModeLabel(label);
+  }, []);
 
   // Actualizar fecha y hora cada segundo
   useEffect(() => {
@@ -195,12 +179,67 @@ export default function MainScreen() {
   }, [systemConfig?.network?.consoleIP]);
 
   useEffect(() => {
+    const onModeChanged = (payload: ModeChangedPayload) => {
+      void doorControlService.syncModeFromPanelRuleKey(payload.currentMode);
+      if (payload.currentMode && pendingModeRuleKey && payload.currentMode === pendingModeRuleKey) {
+        void applyPendingMode(null);
+      }
+    };
+    const onModeQueued = (payload: ModeQueuedPayload) => {
+      void applyPendingMode(payload.pendingMode);
+    };
+    tabletCallService.on('mode_changed', onModeChanged);
+    tabletCallService.on('mode_queued', onModeQueued);
+    return () => {
+      tabletCallService.off('mode_changed', onModeChanged);
+      tabletCallService.off('mode_queued', onModeQueued);
+    };
+  }, [applyPendingMode, pendingModeRuleKey]);
+
+  useEffect(() => {
+    void doorControlService.getPanelModeStatus().then((status) => {
+      if (status.pendingRuleKey) {
+        void applyPendingMode(status.pendingRuleKey);
+      }
+    });
+  }, [applyPendingMode]);
+
+  useEffect(() => {
+    if (!pendingModeRuleKey) return;
+    const timer = setInterval(() => {
+      void doorControlService.getPanelModeStatus().then((status) => {
+        if (!status.pendingRuleKey) {
+          void applyPendingMode(null);
+          return;
+        }
+        if (status.pendingRuleKey !== pendingModeRuleKey) {
+          void applyPendingMode(status.pendingRuleKey);
+        }
+        if (
+          status.currentRuleKey &&
+          status.currentRuleKey === status.pendingRuleKey
+        ) {
+          void doorControlService.syncModeFromPanelRuleKey(status.currentRuleKey);
+          void applyPendingMode(null);
+        }
+      });
+    }, 2500);
+    return () => clearInterval(timer);
+  }, [applyPendingMode, pendingModeRuleKey]);
+
+  useEffect(() => {
+    showManualModeModalRef.current = showManualModeModal;
+  }, [showManualModeModal]);
+
+  useEffect(() => {
     registerIncomingCallUi({
       onAnswer: (call: IncomingCallPayload) => {
         console.log('[TabletCall] handler contestar', call.callId);
+        manualModeOpenBeforeCallRef.current = showManualModeModalRef.current;
         void tabletCallService.answerCall(call.callId);
         const doorId = tabletCallService.doorToAppId(call.door);
         setAutoStartIntercomDoorId(doorId);
+        setVideoporteroDoorId(doorId);
         setShowManualModeModal(true);
       },
       onReject: (call: IncomingCallPayload) => {
@@ -340,6 +379,24 @@ export default function MainScreen() {
     
     const result = await changeMode(targetMode);
     if (result.ok) {
+      if ('queued' in result && result.queued) {
+        console.log('⏳ Modo en cola:', result.pendingRuleKey);
+        setShowModeModal(false);
+        void applyPendingMode(result.pendingRuleKey);
+        const label =
+          (await doorControlService.mapRuleKeyToAppModeName(result.pendingRuleKey)) ||
+          targetMode;
+        const blocked =
+          result.blockedInputs && result.blockedInputs.length > 0
+            ? `\n\nEntradas activas: ${result.blockedInputs.join(', ')}`
+            : '';
+        showOperationInfo(
+          'Modo en cola',
+          `${label} se activará automáticamente cuando se liberen las entradas de bloqueo.${blocked}`,
+        );
+        return;
+      }
+
       console.log('✅ Modo cambiado exitosamente a:', targetMode);
 
       setShowModeModal(false);
@@ -643,6 +700,27 @@ export default function MainScreen() {
       color: '#212529',
       marginBottom: isSmallTablet ? 8 : isLargeTablet ? 12 : 10,
       letterSpacing: 0.3,
+    },
+    pendingModeBanner: {
+      backgroundColor: '#FFF7ED',
+      borderColor: '#FDBA74',
+      borderWidth: 1,
+      borderRadius: 8,
+      padding: isSmallTablet ? 10 : 12,
+      marginBottom: isSmallTablet ? 8 : 10,
+    },
+    pendingModeBannerTitle: {
+      fontSize: 11,
+      fontWeight: '800',
+      color: '#C2410C',
+      letterSpacing: 1,
+      marginBottom: 4,
+    },
+    pendingModeBannerText: {
+      fontSize: isSmallTablet ? 12 : 13,
+      color: '#9A3412',
+      lineHeight: 18,
+      fontWeight: '600',
     },
     modeDescription: {
       fontSize: isSmallTablet ? 13 : isLargeTablet ? 16 : 14,
@@ -1133,6 +1211,14 @@ export default function MainScreen() {
           <View style={styles.cargaCajeroCard}>
             <View style={styles.cargaCajeroContent}>
               <Text style={styles.cargaCajeroTitle}>CARGA CAJERO</Text>
+              {pendingModeLabel ? (
+                <View style={styles.pendingModeBanner}>
+                  <Text style={styles.pendingModeBannerTitle}>EN COLA</Text>
+                  <Text style={styles.pendingModeBannerText}>
+                    {pendingModeLabel} — se activará cuando se liberen las entradas de bloqueo
+                  </Text>
+                </View>
+              ) : null}
               <Text style={styles.cargaCajeroDescription}>
                 Es el modo de funcionamiento destinado la carga de cajero en los casos que exista en el uno en el zaguán. La puerta P1 permanece cerrada y es necesario pulsar para que haga llamada a las consolas interiores. La puerta P2 permanece abierta para facilitar el desarrollo de la actividad.
               </Text>
@@ -1183,6 +1269,14 @@ export default function MainScreen() {
             <View style={styles.modeCard}>
               <View style={styles.modeContent}>
                 <Text style={styles.modeTitle}>Modo de Operación Actual: {formatModeForDisplay(currentMode)}</Text>
+                {pendingModeLabel ? (
+                  <View style={styles.pendingModeBanner}>
+                    <Text style={styles.pendingModeBannerTitle}>EN COLA</Text>
+                    <Text style={styles.pendingModeBannerText}>
+                      {pendingModeLabel} — se activará cuando se liberen las entradas de bloqueo
+                    </Text>
+                  </View>
+                ) : null}
                 <Text style={styles.modeDescription}>
                   Visualización del modo de operación activo en tiempo real. Esta información se obtiene automáticamente mediante una consulta GET al sistema de control de puertas.
                 </Text>
@@ -1250,9 +1344,14 @@ export default function MainScreen() {
 
       <ManualModeModal
         visible={showManualModeModal}
-        onClose={() => setShowManualModeModal(false)}
+        onClose={() => {
+          setShowManualModeModal(false);
+          setVideoporteroDoorId(null);
+          setAutoStartIntercomDoorId(null);
+        }}
         onChangeMode={() => {
           setShowManualModeModal(false);
+          setVideoporteroDoorId(null);
           setShowModeModal(true);
         }}
         onEmergency={handleEmergencyToggle}
@@ -1266,6 +1365,14 @@ export default function MainScreen() {
         intercomConfigs={systemConfig?.doors || []}
         autoStartIntercomDoorId={autoStartIntercomDoorId}
         onAutoStartIntercomDone={() => setAutoStartIntercomDoorId(null)}
+        videoporteroDoorId={videoporteroDoorId}
+        onVideoporteroHangUp={() => {
+          setVideoporteroDoorId(null);
+          setAutoStartIntercomDoorId(null);
+          if (!manualModeOpenBeforeCallRef.current) {
+            setShowManualModeModal(false);
+          }
+        }}
       />
 
       <EmergencyConfirmationModal

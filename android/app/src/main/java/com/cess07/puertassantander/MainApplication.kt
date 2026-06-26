@@ -17,6 +17,7 @@ import expo.modules.ApplicationLifecycleDispatcher
 import expo.modules.ReactNativeHostWrapper
 import com.cess07.puertassantander.dvrsdk.DvrSdkPackage
 import com.cess07.puertassantander.intercombridge.IntercomBridgePackage
+import com.cess07.puertassantander.tabletwake.TabletWakePackage
 
 class MainApplication : Application(), ReactApplication {
 
@@ -27,6 +28,7 @@ class MainApplication : Application(), ReactApplication {
             PackageList(this).packages.apply {
               add(DvrSdkPackage())
               add(IntercomBridgePackage())
+              add(TabletWakePackage())
             }
 
           override fun getJSMainModuleName(): String = ".expo/.virtual-metro-entry"

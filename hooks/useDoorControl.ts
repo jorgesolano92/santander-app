@@ -9,6 +9,7 @@ import { sipService, SipCallState, SipEventType } from '../services/SipService';
 import { startSipIntercom, stopSipIntercom } from '../services/intercomSip';
 import { IntercomConfig } from '../components/IntercomConfigurationModal';
 import { emergencyService } from '../services/EmergencyService';
+import { showOperationError } from '@/utils/showOperationError';
 
 export interface UseDoorControlReturn {
   systemStatus: SystemStatus | null;
@@ -120,6 +121,9 @@ export function useDoorControl(): UseDoorControlReturn {
       const result = await doorControlService.changeMode(mode);
       if (!isMountedRef.current) return { ok: false, errorMessage: 'Operación cancelada.' };
       if (!result.ok) {
+        return result;
+      }
+      if ('queued' in result && result.queued) {
         return result;
       }
 
@@ -303,9 +307,21 @@ export function useDoorControl(): UseDoorControlReturn {
         }
       }
       
-      await doorControlService.controlDoor(doorId, action);
+      const result = await doorControlService.controlDoor(
+        doorId as 'P1' | 'P2' | 'P3' | 'P4',
+        action,
+      );
       
       if (!isMountedRef.current) return false;
+
+      if (!result.ok) {
+        showOperationError(
+          action === 'open' ? 'No se pudo abrir la puerta' : 'No se pudo cerrar la puerta',
+          result.errorMessage,
+        );
+        await updateSystemStatus(false);
+        return false;
+      }
       
       // Refresh system status after door control (sin loader, la acción de puerta ya tiene feedback)
       await updateSystemStatus(false);

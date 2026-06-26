@@ -75,6 +75,7 @@ export default function NewConfigurationModal({
                   doorControlSwitch: door.intercom.doorControlSwitch ?? (index + 1),
                   doorControlAction: door.intercom.doorControlAction || 'set_output',
                   doorControlRuleKey: door.intercom.doorControlRuleKey || '',
+                  doorControlEndpoint: door.intercom.doorControlEndpoint ?? '',
                   doorOutputMode: door.intercom.doorOutputMode || 'auto',
                   doorControlPulseTime:
                     typeof door.intercom.doorControlPulseTime === 'number'

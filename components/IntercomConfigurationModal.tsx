@@ -62,10 +62,12 @@ export interface IntercomConfig {
   hasAudio?: boolean; // Indica si la cámara tiene audio (por defecto true)
   doorControlManualMode?: boolean; // true = control manual (permanente), false = pulso automático (temporal)
   doorControlPulseTime?: number; // Tiempo de pulso en segundos (por defecto 1.0)
-  /** Estrategia de apertura en modo manual: set_output (OUT) o set_rule (regla panel). */
-  doorControlAction?: 'set_output' | 'set_rule';
+  /** Estrategia de apertura: set_output, set_rule o door_endpoint (POST autenticado). */
+  doorControlAction?: 'set_output' | 'set_rule' | 'door_endpoint';
   /** rule_key usada cuando doorControlAction === set_rule. */
   doorControlRuleKey?: string;
+  /** Ruta POST cuando doorControlAction === door_endpoint (ej. /api/v1/door/open/p2). */
+  doorControlEndpoint?: string;
   /** Solo para set_output: auto = pulso con auto-off, manual = queda ON hasta cerrar. */
   doorOutputMode?: 'auto' | 'manual';
   deviceType?: 'AXIS-I8116-E' | 'SAFIRE' | 'GENERIC'; // Tipo de dispositivo para control de audio
@@ -676,6 +678,7 @@ export default function IntercomConfigurationModal({
                   >
                     <Picker.Item label="set_output (OUT)" value="set_output" />
                     <Picker.Item label="set_rule (regla panel)" value="set_rule" />
+                    <Picker.Item label="Endpoint pulsadores" value="door_endpoint" />
                   </Picker>
                 </View>
               </View>
@@ -688,6 +691,17 @@ export default function IntercomConfigurationModal({
                     value={config.doorControlRuleKey || ''}
                     onChangeText={(text) => updateConfig('doorControlRuleKey', text)}
                     placeholder="interfono_puerta_calle_interior"
+                    autoCapitalize="none"
+                  />
+                </View>
+              ) : (config.doorControlAction || 'set_output') === 'door_endpoint' ? (
+                <View style={styles.inputRow}>
+                  <Text style={styles.inputLabel}>Endpoint:</Text>
+                  <TextInput
+                    style={styles.textInput}
+                    value={config.doorControlEndpoint || ''}
+                    onChangeText={(text) => updateConfig('doorControlEndpoint', text)}
+                    placeholder="/api/v1/door/open/p2"
                     autoCapitalize="none"
                   />
                 </View>
