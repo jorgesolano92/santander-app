@@ -28,7 +28,9 @@ Variables de entorno (opcionales): ver BRIDGE_ENV.md en esta carpeta.
 
   SDK_DIR, BRIDGE_HOST, BRIDGE_PORT, BRIDGE_RECORD, BRIDGE_RECORD_DIR,
   BRIDGE_SDK_MIC, BRIDGE_TX_FORMAT (g711|pcm|auto), BRIDGE_G711_CODEC (alaw|ulaw),
-  BRIDGE_RX_BUFFER_MAX_MS, BRIDGE_TX_BUFFER_MAX_MS
+  BRIDGE_RX_BUFFER_MAX_MS, BRIDGE_TX_BUFFER_MAX_MS, BRIDGE_CAMERAS_CONFIG
+
+Perfiles por IP de cámara: bridge_cameras.json (ver BRIDGE_ENV.md).
 """
 
 from __future__ import annotations
@@ -48,12 +50,14 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Optional
 
+from bridge_camera_config import CameraAudioProfile, resolve_camera_profile
+
 try:
-    import websockets
-    from websockets.asyncio.server import serve
+  import websockets
+  from websockets.asyncio.server import serve
 except ImportError:
-    print("[ERROR] Instala dependencias: pip install -r bridge_requirements.txt")
-    sys.exit(1)
+  print("[ERROR] Instala dependencias: pip install -r bridge_requirements.txt")
+  sys.exit(1)
 
 # ---------------------------------------------------------------------------
 # Configuración
@@ -82,42 +86,49 @@ BRIDGE_PREFER_RX_PCM = os.environ.get("BRIDGE_PREFER_RX_PCM", "0").lower() in (
 )
 # Post-procesado RX (PCM ya decodificado). A-law es el códec correcto en TVT TD-E3110.
 try:
-  BRIDGE_RX_GAIN = float(os.environ.get("BRIDGE_RX_GAIN", "1.0"))
+  BRIDGE_RX_GAIN = float(os.environ.get("BRIDGE_RX_GAIN", "0.82"))  # antes: 1.0
 except ValueError:
-  BRIDGE_RX_GAIN = 1.0
+  BRIDGE_RX_GAIN = 0.82  # antes: 1.0
 try:
-  BRIDGE_RX_LIMIT = int(os.environ.get("BRIDGE_RX_LIMIT", "24000"))
+  BRIDGE_RX_LIMIT = int(os.environ.get("BRIDGE_RX_LIMIT", "15000"))  # antes: 20000
 except ValueError:
-  BRIDGE_RX_LIMIT = 24000
+  BRIDGE_RX_LIMIT = 15000  # antes: 20000
 try:
   BRIDGE_RX_QUIET_THRESH = int(os.environ.get("BRIDGE_RX_QUIET_THRESH", "3500"))
 except ValueError:
   BRIDGE_RX_QUIET_THRESH = 3500
 try:
-  BRIDGE_RX_TARGET_PEAK = int(os.environ.get("BRIDGE_RX_TARGET_PEAK", "7500"))
+  BRIDGE_RX_TARGET_PEAK = int(os.environ.get("BRIDGE_RX_TARGET_PEAK", "4800"))  # antes: 6000
 except ValueError:
-  BRIDGE_RX_TARGET_PEAK = 7500
+  BRIDGE_RX_TARGET_PEAK = 4800  # antes: 6000
 try:
-  BRIDGE_RX_MAX_BOOST = float(os.environ.get("BRIDGE_RX_MAX_BOOST", "2.8"))
+  BRIDGE_RX_MAX_BOOST = float(os.environ.get("BRIDGE_RX_MAX_BOOST", "2.2"))  # antes: 2.5
 except ValueError:
-  BRIDGE_RX_MAX_BOOST = 2.8
+  BRIDGE_RX_MAX_BOOST = 2.2  # antes: 2.5
 try:
-  BRIDGE_RX_LOUD_THRESH = int(os.environ.get("BRIDGE_RX_LOUD_THRESH", "11000"))
+  BRIDGE_RX_LOUD_THRESH = int(os.environ.get("BRIDGE_RX_LOUD_THRESH", "6500"))  # antes: 8000
 except ValueError:
-  BRIDGE_RX_LOUD_THRESH = 11000
+  BRIDGE_RX_LOUD_THRESH = 6500  # antes: 8000
 try:
-  BRIDGE_RX_HOT_THRESH = int(os.environ.get("BRIDGE_RX_HOT_THRESH", "25000"))
+  BRIDGE_RX_HOT_THRESH = int(os.environ.get("BRIDGE_RX_HOT_THRESH", "14000"))  # antes: 16000
 except ValueError:
-  BRIDGE_RX_HOT_THRESH = 25000
+  BRIDGE_RX_HOT_THRESH = 14000  # antes: 16000
 try:
-  BRIDGE_RX_HOT_GAIN = float(os.environ.get("BRIDGE_RX_HOT_GAIN", "0.5"))
+  BRIDGE_RX_HOT_GAIN = float(os.environ.get("BRIDGE_RX_HOT_GAIN", "0.28"))  # antes: 0.35
 except ValueError:
-  BRIDGE_RX_HOT_GAIN = 0.5
+  BRIDGE_RX_HOT_GAIN = 0.28  # antes: 0.35
 BRIDGE_RX_PROCESS = os.environ.get("BRIDGE_RX_PROCESS", "1").lower() not in (
     "0", "false", "off", "no",
 )
 BRIDGE_RX_HPF = os.environ.get("BRIDGE_RX_HPF", "0").lower() in ("1", "true", "yes", "on")
-BRIDGE_RX_DECLICK = os.environ.get("BRIDGE_RX_DECLICK", "1").lower() not in (
+BRIDGE_RX_LPF = os.environ.get("BRIDGE_RX_LPF", "1").lower() not in (  # antes: no existía (off)
+    "0", "false", "off", "no",
+)
+try:
+  BRIDGE_RX_LPF_HZ = float(os.environ.get("BRIDGE_RX_LPF_HZ", "2800"))  # antes: no existía
+except ValueError:
+  BRIDGE_RX_LPF_HZ = 2800.0  # antes: no existía
+BRIDGE_RX_DECLICK = os.environ.get("BRIDGE_RX_DECLICK", "0").lower() not in (  # antes: 1
     "0", "false", "off", "no",
 )
 try:
@@ -129,9 +140,13 @@ try:
 except ValueError:
   BRIDGE_RX_GAIN_ATTACK = 0.18
 try:
-  BRIDGE_RX_SOFT_LIMIT = int(os.environ.get("BRIDGE_RX_SOFT_LIMIT", "12000"))
+  BRIDGE_RX_GAIN_RELEASE = float(os.environ.get("BRIDGE_RX_GAIN_RELEASE", "0.06"))
 except ValueError:
-  BRIDGE_RX_SOFT_LIMIT = 12000
+  BRIDGE_RX_GAIN_RELEASE = 0.06
+try:
+  BRIDGE_RX_SOFT_LIMIT = int(os.environ.get("BRIDGE_RX_SOFT_LIMIT", "8000"))  # antes: 10000
+except ValueError:
+  BRIDGE_RX_SOFT_LIMIT = 8000  # antes: 10000
 BRIDGE_TX_SOFT_LIMIT = os.environ.get("BRIDGE_TX_SOFT_LIMIT", "1").lower() not in (
     "0", "false", "off", "no",
 )
@@ -140,9 +155,9 @@ try:
 except ValueError:
   BRIDGE_TX_SOFT_LIMIT_PEAK = 26000
 try:
-  BRIDGE_SDK_RX_VOL = int(os.environ.get("BRIDGE_SDK_RX_VOL", "8"))
+  BRIDGE_SDK_RX_VOL = int(os.environ.get("BRIDGE_SDK_RX_VOL", "3"))  # antes: 5
 except ValueError:
-  BRIDGE_SDK_RX_VOL = 8
+  BRIDGE_SDK_RX_VOL = 3  # antes: 5
 # Solo depuración en PC (BRIDGE_RX_ENABLE=0). La app siempre usa RX SDK.
 BRIDGE_RX_ENABLE = os.environ.get("BRIDGE_RX_ENABLE", "1").lower() in ("1", "true", "yes", "on")
 try:
@@ -166,6 +181,44 @@ RX_WS_CHUNK = 1280  # 80 ms — menos paquetes WS, reproducción más estable en
 RX_BUFFER_MAX_BYTES = int(SAMPLE_RATE * BYTES_PER_SAMPLE * BRIDGE_RX_BUFFER_MAX_MS / 1000)
 RX_BUFFER_WARN_BYTES = int(SAMPLE_RATE * BYTES_PER_SAMPLE * BRIDGE_RX_BUFFER_MAX_MS * 0.6 / 1000)
 TX_BUFFER_MAX_BYTES = int(SAMPLE_RATE * BYTES_PER_SAMPLE * BRIDGE_TX_BUFFER_MAX_MS / 1000)
+
+CAMERAS_CONFIG_PATH = Path(
+    os.environ.get("BRIDGE_CAMERAS_CONFIG", str(SCRIPT_DIR / "bridge_cameras.json")),
+)
+
+
+def default_camera_profile_from_env() -> CameraAudioProfile:
+  """Valores base si no hay bridge_cameras.json o falta una clave."""
+  return CameraAudioProfile(
+      label="env-default",
+      sdk_rx_vol=BRIDGE_SDK_RX_VOL,
+      tx_gain=BRIDGE_TX_GAIN,
+      rx_gain=BRIDGE_RX_GAIN,
+      rx_limit=BRIDGE_RX_LIMIT,
+      rx_quiet_thresh=BRIDGE_RX_QUIET_THRESH,
+      rx_target_peak=BRIDGE_RX_TARGET_PEAK,
+      rx_max_boost=BRIDGE_RX_MAX_BOOST,
+      rx_loud_thresh=BRIDGE_RX_LOUD_THRESH,
+      rx_hot_thresh=BRIDGE_RX_HOT_THRESH,
+      rx_hot_gain=BRIDGE_RX_HOT_GAIN,
+      rx_process=BRIDGE_RX_PROCESS,
+      rx_hpf=BRIDGE_RX_HPF,
+      rx_lpf=BRIDGE_RX_LPF,
+      rx_lpf_hz=BRIDGE_RX_LPF_HZ,
+      rx_declick=BRIDGE_RX_DECLICK,
+      rx_slew_max=BRIDGE_RX_SLEW_MAX,
+      rx_gain_attack=BRIDGE_RX_GAIN_ATTACK,
+      rx_gain_release=BRIDGE_RX_GAIN_RELEASE,
+      rx_soft_limit=BRIDGE_RX_SOFT_LIMIT,
+  )
+
+
+def load_camera_profile(camera_ip: str) -> CameraAudioProfile:
+  return resolve_camera_profile(
+      camera_ip,
+      CAMERAS_CONFIG_PATH,
+      default_camera_profile_from_env(),
+  )
 
 MSG_TX = 0x01
 MSG_RX = 0x02
@@ -400,10 +453,31 @@ def decode_g711_to_pcm(data: bytes, codec: str) -> bytes:
 
 
 def soft_limit_sample(sample: float, limit: float) -> float:
-  """Compresión suave (tanh) — menos distorsión que recorte duro."""
+  """Compresión suave con rodilla — tanh solo por encima del 85 % del techo."""
   if limit <= 0:
     return sample
-  return limit * math.tanh(sample / limit)
+  knee = limit * 0.85
+  a = abs(sample)
+  if a <= knee:
+    return sample
+  return math.copysign(limit * math.tanh(a / limit), sample)
+
+
+def lpf_alpha_for_hz(fc: float, sample_rate: int = SAMPLE_RATE) -> float:
+  fc = max(200.0, min(fc, sample_rate * 0.45))
+  return 1.0 - math.exp(-2.0 * math.pi * fc / sample_rate)
+
+
+def lowpass_pcm(pcm: bytes, alpha: float, y_prev: float) -> tuple[bytes, float]:
+  if not pcm or len(pcm) < 2 or alpha <= 0:
+    return pcm, y_prev
+  samples = struct.unpack(f"<{len(pcm) // 2}h", pcm)
+  y = y_prev
+  out: list[int] = []
+  for x in samples:
+    y += alpha * (float(x) - y)
+    out.append(int(max(-32768, min(32767, round(y)))))
+  return struct.pack(f"<{len(out)}h", *out), y
 
 
 def slew_limit_pcm(pcm: bytes, max_step: int) -> bytes:
@@ -440,45 +514,54 @@ def apply_pcm_soft_limit(pcm: bytes, peak_limit: int) -> bytes:
 
 
 class RxAudioProcessor:
-  """RX: AGC suavizado + compresión suave + de-click (menos picos/artefactos G711)."""
+  """RX: AGC suavizado + limitador único + LPF opcional (menos carraspeo G711)."""
 
   FRAME = 320  # 40 ms @ 8 kHz
 
-  def __init__(self) -> None:
+  def __init__(self, profile: CameraAudioProfile) -> None:
+    self._cfg = profile
     self._x_prev = 0.0
     self._y_prev = 0.0
+    self._lpf_y = 0.0
     self._smooth_gain = 1.0
     self._hpf_alpha = 1.0 / (1.0 + 2.0 * math.pi * 200.0 / SAMPLE_RATE)
+    self._lpf_alpha = (
+        lpf_alpha_for_hz(profile.rx_lpf_hz) if profile.rx_lpf else 0.0
+    )
 
   def reset(self) -> None:
     self._x_prev = 0.0
     self._y_prev = 0.0
+    self._lpf_y = 0.0
     self._smooth_gain = 1.0
 
   def _target_frame_gain(self, peak: int) -> float:
-    base = BRIDGE_RX_GAIN
+    cfg = self._cfg
+    base = cfg.rx_gain
     if peak <= 0:
       return base
-    if peak >= BRIDGE_RX_HOT_THRESH:
-      excess = peak - BRIDGE_RX_HOT_THRESH
-      compress = BRIDGE_RX_HOT_THRESH + excess * 0.35
-      return base * min(1.0, BRIDGE_RX_TARGET_PEAK / max(1, compress))
-    if peak < BRIDGE_RX_QUIET_THRESH:
-      boost = min(BRIDGE_RX_MAX_BOOST, BRIDGE_RX_TARGET_PEAK / peak)
+    if peak >= cfg.rx_hot_thresh:
+      excess = peak - cfg.rx_hot_thresh
+      compress = cfg.rx_hot_thresh + excess * 0.35
+      g = base * min(1.0, cfg.rx_target_peak / max(1, compress))
+      return g * cfg.rx_hot_gain
+    if peak < cfg.rx_quiet_thresh:
+      boost = min(cfg.rx_max_boost, cfg.rx_target_peak / peak)
       return base * boost
-    if peak > BRIDGE_RX_LOUD_THRESH:
-      return base * (BRIDGE_RX_TARGET_PEAK / peak)
+    if peak > cfg.rx_loud_thresh:
+      return base * (cfg.rx_target_peak / peak)
     return base
 
   def process(self, pcm: bytes) -> bytes:
     if not pcm or len(pcm) < 2:
       return pcm
-    if BRIDGE_RX_DECLICK:
-      pcm = slew_limit_pcm(pcm, BRIDGE_RX_SLEW_MAX)
+    cfg = self._cfg
+    if cfg.rx_declick:
+      pcm = slew_limit_pcm(pcm, cfg.rx_slew_max)
 
     samples = list(struct.unpack(f"<{len(pcm) // 2}h", pcm))
-    soft_lim = float(BRIDGE_RX_SOFT_LIMIT)
-    attack = max(0.01, min(1.0, BRIDGE_RX_GAIN_ATTACK))
+    attack = max(0.01, min(1.0, cfg.rx_gain_attack))
+    release = max(0.01, min(1.0, cfg.rx_gain_release))
     out: list[int] = []
 
     for start in range(0, len(samples), self.FRAME):
@@ -487,22 +570,31 @@ class RxAudioProcessor:
         break
       peak = max(abs(s) for s in frame)
       target_gain = self._target_frame_gain(peak)
-      self._smooth_gain += (target_gain - self._smooth_gain) * attack
+      gain_coef = release if target_gain < self._smooth_gain else attack
+      self._smooth_gain += (target_gain - self._smooth_gain) * gain_coef
       fg = self._smooth_gain
 
       for s in frame:
         x = float(s) * fg
-        if BRIDGE_RX_HPF:
+        if cfg.rx_hpf:
           y = self._hpf_alpha * (self._y_prev + x - self._x_prev)
           self._x_prev = x
           self._y_prev = y
           x = y
-        x = soft_limit_sample(x, soft_lim)
         out.append(int(max(-32768, min(32767, round(x)))))
 
     result = struct.pack(f"<{len(out)}h", *out)
-    if BRIDGE_RX_DECLICK:
-      result = slew_limit_pcm(result, max(800, BRIDGE_RX_SLEW_MAX // 2))
+    if cfg.rx_declick:
+      result = slew_limit_pcm(result, cfg.rx_slew_max)
+    if cfg.rx_lpf and self._lpf_alpha > 0:
+      result, self._lpf_y = lowpass_pcm(result, self._lpf_alpha, self._lpf_y)
+    final_lim = float(cfg.rx_soft_limit)
+    if cfg.rx_limit > 0:
+      final_lim = min(final_lim, float(cfg.rx_limit))
+    if final_lim > 0:
+      result = apply_pcm_soft_limit(result, int(final_lim))
+    if cfg.rx_declick:
+      result = slew_limit_pcm(result, max(800, cfg.rx_slew_max // 2))
     return result
 
 
@@ -672,6 +764,7 @@ class TvtSdk:
     self._open_rx_bytes = 0
     self._rx_decode_logged = False
     self._g711_rx_buf = bytearray()
+    self._sdk_rx_vol = 0
     self._lock = threading.Lock()
 
   def load(self) -> None:
@@ -922,10 +1015,17 @@ class TvtSdk:
       "rxBytes": rx_bytes,
     }
 
-  def open_voice(self, channel: int, on_rx: Callable[[bytes], None]) -> dict:
+  def open_voice(
+      self,
+      channel: int,
+      on_rx: Callable[[bytes], None],
+      *,
+      sdk_rx_vol: int = 0,
+  ) -> dict:
     with self._lock:
       self._close_voice_unlocked()
       self._rx_callback = on_rx
+      self._sdk_rx_vol = int(sdk_rx_vol) if sdk_rx_vol > 0 else 0
       self._tx_fail_logged = False
       self._rx_decode_logged = False
       self._g711_rx_buf.clear()
@@ -1149,14 +1249,15 @@ class TvtSdk:
   def _set_volume_unlocked(self) -> None:
     if not self._voice_handle:
       return
-    if BRIDGE_SDK_RX_VOL > 0:
-      volumes = [BRIDGE_SDK_RX_VOL]
+    vol = self._sdk_rx_vol if self._sdk_rx_vol > 0 else BRIDGE_SDK_RX_VOL
+    if vol > 0:
+      volumes = [vol]
     else:
       volumes = [1, 3, 5, 8, 12, 15]
-    for vol in volumes:
+    for try_vol in volumes:
       try:
-        if self._sdk.NET_SDK_SetVoiceComClientVolume(self._voice_handle, vol):
-          log.info("SetVoiceComClientVolume OK vol=%s", vol)
+        if self._sdk.NET_SDK_SetVoiceComClientVolume(self._voice_handle, try_vol):
+          log.info("SetVoiceComClientVolume OK vol=%s", try_vol)
           return
       except Exception:
         pass
@@ -1285,10 +1386,12 @@ class BridgeSession:
     self._active = False
     self._rec_tx: Optional[PcmWavRecorder] = None
     self._rec_rx: Optional[PcmWavRecorder] = None
+    self._rec_rx_decoded: Optional[PcmWavRecorder] = None
     self._rec_rx_raw: Optional[RawRecorder] = None
     self._rec_sdk: Optional[RawRecorder] = None
     self._record_stamp = ""
-    self._rx_processor = RxAudioProcessor()
+    self._profile = default_camera_profile_from_env()
+    self._rx_processor = RxAudioProcessor(self._profile)
     self._rx_enable = True
     self._ws_rx_alive = True
     self._ws_send_fail_logged = False
@@ -1313,10 +1416,12 @@ class BridgeSession:
     self._record_stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     tx_path = RECORD_DIR / f"mic_tx_{tag}_{self._record_stamp}.wav"
     rx_path = RECORD_DIR / f"cam_rx_{tag}_{self._record_stamp}.wav"
+    rx_decoded_path = RECORD_DIR / f"cam_rx_decoded_{tag}_{self._record_stamp}.wav"
     rx_raw_path = RECORD_DIR / f"cam_rx_raw_{tag}_{self._record_stamp}.bin"
     sdk_path = RECORD_DIR / f"sdk_tx_{tag}_{self._record_stamp}.bin"
     self._rec_tx = PcmWavRecorder(tx_path)
     self._rec_rx = PcmWavRecorder(rx_path)
+    self._rec_rx_decoded = PcmWavRecorder(rx_decoded_path)
     self._rec_rx_raw = RawRecorder(rx_raw_path)
     self._rec_sdk = RawRecorder(sdk_path)
     self.sdk._tx_payload_hook = self._rec_sdk.write
@@ -1325,6 +1430,7 @@ class BridgeSession:
     log.info("  mic (WS→SDK): %s", tx_path.name)
     log.info("  payload SDK→cámara: %s", sdk_path.name)
     log.info("  cámara G711 crudo: %s", rx_raw_path.name)
+    log.info("  cámara PCM decodificado: %s", rx_decoded_path.name)
     log.info("  cámara (SDK→WS): %s", rx_path.name)
 
   def _stop_recorders(self) -> None:
@@ -1333,6 +1439,7 @@ class BridgeSession:
     for label, rec, is_pcm in (
         ("mic_tx", self._rec_tx, True),
         ("cam_rx", self._rec_rx, True),
+        ("cam_rx_decoded", self._rec_rx_decoded, True),
         ("cam_rx_raw", self._rec_rx_raw, False),
         ("sdk_tx", self._rec_sdk, False),
     ):
@@ -1346,6 +1453,7 @@ class BridgeSession:
         log.info("BIN %s: %s (%s B)", label, rec.path.name, nbytes)
     self._rec_tx = None
     self._rec_rx = None
+    self._rec_rx_decoded = None
     self._rec_rx_raw = None
     self._rec_sdk = None
 
@@ -1412,6 +1520,13 @@ class BridgeSession:
     channel = int(params.get("channel", -1))
     self._rx_enable = self._parse_rx_enable(params)
 
+    self._profile = load_camera_profile(ip)
+    self._rx_processor = RxAudioProcessor(self._profile)
+    log.info(
+      "Perfil audio %s — %s | %s",
+      ip, self._profile.label, self._profile.summary(),
+    )
+
     self.sdk.login(ip, port, user, pwd)
 
     self._rx_buffer_overflows = 0
@@ -1425,7 +1540,9 @@ class BridgeSession:
     def on_rx(pcm: bytes) -> None:
       if not pcm or not self._rx_enable:
         return
-      if BRIDGE_RX_PROCESS:
+      if self._rec_rx_decoded is not None:
+        self._rec_rx_decoded.write(pcm)
+      if self._profile.rx_process:
         pcm = self._rx_processor.process(pcm)
       self._rx_bytes += len(pcm)
       if self._rec_rx is not None:
@@ -1460,7 +1577,9 @@ class BridgeSession:
 
     self._start_recorders()
     self._rx_processor.reset()
-    info = self.sdk.open_voice(channel, on_rx)
+    info = self.sdk.open_voice(
+        channel, on_rx, sdk_rx_vol=self._profile.sdk_rx_vol,
+    )
     info["rx"] = bool(self._rx_enable and info.get("rx", True))
     if "tx" not in info or not info["tx"]:
       info["tx"] = bool(info.get("txProbe", False))
@@ -1519,11 +1638,14 @@ class BridgeSession:
     while len(self._tx_buf) >= agg:
       frame = bytes(self._tx_buf[:agg])
       del self._tx_buf[:agg]
-      if BRIDGE_TX_GAIN != 1.0 and BRIDGE_TX_GAIN > 0:
+      if self._profile.tx_gain != 1.0 and self._profile.tx_gain > 0:
         samples = struct.unpack(f"<{len(frame) // 2}h", frame)
         frame = struct.pack(
             f"<{len(samples)}h",
-            *[max(-32768, min(32767, int(s * BRIDGE_TX_GAIN))) for s in samples],
+            *[
+                max(-32768, min(32767, int(s * self._profile.tx_gain)))
+                for s in samples
+            ],
         )
       if BRIDGE_TX_SOFT_LIMIT:
         frame = apply_pcm_soft_limit(frame, BRIDGE_TX_SOFT_LIMIT_PEAK)
@@ -1713,21 +1835,21 @@ class BridgeServer:
     if BRIDGE_TX_FORMAT != "auto":
       log.info("BRIDGE_TX_FORMAT=%s", BRIDGE_TX_FORMAT)
     log.info("BRIDGE_TX_GAIN=%s (mic tablet→cámara)", BRIDGE_TX_GAIN)
+    if CAMERAS_CONFIG_PATH.is_file():
+      log.info("Perfiles por cámara: %s", CAMERAS_CONFIG_PATH)
+    else:
+      log.info(
+        "Perfiles por cámara: %s (no existe — solo env/defaults)",
+        CAMERAS_CONFIG_PATH,
+      )
     if not BRIDGE_RX_PROCESS:
-      log.info("BRIDGE_RX_PROCESS=0 → PCM RX sin post-procesado")
+      log.info("BRIDGE_RX_PROCESS=0 → PCM RX sin post-procesado (global)")
     log.info("BRIDGE_RX_CODEC=%s (G711 cámara→tablet)", BRIDGE_RX_CODEC)
     if BRIDGE_PREFER_RX_PCM:
       log.info("BRIDGE_PREFER_RX_PCM=1 → MR(enc=True) RX en PCM antes que G711")
     log.info(
-      "RX post-proc: gain=%s quiet<%s boost<=%s target=%s loud>%s hot>=%s softLim=%s hpf=%s sdkVol=%s",
-      BRIDGE_RX_GAIN, BRIDGE_RX_QUIET_THRESH, BRIDGE_RX_MAX_BOOST,
-      BRIDGE_RX_TARGET_PEAK, BRIDGE_RX_LOUD_THRESH, BRIDGE_RX_HOT_THRESH,
-      BRIDGE_RX_SOFT_LIMIT, BRIDGE_RX_HPF, BRIDGE_SDK_RX_VOL,
-    )
-    log.info(
-      "RX artefactos: declick=%s slewMax=%s gainAttack=%s | TX softLim=%s peak=%s",
-      BRIDGE_RX_DECLICK, BRIDGE_RX_SLEW_MAX, BRIDGE_RX_GAIN_ATTACK,
-      BRIDGE_TX_SOFT_LIMIT, BRIDGE_TX_SOFT_LIMIT_PEAK,
+      "RX fallback env (sin JSON): %s",
+      default_camera_profile_from_env().summary(),
     )
     log.info(
       "RX jitter: max=%s ms, warn~%s ms | TX jitter mic: max=%s ms",

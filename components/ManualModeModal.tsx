@@ -873,7 +873,7 @@ export default function ManualModeModal({
               <Text style={styles.infoIconText}>i</Text>
             </View>
             <View style={styles.modeHeaderContent}>
-              <Text style={styles.modeTitle}>MODO MANUAL</Text>
+              <Text style={styles.modeTitle}>BLOQUEO OFICINA</Text>
             </View>
             <TouchableOpacity 
               style={styles.changeModeButton}

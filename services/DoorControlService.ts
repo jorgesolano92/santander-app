@@ -212,6 +212,12 @@ const modeNameToNumericValueMap: { [key: string]: string } = {
   'EMERGENCIA': '8',
 };
 
+/** IN de puerta abierta → OUT de mantenimiento que bloquea el cambio de modo en cola. */
+const DOOR_QUEUE_BLOCK_INPUT_TO_HOLD_OUTPUT: Record<string, string> = {
+  IN_02_04: 'OUT_02_07',
+  IN_03_04: 'OUT_03_07',
+};
+
 /** Resultado de operaciones contra el API del panel para mostrar feedback al usuario. */
 export type PanelApiResult =
   | { ok: true; queued?: false }
@@ -1033,6 +1039,94 @@ class DoorControlService {
     }
   }
 
+  /** Lee si una salida del panel está activa (OUT_xx_yy). */
+  async readPanelOutput(code: string): Promise<boolean | null> {
+    if (this.sandboxMode) return null;
+    try {
+      const config = await this.getSavedAppConfig();
+      if (!config) return null;
+      const q = encodeURIComponent(code.trim());
+      const response = await this.authenticatedRequest(
+        config,
+        'GET',
+        `/api/v1/output?code=${q}&refresh=true`,
+      );
+      if (!response?.ok) return null;
+      const data = (await response.json().catch(() => ({}))) as Record<string, unknown>;
+      return data.on === true;
+    } catch {
+      return null;
+    }
+  }
+
+  /** Desactiva OUT_xx_07 u otra salida vía set_mode/set_output. */
+  async setPanelOutput(code: string, on: boolean): Promise<PanelApiResult> {
+    if (this.sandboxMode) {
+      return { ok: true };
+    }
+    try {
+      const config = await this.getSavedAppConfig();
+      if (!config) {
+        return { ok: false, errorMessage: 'No hay configuración guardada en la tablet.' };
+      }
+      const endpoint = config?.api?.urlPost || '/api/v1/set_mode';
+      const payload = { action: 'set_output', code: code.trim(), on };
+      const response = await this.authenticatedRequest(config, 'POST', endpoint, payload);
+      if (!response) {
+        return { ok: false, errorMessage: 'No se pudo conectar con el panel.' };
+      }
+      if (!response.ok) {
+        const t = await response.text().catch(() => '');
+        return {
+          ok: false,
+          errorMessage: this.formatPanelApiErrorMessage(response.status, t),
+        };
+      }
+      await response.json().catch(() => ({}));
+      return { ok: true };
+    } catch (error) {
+      return {
+        ok: false,
+        errorMessage:
+          error instanceof Error ? error.message : 'Error al controlar la salida del panel.',
+      };
+    }
+  }
+
+  /**
+   * Si el modo quedó en cola por puerta abierta (IN_02_04 / IN_03_04), apaga el OUT
+   * de mantenimiento correspondiente para que el panel procese la cola.
+   */
+  async releaseDoorBlocksForQueuedMode(blockedInputs: string[]): Promise<string[]> {
+    if (this.sandboxMode || !blockedInputs?.length) return [];
+    const released: string[] = [];
+    const outputsToCheck = new Set<string>();
+    for (const inputCode of blockedInputs) {
+      const out = DOOR_QUEUE_BLOCK_INPUT_TO_HOLD_OUTPUT[inputCode.trim().toUpperCase()];
+      if (out) outputsToCheck.add(out);
+    }
+    if (!outputsToCheck.size) return [];
+
+    for (const outCode of outputsToCheck) {
+      const isOn = await this.readPanelOutput(outCode);
+      if (isOn !== true) {
+        console.log(`[Tablet] ${outCode} ya inactivo, no se desactiva para cola`);
+        continue;
+      }
+      console.log(`[Tablet] Liberando cola de modo: desactivando ${outCode}`);
+      const result = await this.setPanelOutput(outCode, false);
+      if (result.ok) {
+        released.push(outCode);
+      } else if ('errorMessage' in result) {
+        console.warn(`[Tablet] No se pudo desactivar ${outCode}:`, result.errorMessage);
+      }
+    }
+    if (released.length > 0) {
+      this.notifyStatusChange();
+    }
+    return released;
+  }
+
   /**
    * Mapea rule_key del panel al nombre de modo mostrado en la app.
    */
@@ -1242,6 +1336,7 @@ class DoorControlService {
         const queueMessage =
           typeof result.reason === 'string' ? result.reason : undefined;
         console.log('[Tablet] Modo en cola:', pendingRuleKey, blockedInputs);
+        void this.releaseDoorBlocksForQueuedMode(blockedInputs);
         return {
           ok: true,
           queued: true,

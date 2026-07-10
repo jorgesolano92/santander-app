@@ -1,6 +1,6 @@
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, Modal, ScrollView, Switch, Platform, Alert } from 'react-native';
 import { useState, useEffect, useRef } from 'react';
-import { Save, X, Wifi, RefreshCw, Settings } from 'lucide-react-native';
+import { Save, X, RefreshCw, Settings } from 'lucide-react-native';
 import { useWindowDimensions } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { doorControlService, ApiResponse } from '@/services/DoorControlService';
@@ -39,7 +39,6 @@ export default function NewConfigurationModal({
 
   const [config, setConfig] = useState<ConfigurationData>(cloneDefaultDoorAppConfig);
 
-  const [connectionStatus, setConnectionStatus] = useState<{ [key: string]: 'testing' | 'success' | 'error' | null }>({});
   const [showApiResponseModal, setShowApiResponseModal] = useState(false);
   const [apiResponseData, setApiResponseData] = useState<ApiResponse | null>(null);
   const [isTestingApi, setIsTestingApi] = useState(false);
@@ -394,51 +393,6 @@ export default function NewConfigurationModal({
     }));
   };
 
-  const testConnection = async (type: string, ip: string) => {
-    const key = `${type}_${ip}`;
-    setConnectionStatus(prev => ({ ...prev, [key]: 'testing' }));
-    
-    // Simular test de conexión
-    setTimeout(() => {
-      const success = Math.random() > 0.3; // 70% éxito
-      setConnectionStatus(prev => ({ 
-        ...prev, 
-        [key]: success ? 'success' : 'error' 
-      }));
-      
-      // Limpiar estado después de 3 segundos
-      setTimeout(() => {
-        setConnectionStatus(prev => ({ ...prev, [key]: null }));
-      }, 3000);
-    }, 1500);
-  };
-
-  const getConnectionButtonStyle = (status: 'testing' | 'success' | 'error' | null) => {
-    switch (status) {
-      case 'testing':
-        return [styles.connectionButton, styles.connectionButtonTesting];
-      case 'success':
-        return [styles.connectionButton, styles.connectionButtonSuccess];
-      case 'error':
-        return [styles.connectionButton, styles.connectionButtonError];
-      default:
-        return styles.connectionButton;
-    }
-  };
-
-  const getConnectionButtonText = (status: 'testing' | 'success' | 'error' | null) => {
-    switch (status) {
-      case 'testing':
-        return 'PROBANDO...';
-      case 'success':
-        return 'CONECTADO';
-      case 'error':
-        return 'ERROR';
-      default:
-        return 'CONEXIÓN';
-    }
-  };
-
   const styles = StyleSheet.create({
     container: {
       flex: 1,
@@ -574,24 +528,6 @@ export default function NewConfigurationModal({
       paddingHorizontal: isSmallTablet ? 6 : isLargeTablet ? 10 : 8,
       paddingVertical: isSmallTablet ? 4 : isLargeTablet ? 6 : 5,
       fontFamily: 'monospace',
-    },
-    connectionButton: {
-      backgroundColor: '#6C757D',
-      paddingHorizontal: isSmallTablet ? 6 : isLargeTablet ? 10 : 8,
-      paddingVertical: isSmallTablet ? 4 : isLargeTablet ? 6 : 5,
-      borderRadius: 4,
-      minWidth: isSmallTablet ? 24 : isLargeTablet ? 32 : 28,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    connectionButtonTesting: {
-      backgroundColor: '#FFC107',
-    },
-    connectionButtonSuccess: {
-      backgroundColor: '#28A745',
-    },
-    connectionButtonError: {
-      backgroundColor: '#DC3545',
     },
     twoColumnSection: {
       flexDirection: 'row',
@@ -1019,32 +955,8 @@ export default function NewConfigurationModal({
                             style={styles.ipInput}
                             value={door.ipExterior}
                             onChangeText={(text) => updateDoor(index, 'ipExterior', text)}
-                            placeholder="0.0.0.0"
+                            placeholder="192.168.1.200"
                           />
-                          <TouchableOpacity
-                            style={getConnectionButtonStyle(connectionStatus[`exterior_${door.ipExterior}`])}
-                            onPress={() => testConnection('exterior', door.ipExterior)}
-                            disabled={connectionStatus[`exterior_${door.ipExterior}`] === 'testing'}
-                          >
-                            <Wifi size={12} color="#FFFFFF" />
-                          </TouchableOpacity>
-                        </View>
-                        
-                        <View style={styles.ipRow}>
-                          <Text style={styles.ipLabel}>IP Interior:</Text>
-                          <TextInput
-                            style={styles.ipInput}
-                            value={door.ipInterior}
-                            onChangeText={(text) => updateDoor(index, 'ipInterior', text)}
-                            placeholder="0.0.0.0"
-                          />
-                          <TouchableOpacity
-                            style={getConnectionButtonStyle(connectionStatus[`interior_${door.ipInterior}`])}
-                            onPress={() => testConnection('interior', door.ipInterior)}
-                            disabled={connectionStatus[`interior_${door.ipInterior}`] === 'testing'}
-                          >
-                            <Wifi size={12} color="#FFFFFF" />
-                          </TouchableOpacity>
                         </View>
                       </View>
                     
@@ -1095,13 +1007,6 @@ export default function NewConfigurationModal({
                     onChangeText={(text) => updateNetwork('gateway', text)}
                     placeholder="192.168.1.1"
                   />
-                  <TouchableOpacity
-                    style={getConnectionButtonStyle(connectionStatus[`server_${config.network.gateway}`])}
-                    onPress={() => testConnection('server', config.network.gateway)}
-                    disabled={connectionStatus[`server_${config.network.gateway}`] === 'testing'}
-                  >
-                    <Wifi size={12} color="#FFFFFF" />
-                  </TouchableOpacity>
                 </View>
               </View>
             </View>
@@ -1223,7 +1128,7 @@ export default function NewConfigurationModal({
                   autoservicio: 'AUTOSERVICIO',
                   oficinaCerrada: 'OFICINA CERRADA',
                   cargaCajero: 'CARGA DE CAJERO',
-                  manual: 'MANUAL',
+                  manual: 'BLOQUEO OFICINA',
                 }).map(([key, label], idx, arr) => (
                   <View
                     key={key}

@@ -1,0 +1,56 @@
+{
+  "default": {
+    "label": "TD-E3110 — fallback (usar bloque cameras por IP)",
+    "sdk_rx_vol": 3,
+    "tx_gain": 1.0,
+    "rx_gain": 0.82,
+    "rx_limit": 15000,
+    "rx_quiet_thresh": 3500,
+    "rx_target_peak": 4800,
+    "rx_max_boost": 2.2,
+    "rx_loud_thresh": 6500,
+    "rx_hot_thresh": 14000,
+    "rx_hot_gain": 0.28,
+    "rx_process": true,
+    "rx_hpf": false,
+    "rx_lpf": true,
+    "rx_lpf_hz": 2800,
+    "rx_declick": false,
+    "rx_slew_max": 2800,
+    "rx_gain_attack": 0.18,
+    "rx_gain_release": 0.06,
+    "rx_soft_limit": 8000
+  },
+  "cameras": {
+    "192.168.1.200": {
+      "label": ".200 destapada — casi OK, suavizar ruido al hablar",
+      "sdk_rx_vol": 4,
+      "rx_gain": 0.85,
+      "rx_target_peak": 5000,
+      "rx_max_boost": 2.6,
+      "rx_quiet_thresh": 3500,
+      "rx_loud_thresh": 7200,
+      "rx_hot_thresh": 15000,
+      "rx_hot_gain": 0.30,
+      "rx_lpf": true,
+      "rx_lpf_hz": 2600,
+      "rx_soft_limit": 7500,
+      "tx_gain": 1.0
+    },
+    "192.168.1.210": {
+      "label": ".210 caparazón 3D + amp — subir RX (mic muy amortiguado)",
+      "sdk_rx_vol": 7,
+      "rx_gain": 1.0,
+      "rx_target_peak": 6200,
+      "rx_max_boost": 3.0,
+      "rx_quiet_thresh": 2800,
+      "rx_loud_thresh": 9500,
+      "rx_hot_thresh": 20000,
+      "rx_hot_gain": 0.32,
+      "rx_lpf": true,
+      "rx_lpf_hz": 2700,
+      "rx_soft_limit": 8500,
+      "tx_gain": 1.0
+    }
+  }
+}

@@ -41,21 +41,21 @@ const formatModeForDisplay = (mode: string): string => {
     'comercial_automatico': 'COMERCIAL AUTOMÁTICO',
     'comercial_esclusa': 'COMERCIAL ESCLUSA',
     'horario_extendido': 'HORARIO EXTENDIDO',
-    'horario_manual': 'HORARIO MANUAL',
+    'horario_manual': 'BLOQUEO OFICINA',
     'horario_autoservicio': 'HORARIO AUTOSERVICIO',
     'oficina_cerrada': 'OFICINA CERRADA',
     'carga_cajero': 'CARGA DE CAJERO',
     'emergencia': 'EMERGENCIA',
-    'manual': 'MANUAL',
+    'manual': 'BLOQUEO OFICINA',
     'COMERCIAL AUTOMATICO': 'COMERCIAL AUTOMÁTICO',
     'COMERCIAL ESCLUSA': 'COMERCIAL ESCLUSA',
     'HORARIO EXTENDIDO': 'HORARIO EXTENDIDO',
-    'HORARIO MANUAL': 'HORARIO MANUAL',
+    'HORARIO MANUAL': 'BLOQUEO OFICINA',
     'HORARIO AUTOSERVICIO': 'HORARIO AUTOSERVICIO',
     'OFICINA CERRADA': 'OFICINA CERRADA',
     'CARGA DE CAJERO': 'CARGA DE CAJERO',
     'EMERGENCIA': 'EMERGENCIA',
-    'MANUAL': 'MANUAL'
+    'MANUAL': 'BLOQUEO OFICINA',
   };
   
   return modeMap[mode] || mode;
@@ -187,6 +187,7 @@ export default function MainScreen() {
     };
     const onModeQueued = (payload: ModeQueuedPayload) => {
       void applyPendingMode(payload.pendingMode);
+      void doorControlService.releaseDoorBlocksForQueuedMode(payload.blockedInputs);
     };
     tabletCallService.on('mode_changed', onModeChanged);
     tabletCallService.on('mode_queued', onModeQueued);
@@ -360,7 +361,7 @@ export default function MainScreen() {
     setShowNewConfigModal(true);
   };
 
-  const handleModeSelect = async (mode: string) => {
+  const handleModeSelect = async (mode: string): Promise<boolean> => {
     // Mapear el ID del modo a un texto descriptivo
     const modeMap: { [key: string]: string } = {
       'comercial_automatico': 'COMERCIAL AUTOMÁTICO',
@@ -390,11 +391,15 @@ export default function MainScreen() {
           result.blockedInputs && result.blockedInputs.length > 0
             ? `\n\nEntradas activas: ${result.blockedInputs.join(', ')}`
             : '';
+        const doorHold =
+          result.blockedInputs?.some((c) => c === 'IN_02_04' || c === 'IN_03_04')
+            ? '\n\nSe desactivará la salida de puerta abierta para completar el cambio.'
+            : '';
         showOperationInfo(
           'Modo en cola',
-          `${label} se activará automáticamente cuando se liberen las entradas de bloqueo.${blocked}`,
+          `${label} se activará automáticamente cuando se liberen las entradas de bloqueo.${doorHold}${blocked}`,
         );
-        return;
+        return true;
       }
 
       console.log('✅ Modo cambiado exitosamente a:', targetMode);
@@ -404,14 +409,15 @@ export default function MainScreen() {
       if (targetMode === 'MANUAL') {
         setShowManualModeModal(true);
       }
-    } else {
-      console.error('❌ Error cambiando modo a:', targetMode);
-      setShowModeModal(false);
-      showOperationError(
-        'No se pudo cambiar el modo',
-        result.errorMessage ?? 'Error desconocido.',
-      );
+      return true;
     }
+
+    console.error('❌ Error cambiando modo a:', targetMode);
+    showOperationError(
+      'No se pudo cambiar el modo',
+      result.errorMessage ?? 'Error desconocido.',
+    );
+    return false;
   };
 
   const handleEmergencyToggle = () => {
