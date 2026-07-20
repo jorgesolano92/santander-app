@@ -4,6 +4,7 @@ import { cloneDefaultDoorAppConfig } from '@/config/defaultDoorAppConfig';
 import type { ConfigurationData } from '@/types/configurationData';
 import { doorControlService } from '@/services/DoorControlService';
 import { emergencyService } from '@/services/EmergencyService';
+import { fireService } from '@/services/FireService';
 
 const PANEL_DEFAULTS_KEY = 'tablet_panel_defaults';
 const HAS_OVERRIDES_KEY = 'tablet_config_has_overrides';
@@ -38,9 +39,43 @@ export async function getCachedPanelDefaults(): Promise<PanelDefaultsRecord | nu
 }
 
 export async function saveEffectiveConfig(config: ConfigurationData): Promise<void> {
-  await AsyncStorage.setItem(EFFECTIVE_CONFIG_KEY, JSON.stringify(config));
-  if (config.emergency) {
-    await emergencyService.setEmergencyConfig(config.emergency);
+  const defaults = cloneDefaultDoorAppConfig();
+  const effective: ConfigurationData = { ...config };
+  if (!effective.fireSignal) {
+    effective.fireSignal = { ...defaults.fireSignal };
+  }
+  if (!effective.modes.incendio) {
+    effective.modes.incendio = {
+      ...defaults.modes.incendio,
+      ...(effective.fireSignal || {}),
+      rule_key: effective.fireSignal?.rule_key || defaults.modes.incendio.rule_key,
+    };
+  }
+  effective.fireSignal = {
+    ...defaults.fireSignal,
+    enabled: effective.modes.incendio.enabled,
+    rule_key: effective.modes.incendio.rule_key,
+    action: effective.modes.incendio.action,
+    output_code: effective.modes.incendio.output_code || '',
+    output_on: effective.modes.incendio.output_on !== false,
+  };
+  if (effective.emergency?.rule_key === 'senal_de_incendio_activada') {
+    effective.fireSignal = {
+      ...defaults.fireSignal,
+      ...effective.fireSignal,
+      rule_key: 'senal_de_incendio_activada',
+    };
+    effective.emergency = {
+      ...effective.emergency,
+      rule_key: defaults.emergency.rule_key,
+    };
+  }
+  await AsyncStorage.setItem(EFFECTIVE_CONFIG_KEY, JSON.stringify(effective));
+  if (effective.emergency) {
+    await emergencyService.setEmergencyConfig(effective.emergency);
+  }
+  if (effective.fireSignal) {
+    await fireService.setFireConfig(effective.fireSignal);
   }
 }
 
@@ -81,7 +116,9 @@ export async function pullAndApplyPanelDefaults(
 export async function initializeTabletConfigOnBoot(): Promise<ConfigurationData> {
   const saved = await AsyncStorage.getItem(EFFECTIVE_CONFIG_KEY);
   if (saved) {
-    return JSON.parse(saved) as ConfigurationData;
+    const config = JSON.parse(saved) as ConfigurationData;
+    await saveEffectiveConfig(config);
+    return config;
   }
 
   console.log('[TabletConfig] Primera instalación: importando defaults del panel…');

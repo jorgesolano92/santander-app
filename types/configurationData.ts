@@ -1,5 +1,6 @@
 import type { IntercomConfig } from '@/components/IntercomConfigurationModal';
 import type { EmergencyConfig } from '@/services/EmergencyService';
+import type { FireSignalConfig } from '@/services/FireService';
 
 export interface DoorConfig {
   enabled: boolean;
@@ -30,6 +31,8 @@ export interface ModesConfig {
   oficinaCerrada: ModeConfig;
   cargaCajero: ModeConfig;
   manual: ModeConfig;
+  /** Señal de incendio global (rule_key sin prefijo horario_). */
+  incendio: ModeConfig;
 }
 
 export interface ConfigurationData {
@@ -56,6 +59,7 @@ export interface ConfigurationData {
   };
   officeWithATM: boolean;
   emergency: EmergencyConfig;
+  fireSignal: FireSignalConfig;
   modes: ModesConfig;
   /** Configuración de llamadas P1 → tablets (defaults de sucursal en panel). */
   tabletCall?: TabletCallConfig;

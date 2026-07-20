@@ -26,6 +26,7 @@
       "expo-web-browser",
       "expo-media-library",
       "expo-file-system",
+      "expo-video",
       "./plugins/with-dependency-resolver.js",
       "./plugins/with-rtsp-tcp.js",
       [

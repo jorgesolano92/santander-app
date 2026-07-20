@@ -18,6 +18,7 @@ import ModeSelectionModal from '@/components/ModeSelectionModal';
 import TechnicianModal from '@/components/TechnicianModal';
 import ManualModeModal from '@/components/ManualModeModal';
 import EmergencyConfirmationModal from '@/components/EmergencyConfirmationModal';
+import FireConfirmationModal from '@/components/FireConfirmationModal';
 import { useDoorControl } from '@/hooks/useDoorControl';
 import { doorControlService } from '@/services/DoorControlService';
 import {
@@ -29,10 +30,14 @@ import {
   type IncomingCallPayload,
   type ModeChangedPayload,
   type ModeQueuedPayload,
+  type CoceNotificationPayload,
 } from '@/services/tabletCallService';
-import { initializeTabletConfigOnBoot } from '@/services/tabletPanelConfigService';
+import { CoceMessageToast } from '@/components/CoceMessageToast';
+import { CoceMessagesModal } from '@/components/CoceMessagesModal';
+import { coceMessageService, type CoceMessage } from '@/services/CoceMessageService';
 import { showOperationError, showOperationInfo } from '@/utils/showOperationError';
 import type { ConfigurationData } from '@/types/configurationData';
+import { getModeActiveDescription, formatModeDisplayName } from '@/config/modeTexts';
 // (Eliminar) import * as FileSystem from 'expo-file-system';
 
 // Function to format mode names for display
@@ -78,6 +83,7 @@ export default function MainScreen() {
     currentScheduleMode,
     changeMode,
     toggleEmergency,
+    toggleFire,
     configure,
     validateDevice,
     determineScheduleMode,
@@ -122,6 +128,7 @@ export default function MainScreen() {
   const showManualModeModalRef = useRef(showManualModeModal);
   const manualModeOpenBeforeCallRef = useRef(false);
   const [showEmergencyConfirmModal, setShowEmergencyConfirmModal] = useState(false);
+  const [showFireConfirmModal, setShowFireConfirmModal] = useState(false);
   const [currentDateTime, setCurrentDateTime] = useState(new Date());
   const [communicatingDoors, setCommunicatingDoors] = useState<Set<string>>(new Set());
   // const [isSandboxMode, setIsSandboxMode] = useState(false); // Modo sandbox deshabilitado permanentemente
@@ -129,6 +136,10 @@ export default function MainScreen() {
   const [emergencyFlashColor, setEmergencyFlashColor] = useState<string>('#F8F9FA');
   const [pendingModeRuleKey, setPendingModeRuleKey] = useState<string | null>(null);
   const [pendingModeLabel, setPendingModeLabel] = useState<string | null>(null);
+  const [showCoceMessagesModal, setShowCoceMessagesModal] = useState(false);
+  const [coceMessages, setCoceMessages] = useState<CoceMessage[]>([]);
+  const [coceToastMessage, setCoceToastMessage] = useState<CoceMessage | null>(null);
+  const [coceUnreadCount, setCoceUnreadCount] = useState(0);
 
   const applyPendingMode = useCallback(async (ruleKey: string | null) => {
     setPendingModeRuleKey(ruleKey);
@@ -173,10 +184,40 @@ export default function MainScreen() {
   useEffect(() => {
     if (!systemConfig?.network?.consoleIP) return;
     void tabletCallService.start();
+    void coceMessageService.start();
     return () => {
       tabletCallService.stop();
     };
   }, [systemConfig?.network?.consoleIP]);
+
+  useEffect(() => {
+    const refreshCoceMessages = () => {
+      setCoceMessages(coceMessageService.getMessages());
+      setCoceUnreadCount(coceMessageService.getUnreadCount());
+    };
+    const onToast = (message: CoceMessage) => {
+      setCoceToastMessage(message);
+      refreshCoceMessages();
+    };
+    const onCoceNotification = (payload: CoceNotificationPayload) => {
+      void coceMessageService.ingestFromWs({
+        id: payload.id,
+        title: payload.title,
+        body: payload.body,
+        urgent: payload.urgent,
+        received_at: payload.receivedAt,
+      });
+    };
+    refreshCoceMessages();
+    coceMessageService.on('updated', refreshCoceMessages);
+    coceMessageService.on('toast', onToast);
+    tabletCallService.on('coce_notification', onCoceNotification);
+    return () => {
+      coceMessageService.off('updated', refreshCoceMessages);
+      coceMessageService.off('toast', onToast);
+      tabletCallService.off('coce_notification', onCoceNotification);
+    };
+  }, []);
 
   useEffect(() => {
     const onModeChanged = (payload: ModeChangedPayload) => {
@@ -283,6 +324,7 @@ export default function MainScreen() {
   // Estados derivados del sistema real
   const currentMode = systemStatus?.mode || 'COMERCIAL AUTOMATICO';
   const isEmergencyActive = systemStatus?.emergencyActive || false;
+  const isFireActive = systemStatus?.fireActive || false;
   const isCargaCajeroMode = currentMode === 'CARGA DE CAJERO';
 
   // Mostrar información del modo automático por horario
@@ -292,23 +334,24 @@ export default function MainScreen() {
     }
   }, [currentScheduleMode]);
 
-  // Efecto de parpadeo en emergencia
+  // Efecto de parpadeo: incendio (naranja) tiene prioridad sobre emergencia (rojo)
   useEffect(() => {
-    if (isEmergencyActive) {
-      // Alternar entre rojo y blanco cada segundo
+    if (isFireActive) {
       const flashTimer = setInterval(() => {
-        setEmergencyFlashColor(prev => prev === '#DC3545' ? '#FFFFFF' : '#DC3545');
+        setEmergencyFlashColor((prev) => (prev === '#E85D04' ? '#FFFFFF' : '#E85D04'));
       }, 1000);
-
-      // Asegurar que empieza en rojo
-      setEmergencyFlashColor('#DC3545');
-
+      setEmergencyFlashColor('#E85D04');
       return () => clearInterval(flashTimer);
-    } else {
-      // Resetear al color original cuando no hay emergencia
-      setEmergencyFlashColor('#F8F9FA');
     }
-  }, [isEmergencyActive]);
+    if (isEmergencyActive) {
+      const flashTimer = setInterval(() => {
+        setEmergencyFlashColor((prev) => (prev === '#DC3545' ? '#FFFFFF' : '#DC3545'));
+      }, 1000);
+      setEmergencyFlashColor('#DC3545');
+      return () => clearInterval(flashTimer);
+    }
+    setEmergencyFlashColor('#F8F9FA');
+  }, [isFireActive, isEmergencyActive]);
 
   // Validar dispositivo al iniciar
   useEffect(() => {
@@ -442,6 +485,39 @@ export default function MainScreen() {
     }
   };
 
+  const handleFireToggle = () => {
+    setShowFireConfirmModal(true);
+  };
+
+  const handleFireConfirm = async () => {
+    setShowFireConfirmModal(false);
+
+    const newState = !isFireActive;
+    console.log('🔥 Incendio:', newState ? 'ACTIVANDO' : 'DESACTIVANDO');
+
+    const result = await toggleFire(newState);
+    if (result.ok) {
+      if (newState && 'queued' in result && result.queued) {
+        void applyPendingMode(result.pendingRuleKey);
+        const blocked =
+          result.blockedInputs && result.blockedInputs.length > 0
+            ? `\n\nEntradas activas: ${result.blockedInputs.join(', ')}`
+            : '';
+        showOperationInfo(
+          'Señal de incendio en cola',
+          `Se activará automáticamente cuando se liberen las entradas de bloqueo.${blocked}`,
+        );
+        return;
+      }
+      console.log('✅ Incendio:', newState ? 'ACTIVADO' : 'DESACTIVADO');
+    } else {
+      showOperationError(
+        newState ? 'No se pudo activar la señal de incendio' : 'No se pudo desactivar la señal de incendio',
+        result.errorMessage ?? 'Error desconocido.',
+      );
+    }
+  };
+
   const handleCommunicate = (doorId: string, doorName: string) => {
     console.log(`📞 Comunicar con ${doorName}`);
     
@@ -472,6 +548,38 @@ export default function MainScreen() {
     }
   };
 
+  const centerConnectionColor =
+    connectionStatus === 'connected'
+      ? '#28A745'
+      : connectionStatus === 'connecting'
+        ? '#FFC107'
+        : '#DC3545';
+
+  const centerConnectionLabel =
+    connectionStatus === 'connected'
+      ? 'Conectado al centro de control'
+      : connectionStatus === 'connecting'
+        ? 'Comprobando conexión con el centro'
+        : 'Sin conexión con el centro de control';
+
+  const renderBottomActions = () => (
+    <View style={styles.bottomButtons}>
+      <TouchableOpacity
+        style={[styles.emergencyButton, isEmergencyActive && styles.emergencyButtonActive]}
+        onPress={handleEmergencyToggle}
+      >
+        <Text
+          style={[styles.emergencyButtonText, isEmergencyActive && styles.emergencyButtonTextActive]}
+        >
+          {isEmergencyActive ? 'EMERGENCIA ACTIVADA' : 'ACTIVAR EMERGENCIA'}
+        </Text>
+      </TouchableOpacity>
+      <TouchableOpacity style={styles.visualizationButton} onPress={() => setShowManualModeModal(true)}>
+        <Text style={styles.visualizationButtonText}>VISUALIZACIÓN</Text>
+      </TouchableOpacity>
+    </View>
+  );
+
   // Create styles inside component with access to responsive variables
   const styles = StyleSheet.create({
     container: {
@@ -483,7 +591,10 @@ export default function MainScreen() {
     },
     scrollContentContainer: {
       flexGrow: 1,
-      paddingBottom: 20,
+      paddingBottom: 8,
+    },
+    body: {
+      flex: 1,
     },
     header: {
       backgroundColor: '#495057',
@@ -531,6 +642,20 @@ export default function MainScreen() {
       color: '#FFFFFF',
       letterSpacing: 0.5,
     },
+    notificationsBadge: {
+      minWidth: 20,
+      height: 20,
+      borderRadius: 10,
+      paddingHorizontal: 5,
+      backgroundColor: '#DC2626',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    notificationsBadgeText: {
+      color: '#FFFFFF',
+      fontSize: 11,
+      fontWeight: '700',
+    },
     leftHeaderSection: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -551,14 +676,20 @@ export default function MainScreen() {
       marginRight: 16,
     },
     connectionIndicator: {
-      paddingHorizontal: isSmallTablet ? 10 : isLargeTablet ? 16 : 12,
-      paddingVertical: isSmallTablet ? 5 : isLargeTablet ? 8 : 6,
-      borderRadius: 12,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      backgroundColor: 'rgba(255, 255, 255, 0.1)',
+      paddingHorizontal: isSmallTablet ? 10 : isLargeTablet ? 14 : 12,
+      paddingVertical: isSmallTablet ? 6 : isLargeTablet ? 8 : 7,
+      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: 'rgba(255, 255, 255, 0.2)',
     },
     connectionText: {
-      fontSize: isSmallTablet ? 10 : isLargeTablet ? 14 : 12,
-      fontWeight: '600',
-      color: '#FFFFFF',
+      fontSize: isSmallTablet ? 10 : isLargeTablet ? 12 : 11,
+      fontWeight: '700',
+      letterSpacing: 0.6,
     },
     scheduleIndicator: {
       backgroundColor: '#17A2B8',
@@ -675,7 +806,7 @@ export default function MainScreen() {
       height: isSmallTablet ? 90 : isLargeTablet ? 130 : 110,
     },
     operationSection: {
-      marginBottom: isSmallTablet ? 20 : isLargeTablet ? 32 : 24,
+      flex: 1,
     },
     modeCard: {
       backgroundColor: '#FFFFFF',
@@ -706,6 +837,11 @@ export default function MainScreen() {
       color: '#212529',
       marginBottom: isSmallTablet ? 8 : isLargeTablet ? 12 : 10,
       letterSpacing: 0.3,
+      textTransform: 'uppercase',
+    },
+    modeTitleValue: {
+      textTransform: 'none',
+      fontWeight: '600',
     },
     pendingModeBanner: {
       backgroundColor: '#FFF7ED',
@@ -817,11 +953,67 @@ export default function MainScreen() {
       letterSpacing: 1,
       textAlign: 'center',
     },
+    fireCard: {
+      backgroundColor: '#E85D04',
+      borderRadius: 12,
+      padding: 16,
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      marginBottom: 20,
+      width: '100%',
+      maxWidth: 700,
+      shadowColor: '#E85D04',
+      shadowOffset: { width: 0, height: 8 },
+      shadowOpacity: 0.3,
+      shadowRadius: 16,
+      elevation: 8,
+    },
+    fireTitle: {
+      fontSize: 20,
+      fontWeight: '700',
+      color: '#FFFFFF',
+      marginBottom: 12,
+      letterSpacing: 0.5,
+    },
+    fireDescription: {
+      fontSize: 14,
+      color: '#FFFFFF',
+      lineHeight: 20,
+      fontWeight: '400',
+      opacity: 0.95,
+    },
+    deactivateFireButton: {
+      backgroundColor: '#E85D04',
+      paddingHorizontal: 32,
+      paddingVertical: 16,
+      borderRadius: 12,
+      marginBottom: 16,
+      shadowColor: '#E85D04',
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.3,
+      shadowRadius: 8,
+      elevation: 6,
+      borderWidth: 2,
+      borderColor: '#FFFFFF',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    deactivateFireButtonText: {
+      fontSize: 15,
+      fontWeight: '700',
+      color: '#FFFFFF',
+      letterSpacing: 1,
+      textAlign: 'center',
+    },
     bottomButtons: {
       flexDirection: 'row',
       gap: isSmallTablet ? 12 : isLargeTablet ? 24 : 18,
-      marginBottom: isSmallTablet ? 12 : isLargeTablet ? 24 : 18,
-      paddingHorizontal: isSmallTablet ? 8 : 0,
+      paddingHorizontal: isSmallTablet ? 16 : isLargeTablet ? 32 : 24,
+      paddingTop: isSmallTablet ? 12 : isLargeTablet ? 16 : 14,
+      paddingBottom: isSmallTablet ? 14 : isLargeTablet ? 24 : 18,
+      backgroundColor: '#F8F9FA',
+      borderTopWidth: 1,
+      borderTopColor: '#DEE2E6',
     },
     emergencyButton: {
       flex: 1,
@@ -1113,10 +1305,20 @@ export default function MainScreen() {
         <View style={styles.leftHeaderSection}>
           <TouchableOpacity 
             style={styles.notificationsButton}
-            onPress={() => console.log('📢 Notificaciones presionado')}
+            onPress={() => {
+              setShowCoceMessagesModal(true);
+              void coceMessageService.markAllSeen();
+            }}
           >
             <MessageCircle size={isSmallTablet ? 20 : isLargeTablet ? 24 : 22} color="#FFFFFF" />
             <Text style={styles.notificationsButtonText}>NOTIFICACIONES</Text>
+            {coceUnreadCount > 0 ? (
+              <View style={styles.notificationsBadge}>
+                <Text style={styles.notificationsBadgeText}>
+                  {coceUnreadCount > 99 ? '99+' : coceUnreadCount}
+                </Text>
+              </View>
+            ) : null}
           </TouchableOpacity>
 
           <TouchableOpacity 
@@ -1139,11 +1341,16 @@ export default function MainScreen() {
 
         {/* Right Section */}
         <View style={styles.rightHeaderSection}>
-          <View style={styles.connectionIndicator}>
-            <Wifi 
-              size={isSmallTablet ? 20 : isLargeTablet ? 24 : 22} 
-              color={connectionStatus === 'connected' ? '#28A745' : '#DC3545'} 
+          <View
+            style={styles.connectionIndicator}
+            accessibilityLabel={centerConnectionLabel}
+            accessibilityRole="text"
+          >
+            <Wifi
+              size={isSmallTablet ? 18 : isLargeTablet ? 22 : 20}
+              color={centerConnectionColor}
             />
+            <Text style={[styles.connectionText, { color: centerConnectionColor }]}>CENTRO</Text>
           </View>
           
           <TouchableOpacity 
@@ -1170,12 +1377,41 @@ export default function MainScreen() {
       )}
 
       {/* Main Content - ScrollView */}
+      <View style={styles.body}>
       <ScrollView 
         style={styles.scrollContent}
         contentContainerStyle={styles.scrollContentContainer}
         showsVerticalScrollIndicator={true}
       >
-      {isEmergencyActive ? (
+      {isFireActive ? (
+        <View style={styles.emergencyContent}>
+          <View style={styles.logoSection}>
+            <Image 
+              source={require('@/assets/images/banco-santander-seeklogo.png')}
+              style={styles.santanderLogo}
+              resizeMode="contain"
+            />
+          </View>
+
+          <View style={styles.fireCard}>
+            <View style={styles.emergencyTextContent}>
+              <Text style={styles.fireTitle}>SEÑAL DE INCENDIO ACTIVADA</Text>
+              <Text style={styles.fireDescription}>
+                El panel ha entrado en modo de señal de incendio.{'\n'}
+                Las puertas y salidas siguen la lógica configurada para incendio.{'\n'}
+                Desactive la señal solo cuando el centro de control lo indique.
+              </Text>
+            </View>
+          </View>
+
+          <TouchableOpacity 
+            style={styles.deactivateFireButton}
+            onPress={handleFireToggle}
+          >
+            <Text style={styles.deactivateFireButtonText}>DESACTIVAR SEÑAL DE INCENDIO</Text>
+          </TouchableOpacity>
+        </View>
+      ) : isEmergencyActive ? (
         /* Emergency Mode View */
         <View style={styles.emergencyContent}>
           <View style={styles.logoSection}>
@@ -1236,29 +1472,6 @@ export default function MainScreen() {
               <Text style={styles.changeModeButtonTextCarga}>CAMBIAR MODO</Text>
             </TouchableOpacity>
           </View>
-
-          <View style={styles.bottomButtons}>
-            <TouchableOpacity 
-              style={[
-                styles.emergencyButton,
-                isEmergencyActive && styles.emergencyButtonActive
-              ]}
-              onPress={handleEmergencyToggle}
-            >
-              <Text style={[
-                styles.emergencyButtonText,
-                isEmergencyActive && styles.emergencyButtonTextActive
-              ]}>
-                {isEmergencyActive ? 'EMERGENCIA ACTIVADA' : 'EMERGENCIA'}
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity 
-              style={styles.visualizationButton}
-              onPress={() => setShowManualModeModal(true)}
-            >
-              <Text style={styles.visualizationButtonText}>VISUALIZACIÓN</Text>
-            </TouchableOpacity>
-          </View>
         </View>
       ) : (
         /* Vista normal para todos los modos excepto emergencia y carga cajero */
@@ -1274,7 +1487,12 @@ export default function MainScreen() {
           <View style={styles.operationSection}>
             <View style={styles.modeCard}>
               <View style={styles.modeContent}>
-                <Text style={styles.modeTitle}>Modo de Operación Actual: {formatModeForDisplay(currentMode)}</Text>
+                <Text style={styles.modeTitle}>
+                  MODO DE OPERACIÓN ACTUAL:{' '}
+                  <Text style={styles.modeTitleValue}>
+                    {formatModeDisplayName(currentMode)}
+                  </Text>
+                </Text>
                 {pendingModeLabel ? (
                   <View style={styles.pendingModeBanner}>
                     <Text style={styles.pendingModeBannerTitle}>EN COLA</Text>
@@ -1284,7 +1502,7 @@ export default function MainScreen() {
                   </View>
                 ) : null}
                 <Text style={styles.modeDescription}>
-                  Visualización del modo de operación activo en tiempo real. Esta información se obtiene automáticamente mediante una consulta GET al sistema de control de puertas.
+                  {getModeActiveDescription(currentMode)}
                 </Text>
               </View>
               <TouchableOpacity 
@@ -1295,32 +1513,12 @@ export default function MainScreen() {
               </TouchableOpacity>
             </View>
           </View>
-
-          <View style={styles.bottomButtons}>
-            <TouchableOpacity 
-              style={[
-                styles.emergencyButton,
-                isEmergencyActive && styles.emergencyButtonActive
-              ]}
-              onPress={handleEmergencyToggle}
-            >
-              <Text style={[
-                styles.emergencyButtonText,
-                isEmergencyActive && styles.emergencyButtonTextActive
-              ]}>
-                {isEmergencyActive ? 'EMERGENCIA ACTIVADA' : 'ACTIVAR EMERGENCIA'}
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity 
-              style={styles.visualizationButton}
-              onPress={() => setShowManualModeModal(true)}
-            >
-              <Text style={styles.visualizationButtonText}>VISUALIZACIÓN</Text>
-            </TouchableOpacity>
-          </View>
         </View>
       )}
       </ScrollView>
+
+      {!isEmergencyActive && !isFireActive && renderBottomActions()}
+      </View>
 
       <LoginModal
         visible={showLoginModal}
@@ -1386,6 +1584,24 @@ export default function MainScreen() {
         onClose={() => setShowEmergencyConfirmModal(false)}
         onConfirm={handleEmergencyConfirm}
         isDeactivating={isEmergencyActive}
+      />
+
+      <FireConfirmationModal
+        visible={showFireConfirmModal}
+        onClose={() => setShowFireConfirmModal(false)}
+        onConfirm={handleFireConfirm}
+        isDeactivating={isFireActive}
+      />
+
+      <CoceMessageToast
+        message={coceToastMessage}
+        onDismiss={() => setCoceToastMessage(null)}
+      />
+
+      <CoceMessagesModal
+        visible={showCoceMessagesModal}
+        messages={coceMessages}
+        onClose={() => setShowCoceMessagesModal(false)}
       />
     </View>
   );

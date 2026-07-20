@@ -8,9 +8,17 @@ import {
   Image,
   useWindowDimensions,
 } from 'react-native';
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import ModeSwipeRow from '@/components/ModeSwipeRow';
-
+import {
+  MODE_DEFINITIONS,
+  MODE_CATEGORY_LABELS,
+  MODE_CATEGORY_ORDER,
+  normalizeModeToId,
+  modeIdToBackendName,
+  type ModeDefinition,
+} from '@/config/modeTexts';
 interface ModeSelectionModalProps {
   visible: boolean;
   onClose: () => void;
@@ -18,135 +26,9 @@ interface ModeSelectionModalProps {
   currentMode?: string | null;
 }
 
-interface ModeOption {
-  id: string;
-  category: 'COMERCIAL' | 'EXTENDIDO' | 'ATM' | 'CERRADO' | 'CARGA_CAJERO' | 'EMERGENCIA' | 'INDIVIDUAL';
-  name: string;
-  description: string;
-}
-
 const BLOQUEO_OFICINA_ID = 'manual';
 
-const modeOptions: ModeOption[] = [
-  {
-    id: 'comercial_automatico',
-    category: 'COMERCIAL',
-    name: 'AUTOMÁTICO',
-    description:
-      'La puerta P1 y la puerta P2 actúan de forma automática, tanto si se va en dirección entrada como en dirección salida. No es necesario pulsar botones de Visor Voxter o Videoporteros, dado que los detectores de movimiento actuarán como apertura de puerta en cortesía. Los detectores de movimiento interiores y exteriores actuarán también en modo seguridad, es decir, cuando la puerta esté abierta, protegerán a los usuarios frente al atrapamiento cuando ésta se cierre. Las puertas trabajan en modo esclusa; es decir una puerta no abre hasta que la otra esté cerrada.',
-  },
-  {
-    id: 'comercial_esclusa',
-    category: 'COMERCIAL',
-    name: 'ESCLUSA',
-    description:
-      'La puerta P1 y la puerta P2 actúan de forma automática con funcionamiento en esclusa estricta. Los detectores de movimiento actuarán como apertura de puerta en cortesía. Una puerta no abre hasta que la otra esté completamente cerrada, garantizando máxima seguridad en el acceso.',
-  },
-  {
-    id: 'horario_extendido',
-    category: 'EXTENDIDO',
-    name: 'EXTENDIDO',
-    description:
-      'Modo de funcionamiento para horarios extendidos de atención al público. Las puertas funcionan de forma automática con detectores de movimiento activos. Ideal para horarios de mayor afluencia de clientes.',
-  },
-  {
-    id: 'horario_autoservicio',
-    category: 'EXTENDIDO',
-    name: 'AUTOSERVICIO',
-    description:
-      'Modo de funcionamiento para horarios de autoservicio. Las puertas funcionan de forma automática permitiendo el acceso a los cajeros automáticos fuera del horario comercial normal.',
-  },
-  {
-    id: 'oficina_cerrada',
-    category: 'INDIVIDUAL',
-    name: 'OFICINA CERRADA',
-    description:
-      'Modo de funcionamiento destinado a horarios sin empleados. Solo se permite acceso mediante llave o de forma remota en caso que la instalación se haya dado de alta en los servidores del cliente. Todas las puertas permanecen bloqueadas.',
-  },
-  {
-    id: 'carga_cajero',
-    category: 'INDIVIDUAL',
-    name: 'CARGA DE CAJERO',
-    description:
-      'Es el modo de funcionamiento destinado la carga de cajero en los casos que exista en el uno en el zaguán. La puerta P1 permanece cerrada y es necesario pulsar para que haga llamada a las consolas interiores. La puerta P2 permanece abierta para facilitar el desarrollo de la actividad.',
-  },
-  {
-    id: BLOQUEO_OFICINA_ID,
-    category: 'INDIVIDUAL',
-    name: 'BLOQUEO OFICINA',
-    description:
-      'La puerta P1 y la puerta P2 actúan de forma manual. Es necesario pulsar el botón de llamada de los videoporteros ubicados en la parte exterior de las puertas o los pulsadores retroiluminados ubicados en el interior. Los detectores de movimiento actuarán sólo en modo seguridad para evitar atrapamientos.',
-  },
-];
-
-const categoryOrder = ['COMERCIAL', 'EXTENDIDO', 'INDIVIDUAL'];
-
-const categoryDisplayNames = {
-  COMERCIAL: 'COMERCIAL',
-  EXTENDIDO: 'HORARIO',
-  INDIVIDUAL: '',
-};
-
-const modeIdToNameMap: Record<string, string> = {
-  comercial_automatico: 'COMERCIAL AUTOMÁTICO',
-  comercial_esclusa: 'COMERCIAL ESCLUSA',
-  horario_extendido: 'HORARIO EXTENDIDO',
-  horario_autoservicio: 'HORARIO AUTOSERVICIO',
-  oficina_cerrada: 'OFICINA CERRADA',
-  carga_cajero: 'CARGA DE CAJERO',
-  manual: 'MANUAL',
-};
-
-const bloqueoOficinaMode = modeOptions.find((m) => m.id === BLOQUEO_OFICINA_ID)!;
-
-function normalizeCurrentModeToModeId(mode: string | null | undefined): string | null {
-  if (!mode) return null;
-  const lower = String(mode).trim().toLowerCase();
-
-  const directIds = new Set([
-    'comercial_automatico',
-    'comercial_esclusa',
-    'horario_extendido',
-    'horario_autoservicio',
-    'horario_automatico',
-    'horario_esclusa',
-    'horario_manual',
-    'horario_carga_cajero',
-    'horario_cerrado',
-    'oficina_cerrada',
-    'carga_cajero',
-    'manual',
-  ]);
-
-  const ruleKeyToId: Record<string, string> = {
-    horario_automatico: 'comercial_automatico',
-    horario_esclusa: 'comercial_esclusa',
-    horario_extendido: 'horario_extendido',
-    horario_autoservicio: 'horario_autoservicio',
-    horario_cerrado: 'oficina_cerrada',
-    horario_carga_cajero: 'carga_cajero',
-    horario_manual: 'manual',
-  };
-
-  if (directIds.has(lower)) {
-    return ruleKeyToId[lower] || (lower === 'horario_cerrado' ? 'oficina_cerrada' : lower);
-  }
-
-  const labelToIdMap: Record<string, string> = {
-    'comercial automático': 'comercial_automatico',
-    'comercial automatico': 'comercial_automatico',
-    'comercial esclusa': 'comercial_esclusa',
-    'horario extendido': 'horario_extendido',
-    'horario autoservicio': 'horario_autoservicio',
-    'oficina cerrada': 'oficina_cerrada',
-    'carga de cajero': 'carga_cajero',
-    'carga cajero': 'carga_cajero',
-    manual: 'manual',
-    'horario manual': 'manual',
-    'bloqueo oficina': 'manual',
-  };
-  return labelToIdMap[lower] || null;
-}
+const bloqueoOficinaMode = MODE_DEFINITIONS.find((m) => m.id === BLOQUEO_OFICINA_ID)!;
 
 export default function ModeSelectionModal({
   visible,
@@ -160,12 +42,31 @@ export default function ModeSelectionModal({
 
   const [selectedMode, setSelectedMode] = useState<string>('comercial_automatico');
   const [isModalReady, setIsModalReady] = useState<boolean>(false);
+  const [officeWithATM, setOfficeWithATM] = useState(false);
 
   const activeModeId = useMemo(
-    () => normalizeCurrentModeToModeId(currentMode),
+    () => normalizeModeToId(currentMode),
     [currentMode]
   );
 
+  useEffect(() => {
+    if (!visible) return;
+    AsyncStorage.getItem('new_door_config')
+      .then((raw) => {
+        if (!raw) return;
+        const parsed = JSON.parse(raw);
+        setOfficeWithATM(Boolean(parsed?.officeWithATM));
+      })
+      .catch(() => {});
+  }, [visible]);
+
+  const visibleModes = useMemo(
+    () =>
+      MODE_DEFINITIONS.filter(
+        (mode) => !mode.requiresAtmInVestibule || officeWithATM
+      ),
+    [officeWithATM]
+  );
   useEffect(() => {
     if (visible && !isModalReady) {
       const preselected = activeModeId || 'comercial_automatico';
@@ -181,16 +82,15 @@ export default function ModeSelectionModal({
   };
 
   const handleActivateMode = async (modeId: string): Promise<boolean> => {
-    const modeName = modeIdToNameMap[modeId] || modeId;
+    const modeName = modeIdToBackendName(modeId);
     const result = await Promise.resolve(onModeSelect(modeName));
     return result !== false;
   };
 
-  const selectedModeDetails = modeOptions.find((mode) => mode.id === selectedMode);
-  const mainModes = modeOptions.filter((m) => m.id !== BLOQUEO_OFICINA_ID);
+  const selectedModeDetails = visibleModes.find((mode) => mode.id === selectedMode);
+  const mainModes = visibleModes.filter((m) => m.id !== BLOQUEO_OFICINA_ID);
 
-  const renderModeRow = (mode: ModeOption) => (
-    <ModeSwipeRow
+  const renderModeRow = (mode: ModeDefinition) => (    <ModeSwipeRow
       key={mode.id}
       modeName={mode.name}
       isSelected={selectedMode === mode.id}
@@ -229,7 +129,8 @@ export default function ModeSelectionModal({
     content: {
       flex: 1,
       flexDirection: 'row',
-      padding: isSmallTablet ? 20 : isLargeTablet ? 32 : 24,
+      paddingVertical: 12,
+      paddingHorizontal: isSmallTablet ? 20 : isLargeTablet ? 32 : 24,
       gap: isSmallTablet ? 20 : isLargeTablet ? 32 : 24,
     },
     leftPanel: {
@@ -238,12 +139,19 @@ export default function ModeSelectionModal({
       flex: 1,
     },
     leftPanelContent: {
-      padding: isSmallTablet ? 12 : isLargeTablet ? 20 : 16,
-      paddingBottom: 40,
       flexGrow: 1,
+      minHeight: '100%',
+      paddingTop: isSmallTablet ? 12 : isLargeTablet ? 20 : 16,
+      paddingHorizontal: isSmallTablet ? 12 : isLargeTablet ? 20 : 16,
+      paddingBottom: 12,
+      justifyContent: 'flex-start',
     },
     section: {
       marginBottom: 18,
+    },
+    modesBlock: {
+      gap: 18,
+      paddingBottom: 0,
     },
     modeList: {
       gap: 10,
@@ -266,8 +174,9 @@ export default function ModeSelectionModal({
       lineHeight: 16,
     },
     bloqueoSection: {
-      marginTop: 6,
-      paddingTop: 16,
+      marginTop: 'auto',
+      paddingTop: 20,
+      paddingBottom: 0,
       borderTopWidth: 2,
       borderTopColor: '#DEE2E6',
     },
@@ -277,22 +186,24 @@ export default function ModeSelectionModal({
       alignItems: 'center',
     },
     rightPanelMain: {
-      flex: 1,
       width: '100%',
       alignItems: 'center',
-      justifyContent: 'center',
+      justifyContent: 'flex-start',
+      flexGrow: 0,
+      flexShrink: 1,
     },
     logoSection: {
       alignItems: 'center',
-      marginBottom: isSmallTablet ? 20 : isLargeTablet ? 32 : 24,
+      marginBottom: isSmallTablet ? 10 : isLargeTablet ? 14 : 12,
     },
     santanderLogo: {
-      width: isSmallTablet ? 280 : isLargeTablet ? 400 : 340,
-      height: isSmallTablet ? 80 : isLargeTablet ? 115 : 97,
+      width: isSmallTablet ? 240 : isLargeTablet ? 340 : 290,
+      height: isSmallTablet ? 68 : isLargeTablet ? 98 : 83,
     },
     detailsScrollView: {
       width: '100%',
-      maxHeight: '55%',
+      flexGrow: 0,
+      maxHeight: '70%',
     },
     detailsCard: {
       backgroundColor: '#FFFFFF',
@@ -329,6 +240,7 @@ export default function ModeSelectionModal({
       maxWidth: 420,
       alignItems: 'center',
       paddingBottom: 8,
+      marginTop: 'auto',
     },
     volverButton: {
       backgroundColor: '#FFFFFF',
@@ -363,23 +275,25 @@ export default function ModeSelectionModal({
                 activo no requiere deslizamiento.
               </Text>
 
-              {categoryOrder.map((category) => {
-                const categoryModes = mainModes.filter((mode) => mode.category === category);
-                if (categoryModes.length === 0) return null;
+              <View style={styles.modesBlock}>
+                {MODE_CATEGORY_ORDER.map((category) => {
+                  const categoryModes = mainModes.filter((mode) => mode.category === category);
+                  if (categoryModes.length === 0) return null;
 
-                return (
-                  <View key={category} style={styles.section}>
-                    {categoryDisplayNames[category as keyof typeof categoryDisplayNames] ? (
-                      <Text style={styles.sectionTitleStatic}>
-                        {categoryDisplayNames[category as keyof typeof categoryDisplayNames]}
-                      </Text>
-                    ) : null}
-                    <View style={styles.modeList}>
-                      {categoryModes.map(renderModeRow)}
+                  return (
+                    <View key={category} style={styles.section}>
+                      {MODE_CATEGORY_LABELS[category] ? (
+                        <Text style={styles.sectionTitleStatic}>
+                          {MODE_CATEGORY_LABELS[category]}
+                        </Text>
+                      ) : null}
+                      <View style={styles.modeList}>
+                        {categoryModes.map(renderModeRow)}
+                      </View>
                     </View>
-                  </View>
-                );
-              })}
+                  );
+                })}
+              </View>
 
               <View style={styles.bloqueoSection}>
                 {renderModeRow(bloqueoOficinaMode)}
@@ -401,9 +315,8 @@ export default function ModeSelectionModal({
                     <View style={styles.detailsContent}>
                       <Text style={styles.detailsTitle}>{selectedModeDetails?.name}</Text>
                       <Text style={styles.detailsDescription}>
-                        {selectedModeDetails?.description}
-                      </Text>
-                    </View>
+                        {selectedModeDetails?.previewDescription}
+                      </Text>                    </View>
                   </View>
                 </ScrollView>
               </View>

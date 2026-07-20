@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, Modal, ScrollView, Switch, Platform, Alert } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, Modal, ScrollView, Switch, Platform } from 'react-native';
 import { useState, useEffect, useRef } from 'react';
 import { Save, X, RefreshCw, Settings } from 'lucide-react-native';
 import { useWindowDimensions } from 'react-native';
@@ -7,14 +7,19 @@ import { doorControlService, ApiResponse } from '@/services/DoorControlService';
 import ApiResponseDisplayModal from './ApiResponseDisplayModal';
 import IntercomConfigurationModal, { IntercomConfig } from './IntercomConfigurationModal';
 import ActionSelector from './ActionSelector';
+import ConfirmDialogModal from './ConfirmDialogModal';
 import { emergencyService } from '@/services/EmergencyService';
+import { fireService } from '@/services/FireService';
 import {
   markLocalConfigOverrides,
   restorePanelDefaultsOnDevice,
 } from '@/services/tabletPanelConfigService';
 import { cloneDefaultDoorAppConfig } from '@/config/defaultDoorAppConfig';
 import { INTERCOM_BRIDGE_ONLY } from '@/config/intercomFeatures';
+import { showOperationError, showOperationInfo } from '@/utils/showOperationError';
 import type { ConfigurationData, ModeConfig, ModesConfig } from '@/types/configurationData';
+
+type ConfigConfirmAction = 'reset_app' | 'panel_defaults';
 
 export type { ConfigurationData, ModeConfig, DoorConfig, ModesConfig } from '@/types/configurationData';
 
@@ -44,6 +49,8 @@ export default function NewConfigurationModal({
   const [isTestingApi, setIsTestingApi] = useState(false);
   const [showIntercomModal, setShowIntercomModal] = useState(false);
   const [selectedDoorIndex, setSelectedDoorIndex] = useState<number>(0);
+  const [confirmAction, setConfirmAction] = useState<ConfigConfirmAction | null>(null);
+  const [confirmBusy, setConfirmBusy] = useState(false);
   const defaultConfigRef = useRef<ConfigurationData>(cloneDefaultDoorAppConfig());
 
   useEffect(() => {
@@ -128,6 +135,34 @@ export default function NewConfigurationModal({
           parsedConfig.emergency.action = 'set_rule';
         }
         console.log('✅ Emergencia tras migración:', parsedConfig.emergency);
+
+        const configDefaults = cloneDefaultDoorAppConfig();
+        if (!parsedConfig.fireSignal) {
+          parsedConfig.fireSignal = { ...configDefaults.fireSignal };
+        }
+        if (parsedConfig.emergency?.rule_key === 'senal_de_incendio_activada') {
+          parsedConfig.fireSignal = {
+            ...configDefaults.fireSignal,
+            ...parsedConfig.fireSignal,
+            enabled: parsedConfig.emergency.enabled !== false,
+            rule_key: 'senal_de_incendio_activada',
+            action: parsedConfig.emergency.action || 'set_rule',
+            output_code: parsedConfig.emergency.output_code || '',
+            output_on: parsedConfig.emergency.output_on !== false,
+          };
+          parsedConfig.emergency.rule_key = configDefaults.emergency.rule_key;
+          console.log('✅ Migrada rule_key de incendio desde emergencia a fireSignal');
+        }
+        const fireConfig = await fireService.getFireConfig();
+        parsedConfig.fireSignal = {
+          ...configDefaults.fireSignal,
+          ...parsedConfig.fireSignal,
+          ...(fireConfig ? fireConfig : {}),
+        };
+        if (!parsedConfig.fireSignal.action) {
+          parsedConfig.fireSignal.action = 'set_rule';
+        }
+        console.log('✅ Incendio tras migración:', parsedConfig.fireSignal);
         
         // Migrar configuración de modos si no existe
         if (!parsedConfig.modes) {
@@ -140,8 +175,20 @@ export default function NewConfigurationModal({
             oficinaCerrada: { ...def, rule_key: 'horario_cerrado' },
             cargaCajero: { ...def, rule_key: 'horario_carga_cajero' },
             manual: { ...def, rule_key: 'horario_manual' },
+            incendio: { ...def, rule_key: 'senal_de_incendio_activada' },
           };
           console.log('✅ Configuración de modos inicializada con valores por defecto');
+        }
+        if (!parsedConfig.modes.incendio) {
+          const def = { action: 'set_rule' as const, enabled: true, output_code: '', output_on: true };
+          parsedConfig.modes.incendio = {
+            ...def,
+            ...(parsedConfig.fireSignal || {}),
+            rule_key:
+              parsedConfig.fireSignal?.rule_key ||
+              parsedConfig.modes.incendio?.rule_key ||
+              'senal_de_incendio_activada',
+          };
         }
         // Migrar estructura antigua de modos (pcb/relay) a nueva (rule_key/action).
         for (const [k, v] of Object.entries(parsedConfig.modes || {})) {
@@ -154,6 +201,7 @@ export default function NewConfigurationModal({
               oficinaCerrada: 'horario_cerrado',
               cargaCajero: 'horario_carga_cajero',
               manual: 'horario_manual',
+              incendio: 'senal_de_incendio_activada',
             };
             parsedConfig.modes[k] = {
               rule_key: defaultRuleKeyMap[k] || k,
@@ -203,6 +251,7 @@ export default function NewConfigurationModal({
         setConfig(defaults);
         await AsyncStorage.setItem('new_door_config', JSON.stringify(defaults));
         await emergencyService.setEmergencyConfig(defaults.emergency);
+        await fireService.setFireConfig(defaults.fireSignal);
         console.log('✅ Configuración por defecto aplicada (primera instalación)');
       }
     } catch (error) {
@@ -236,6 +285,21 @@ export default function NewConfigurationModal({
       } else {
         console.log('⚠️ No hay configuración de emergencia para guardar');
       }
+
+      if (config.modes?.incendio) {
+        const fireFromMode = {
+          enabled: config.modes.incendio.enabled,
+          rule_key: config.modes.incendio.rule_key,
+          action: config.modes.incendio.action,
+          output_code: config.modes.incendio.output_code || '',
+          output_on: config.modes.incendio.output_on !== false,
+        };
+        await fireService.setFireConfig(fireFromMode);
+        console.log('✅ Configuración de incendio guardada exitosamente');
+      } else if (config.fireSignal) {
+        await fireService.setFireConfig(config.fireSignal);
+        console.log('✅ Configuración de incendio guardada exitosamente');
+      }
       
       // Convertir la configuración al formato esperado por el componente padre
       const configForParent = {
@@ -260,65 +324,63 @@ export default function NewConfigurationModal({
   };
 
   const handleResetConfiguration = () => {
-    Alert.alert(
-      'Restablecer configuración local',
-      'Se eliminarán los datos guardados en esta tablet y se cargarán los valores de fábrica embebidos en la app (solo si falla la conexión al panel). ¿Continuar?',
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Restablecer',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await AsyncStorage.removeItem('new_door_config');
-              await AsyncStorage.removeItem('detailed_door_config');
-              const resetConfig = cloneDefaultDoorAppConfig();
-              defaultConfigRef.current = resetConfig;
-              setConfig(resetConfig);
-              await AsyncStorage.setItem('new_door_config', JSON.stringify(resetConfig));
-              await emergencyService.setEmergencyConfig(resetConfig.emergency);
-              await markLocalConfigOverrides();
-              console.log('✅ Configuración restablecida a valores por defecto');
-            } catch (error) {
-              console.error('❌ Error restableciendo configuración:', error);
-            }
-          },
-        },
-      ]
-    );
+    setConfirmAction('reset_app');
   };
 
   const handleRestorePanelDefaults = () => {
-    Alert.alert(
-      'Restaurar datos del panel',
-      'Se descartarán los cambios locales de esta tablet y se importará la configuración por defecto de la sucursal desde el panel. ¿Continuar?',
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Restaurar',
-          onPress: async () => {
-            try {
-              const restored = await restorePanelDefaultsOnDevice();
-              if (!restored) {
-                Alert.alert(
-                  'Error',
-                  'No se pudo importar la configuración del panel. Comprueba red, IP de consola y credenciales API.',
-                );
-                return;
-              }
-              setConfig(restored);
-              defaultConfigRef.current = restored;
-              await emergencyService.setEmergencyConfig(restored.emergency);
-              onSave(restored);
-              Alert.alert('Listo', 'Configuración del panel importada en esta tablet.');
-            } catch (error) {
-              console.error('❌ Error restaurando defaults del panel:', error);
-              Alert.alert('Error', 'No se pudo restaurar la configuración del panel.');
-            }
-          },
-        },
-      ],
-    );
+    setConfirmAction('panel_defaults');
+  };
+
+  const runConfirmedConfigAction = async () => {
+    if (!confirmAction || confirmBusy) return;
+    setConfirmBusy(true);
+    try {
+      if (confirmAction === 'reset_app') {
+        await AsyncStorage.removeItem('new_door_config');
+        await AsyncStorage.removeItem('detailed_door_config');
+        const resetConfig = cloneDefaultDoorAppConfig();
+        defaultConfigRef.current = resetConfig;
+        setConfig(resetConfig);
+        await AsyncStorage.setItem('new_door_config', JSON.stringify(resetConfig));
+        await emergencyService.setEmergencyConfig(resetConfig.emergency);
+        await fireService.setFireConfig(resetConfig.fireSignal);
+        await markLocalConfigOverrides();
+        onSave(resetConfig);
+        showOperationInfo(
+          'Configuración restablecida',
+          'Se cargaron los valores de fábrica embebidos en la app.',
+        );
+      } else {
+        const restored = await restorePanelDefaultsOnDevice();
+        if (!restored) {
+          showOperationError(
+            'Error al importar',
+            'No se pudo obtener la configuración del panel. Comprueba red, IP de consola y credenciales API.',
+          );
+          return;
+        }
+        setConfig(restored);
+        defaultConfigRef.current = restored;
+        await emergencyService.setEmergencyConfig(restored.emergency);
+        await fireService.setFireConfig(restored.fireSignal);
+        onSave(restored);
+        showOperationInfo(
+          'Datos del panel importados',
+          'La configuración por defecto de la sucursal se aplicó en esta tablet.',
+        );
+      }
+    } catch (error) {
+      console.error('❌ Error en acción de configuración:', error);
+      showOperationError(
+        'Error',
+        confirmAction === 'reset_app'
+          ? 'No se pudo restablecer la configuración local.'
+          : 'No se pudo restaurar la configuración del panel.',
+      );
+    } finally {
+      setConfirmBusy(false);
+      setConfirmAction(null);
+    }
   };
 
   // Función de prueba de API deshabilitada (no usa gettags)
@@ -757,7 +819,14 @@ export default function NewConfigurationModal({
     bottomButtons: {
       flexDirection: 'row',
       gap: isSmallTablet ? 8 : isLargeTablet ? 16 : 12,
-      marginTop: isSmallTablet ? 16 : isLargeTablet ? 24 : 20,
+    },
+    footer: {
+      paddingHorizontal: isSmallTablet ? 16 : isLargeTablet ? 24 : 20,
+      paddingTop: isSmallTablet ? 12 : isLargeTablet ? 16 : 14,
+      paddingBottom: Platform.OS === 'android' ? 20 : 16,
+      borderTopWidth: 1,
+      borderTopColor: '#DEE2E6',
+      backgroundColor: '#F8F9FA',
     },
     backButton: {
       flex: 1,
@@ -1129,6 +1198,7 @@ export default function NewConfigurationModal({
                   oficinaCerrada: 'OFICINA CERRADA',
                   cargaCajero: 'CARGA DE CAJERO',
                   manual: 'BLOQUEO OFICINA',
+                  incendio: 'SEÑAL DE INCENDIO',
                 }).map(([key, label], idx, arr) => (
                   <View
                     key={key}
@@ -1277,7 +1347,7 @@ export default function NewConfigurationModal({
                         emergency: { ...prev.emergency, rule_key: value },
                       }))
                     }
-                    placeholder="ej: senal_de_incendio_activada"
+                    placeholder="ej: pulsador_emergencia_verde_puerta_oficina"
                     autoCapitalize="none"
                   />
                   <Text style={[styles.modeFieldLabel, { marginTop: 10 }]}>action</Text>
@@ -1325,14 +1395,15 @@ export default function NewConfigurationModal({
                     </>
                   )}
                   <Text style={styles.emergencyNote}>
-                    Titilado rojo cuando get_mode coincide con rule_key o tras activar desde la tablet.
+                    Titilado rojo cuando el pulsador de emergencia está activo en el panel o tras activar desde la tablet.
                   </Text>
                 </View>
               )}
             </View>
           </View>
+        </ScrollView>
 
-          {/* Botones reset / restaurar panel */}
+        <View style={styles.footer}>
           <View style={styles.bottomButtons}>
             <TouchableOpacity style={styles.panelDefaultsButton} onPress={handleRestorePanelDefaults}>
               <RefreshCw size={20} color="#FFFFFF" />
@@ -1343,7 +1414,28 @@ export default function NewConfigurationModal({
               <Text style={styles.resetButtonText}>RESET APP</Text>
             </TouchableOpacity>
           </View>
-        </ScrollView>
+        </View>
+        
+        <ConfirmDialogModal
+          visible={confirmAction !== null}
+          title={
+            confirmAction === 'reset_app'
+              ? 'Restablecer configuración local'
+              : 'Restaurar datos del panel'
+          }
+          message={
+            confirmAction === 'reset_app'
+              ? 'Se eliminarán los datos guardados en esta tablet y se cargarán los valores de fábrica embebidos en la app. ¿Continuar?'
+              : 'Se descartarán los cambios locales y se importará la configuración por defecto de la sucursal desde el panel. ¿Continuar?'
+          }
+          confirmText={confirmAction === 'reset_app' ? 'Restablecer' : 'Restaurar'}
+          confirmColor={confirmAction === 'reset_app' ? '#DC3545' : '#0D6EFD'}
+          loading={confirmBusy}
+          onCancel={() => {
+            if (!confirmBusy) setConfirmAction(null);
+          }}
+          onConfirm={runConfirmedConfigAction}
+        />
         
         <ApiResponseDisplayModal
           visible={showApiResponseModal}

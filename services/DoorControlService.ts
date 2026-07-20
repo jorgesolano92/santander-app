@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 import axios from 'axios';
 import { emergencyService, EmergencyConfig } from './EmergencyService';
+import { fireService, FireSignalConfig, FIRE_SIGNAL_RULE_KEY } from './FireService';
 
 /** Evita que la UI quede en "Procesando..." si el backend/panel no responde. */
 const API_FETCH_TIMEOUT_MS = 10_000;
@@ -55,6 +56,8 @@ export interface SystemStatus {
   };
   emergencyActive: boolean;
   emergencyConfigured?: boolean;
+  fireActive: boolean;
+  fireConfigured?: boolean;
   connectionStatus: 'online' | 'offline';
   lastSync: string;
   tags?: Tag[];
@@ -139,6 +142,8 @@ const modeNameToConfigKeyMap: { [key: string]: string } = {
   'CARGA CAJERO': 'cargaCajero',             // Variante sin "DE"
   'MANUAL': 'manual',                        // Manual
   'EMERGENCIA': 'emergencia',                // Emergencia (no se configura aquí)
+  'INCENDIO': 'incendio',
+  'SEÑAL DE INCENDIO': 'incendio',
 };
 
 const TABLET_BEARER_TOKEN_KEY = 'tablet_bearer_token';
@@ -233,6 +238,9 @@ export type PanelApiResult =
 export type PanelModeStatus = {
   currentRuleKey: string | null;
   pendingRuleKey: string | null;
+  activeToggleRules: string[];
+  /** true si el GET al panel (centro) respondió correctamente. */
+  panelReachable: boolean;
 };
 
 class DoorControlService {
@@ -319,6 +327,7 @@ class DoorControlService {
         },
       },
       emergencyActive: false,
+      fireActive: false,
       connectionStatus: 'online',
       lastSync: new Date().toISOString(),
     };
@@ -542,7 +551,8 @@ class DoorControlService {
     config: any,
     method: 'GET' | 'POST',
     endpointPath: string,
-    jsonBody?: any
+    jsonBody?: any,
+    timeoutMs: number = API_FETCH_TIMEOUT_MS,
   ): Promise<Response | null> {
     const baseUrl = this.buildBackendBaseUrl(config?.network?.consoleIP, Number(config?.api?.port || 8000));
     const endpoint = this.normalizeApiPath(endpointPath);
@@ -568,7 +578,7 @@ class DoorControlService {
         method,
         headers,
         ...(jsonBody !== undefined ? { body: JSON.stringify(jsonBody) } : {}),
-      });
+      }, timeoutMs);
     };
 
     let response = await makeCall(token);
@@ -910,6 +920,7 @@ class DoorControlService {
       mode: currentMode,
       doors,
       emergencyActive,
+      fireActive: false,
       connectionStatus: this.connectionStatus,
       lastSync: new Date().toISOString(),
       tags: data.tags,
@@ -1021,22 +1032,104 @@ class DoorControlService {
 
   /** Modo activo y modo en cola (esperando liberar entradas de bloqueo). */
   async getPanelModeStatus(): Promise<PanelModeStatus> {
+    const unreachable: PanelModeStatus = {
+      currentRuleKey: null,
+      pendingRuleKey: null,
+      activeToggleRules: [],
+      panelReachable: false,
+    };
     try {
       const config = await this.getSavedAppConfig();
-      if (!config) return { currentRuleKey: null, pendingRuleKey: null };
+      if (!config) return unreachable;
       const endpoint = config?.api?.urlGet || '/api/v1/get_mode';
       const response = await this.authenticatedRequest(config, 'GET', endpoint);
-      if (!response?.ok) return { currentRuleKey: null, pendingRuleKey: null };
+      if (!response?.ok) return unreachable;
       const data = await response.json();
       const current = data?.current_mode;
       const pending = data?.pending_mode;
+      const toggles = Array.isArray(data?.active_toggle_rules)
+        ? data.active_toggle_rules.map((k: unknown) => String(k))
+        : [];
       return {
         currentRuleKey: typeof current === 'string' && current.trim() ? current.trim() : null,
         pendingRuleKey: typeof pending === 'string' && pending.trim() ? pending.trim() : null,
+        activeToggleRules: toggles,
+        panelReachable: true,
       };
     } catch {
-      return { currentRuleKey: null, pendingRuleKey: null };
+      return unreachable;
     }
+  }
+
+  /** Emergencia activa en panel: modo operativo o actuación interruptor configurada. */
+  isEmergencyActiveOnPanel(
+    config: EmergencyConfig | null,
+    currentRuleKey: string | null,
+    activeToggleRules: string[],
+  ): boolean {
+    if (!config?.enabled) return false;
+    const rk = String(config.rule_key || '').trim();
+    if (!rk) return false;
+    if (currentRuleKey === rk) return true;
+    return activeToggleRules.includes(rk);
+  }
+
+  isFireActiveOnPanel(
+    config: FireSignalConfig | null,
+    currentRuleKey: string | null,
+  ): boolean {
+    if (config && !config.enabled) return false;
+    const rk = String(config?.rule_key || FIRE_SIGNAL_RULE_KEY).trim();
+    return !!rk && currentRuleKey === rk;
+  }
+
+  async syncPanelLiveState(
+    currentRuleKey: string | null,
+    activeToggleRules: string[],
+  ): Promise<{ emergencyActive: boolean; fireActive: boolean }> {
+    const emergencyConfig = await emergencyService.getEmergencyConfig();
+    const fireConfig = await fireService.getFireConfig();
+    const emergencyActive = this.isEmergencyActiveOnPanel(
+      emergencyConfig,
+      currentRuleKey,
+      activeToggleRules,
+    );
+    const fireActive = this.isFireActiveOnPanel(fireConfig, currentRuleKey);
+
+    const emergLocal = await emergencyService.getEmergencyState();
+    if (emergencyActive && !emergLocal?.isActive) {
+      await emergencyService.activateEmergency();
+    } else if (!emergencyActive && emergLocal?.isActive) {
+      await emergencyService.deactivateEmergency();
+    }
+
+    const fireLocal = await fireService.getFireState();
+    if (fireActive && !fireLocal?.isActive) {
+      await fireService.activateFire();
+    } else if (!fireActive && fireLocal?.isActive) {
+      await fireService.deactivateFire();
+    }
+
+    this.mockSystemStatus.emergencyActive = emergencyActive;
+    this.mockSystemStatus.fireActive = fireActive;
+    if (currentRuleKey && !fireActive) {
+      const label = await this.mapRuleKeyToAppModeName(currentRuleKey);
+      if (label) this.mockSystemStatus.mode = label;
+    } else if (fireActive) {
+      this.mockSystemStatus.mode = 'INCENDIO';
+    }
+    this.mockSystemStatus.lastSync = new Date().toISOString();
+    this.notifyStatusChange();
+    return { emergencyActive, fireActive };
+  }
+
+  /** @deprecated Usar syncPanelLiveState */
+  async syncEmergencyFromPanelLive(
+    currentRuleKey: string | null,
+    activeToggleRules: string[],
+  ): Promise<boolean> {
+    const r = await this.syncPanelLiveState(currentRuleKey, activeToggleRules);
+    return r.emergencyActive;
   }
 
   /** Lee si una salida del panel está activa (OUT_xx_yy). */
@@ -1151,6 +1244,7 @@ class DoorControlService {
           oficinaCerrada: 'OFICINA CERRADA',
           cargaCajero: 'CARGA DE CAJERO',
           manual: 'MANUAL',
+          incendio: 'INCENDIO',
         };
         return configKeyToModeName[configKey] || key;
       }
@@ -1163,6 +1257,14 @@ class DoorControlService {
   /** Actualiza el modo mostrado tras broadcast WS de otra tablet o del panel. */
   async syncModeFromPanelRuleKey(ruleKey: string | null): Promise<void> {
     if (!ruleKey) return;
+    const fireKey = await this.resolveFireRuleKey(await this.getSavedAppConfig());
+    if (ruleKey === fireKey) {
+      this.mockSystemStatus.fireActive = true;
+      this.mockSystemStatus.mode = 'INCENDIO';
+      this.mockSystemStatus.lastSync = new Date().toISOString();
+      this.notifyStatusChange();
+      return;
+    }
     const label = await this.mapRuleKeyToAppModeName(ruleKey);
     if (!label || this.mockSystemStatus.mode === label) return;
     this.mockSystemStatus.mode = label;
@@ -1211,6 +1313,7 @@ class DoorControlService {
           oficinaCerrada: 'OFICINA CERRADA',
           cargaCajero: 'CARGA DE CAJERO',
           manual: 'MANUAL',
+          incendio: 'INCENDIO',
         };
         return configKeyToModeName[configKey] || currentRuleKey;
       }
@@ -1247,6 +1350,182 @@ class DoorControlService {
   }
 
   /**
+   * POST /api/v1/set_mode con manejo de cola y bloqueos (como horarios).
+   */
+  async postSetModePayload(
+    config: Record<string, any>,
+    payload: Record<string, unknown>,
+    options?: { requireDeactivated?: boolean; timeoutMs?: number },
+  ): Promise<PanelApiResult> {
+    const endpoint = config?.api?.urlPost || '/api/v1/set_mode';
+    const timeoutMs =
+      options?.timeoutMs ??
+      (options?.requireDeactivated ? 120_000 : API_FETCH_TIMEOUT_MS);
+    let response: Response | null;
+    try {
+      response = await this.authenticatedRequest(
+        config,
+        'POST',
+        endpoint,
+        payload,
+        timeoutMs,
+      );
+    } catch (error) {
+      const ruleKey = String(payload.rule_key || '').trim();
+      if (options?.requireDeactivated && ruleKey) {
+        const cleared = await this.verifyOperationalRuleCleared(ruleKey);
+        if (cleared) {
+          console.warn('[Tablet] set_mode timeout pero el panel ya desactivó la regla:', ruleKey);
+          return { ok: true };
+        }
+      }
+      return {
+        ok: false,
+        errorMessage: error instanceof Error ? error.message : 'Error de red con el panel.',
+      };
+    }
+    if (!response) {
+      return {
+        ok: false,
+        errorMessage: 'No se pudo conectar con el panel. Comprueba red y credenciales.',
+      };
+    }
+    if (!response.ok) {
+      const t = await response.text().catch(() => '');
+      if (response.status === 409) {
+        console.warn(`⚠️ set_mode bloqueado por el panel (409): ${t}`);
+      } else {
+        console.error(`❌ Error set_mode (${response.status}): ${t}`);
+      }
+      return {
+        ok: false,
+        errorMessage: this.formatPanelApiErrorMessage(response.status, t),
+      };
+    }
+
+    const data = (await response.json().catch(() => ({}))) as Record<string, unknown>;
+    if (data.queued === true) {
+      const result = (data.result || {}) as Record<string, unknown>;
+      const pendingRuleKey = String(
+        result.pending_manual_mode || result.rule || payload.rule_key || '',
+      ).trim();
+      const blockedInputs = Array.isArray(result.blocked_inputs)
+        ? result.blocked_inputs.map((c) => String(c))
+        : [];
+      const queueMessage = typeof result.reason === 'string' ? result.reason : undefined;
+      console.log('[Tablet] Regla en cola:', pendingRuleKey, blockedInputs);
+      void this.releaseDoorBlocksForQueuedMode(blockedInputs);
+      return {
+        ok: true,
+        queued: true,
+        pendingRuleKey: pendingRuleKey || String(payload.rule_key || ''),
+        blockedInputs,
+        queueMessage,
+      };
+    }
+
+    if (options?.requireDeactivated) {
+      const panelDeactivated =
+        data.deactivated === true || data.cleared === true || data.toggle_off === true;
+      if (!panelDeactivated) {
+        return {
+          ok: false,
+          errorMessage:
+            typeof data.reason === 'string'
+              ? data.reason
+              : 'La regla no estaba activa en el panel.',
+        };
+      }
+    }
+
+    return { ok: true };
+  }
+
+  private async resolveFireRuleKey(config: Record<string, any> | null): Promise<string> {
+    const fromModes = String(config?.modes?.incendio?.rule_key || '').trim();
+    if (fromModes) return fromModes;
+    const fireConfig = await fireService.getFireConfig();
+    return String(fireConfig?.rule_key || FIRE_SIGNAL_RULE_KEY).trim();
+  }
+
+  /** Comprueba en get_mode que la regla operativa ya no es current_mode. */
+  async verifyOperationalRuleCleared(ruleKey: string): Promise<boolean> {
+    try {
+      const status = await this.getPanelModeStatus();
+      const rk = String(ruleKey || '').trim();
+      if (!rk) return false;
+      return status.currentRuleKey !== rk;
+    } catch {
+      return false;
+    }
+  }
+
+  async isFireModeEnabled(config?: Record<string, any> | null): Promise<boolean> {
+    const saved = config ?? (await this.getSavedAppConfig());
+    if (saved?.modes?.incendio?.enabled === false) return false;
+    const fireConfig = await fireService.getFireConfig();
+    return fireConfig?.enabled !== false;
+  }
+
+  /**
+   * Activa/desactiva una regla operativa (horario, incendio…) respetando bloqueos y cola del panel.
+   */
+  async setPanelRuleActive(ruleKey: string, active: boolean): Promise<PanelApiResult> {
+    try {
+      const config = await this.getSavedAppConfig();
+      if (!config) {
+        return { ok: false, errorMessage: 'No hay configuración guardada en la tablet.' };
+      }
+      const rk = String(ruleKey || '').trim();
+      if (!rk) {
+        return { ok: false, errorMessage: 'Falta rule_key para set_rule.' };
+      }
+
+      const fireKey = await this.resolveFireRuleKey(config);
+      if (rk === fireKey) {
+        const enabled = await this.isFireModeEnabled(config);
+        if (!enabled) {
+          return { ok: false, errorMessage: 'La señal de incendio no está habilitada en la tablet.' };
+        }
+      }
+
+      const result = await this.postSetModePayload(
+        config,
+        { action: 'set_rule', rule_key: rk, active },
+        { requireDeactivated: !active },
+      );
+      if (!result.ok || result.queued) return result;
+
+      if (rk === fireKey) {
+        if (active) {
+          await fireService.activateFire();
+          this.mockSystemStatus.fireActive = true;
+          this.mockSystemStatus.mode = 'INCENDIO';
+        } else {
+          await fireService.deactivateFire();
+          this.mockSystemStatus.fireActive = false;
+          const m = await this.getCurrentModeFromAPI2();
+          if (m) this.mockSystemStatus.mode = m;
+        }
+      } else {
+        await new Promise((resolve) => setTimeout(resolve, 300));
+        const currentMode = await this.getCurrentModeFromAPI2();
+        if (currentMode) this.mockSystemStatus.mode = currentMode;
+      }
+
+      this.mockSystemStatus.lastSync = new Date().toISOString();
+      this.notifyStatusChange();
+      return { ok: true };
+    } catch (error) {
+      return {
+        ok: false,
+        errorMessage:
+          error instanceof Error ? error.message : 'Error inesperado al aplicar regla en el panel.',
+      };
+    }
+  }
+
+  /**
    * Cambiar modo usando backend Python (`POST /api/v1/set_mode`).
    * set_rule: rule_key y active. set_output: code y on.
    */
@@ -1263,7 +1542,7 @@ class DoorControlService {
         console.error(`❌ Modo no reconocido: ${mode}`);
         return { ok: false, errorMessage: `Modo no reconocido: ${mode}` };
       }
-      const modeConfig = config?.modes?.[configKey] as {
+      const modeConfig = config?.modes?.[configKey as keyof typeof config.modes] as {
         rule_key?: string;
         action?: string;
         enabled?: boolean;
@@ -1278,82 +1557,34 @@ class DoorControlService {
         };
       }
 
-      const endpoint = config?.api?.urlPost || '/api/v1/set_mode';
       const useOutput = modeConfig.action === 'set_output';
-      let payload: Record<string, unknown>;
       if (useOutput) {
         const code = String(modeConfig.output_code || '').trim();
         if (!code) {
-          console.error(`❌ Modo ${configKey}: action set_output requiere output_code`);
           return {
             ok: false,
             errorMessage: 'Falta el código de salida para set_output. Revísalo en configuración.',
           };
         }
         const on = modeConfig.output_on !== false;
-        payload = { action: 'set_output', code, on };
-      } else {
-        const rk = String(modeConfig.rule_key || '').trim();
-        if (!rk) {
-          console.error(`❌ Modo ${configKey}: falta rule_key para set_rule`);
-          return {
-            ok: false,
-            errorMessage: 'Falta la clave de regla (rule_key) para set_rule. Revísalo en configuración.',
-          };
-        }
-        payload = { action: 'set_rule', rule_key: rk, active: true };
+        const result = await this.postSetModePayload(config, { action: 'set_output', code, on });
+        if (!result.ok || result.queued) return result;
+        await new Promise((resolve) => setTimeout(resolve, 300));
+        const currentMode = await this.getCurrentModeFromAPI2();
+        if (currentMode) this.mockSystemStatus.mode = currentMode;
+        this.mockSystemStatus.lastSync = new Date().toISOString();
+        this.notifyStatusChange();
+        return { ok: true };
       }
 
-      const response = await this.authenticatedRequest(config, 'POST', endpoint, payload);
-      if (!response) {
+      const rk = String(modeConfig.rule_key || '').trim();
+      if (!rk) {
         return {
           ok: false,
-          errorMessage: 'No se pudo conectar con el panel. Comprueba red y credenciales.',
+          errorMessage: 'Falta la clave de regla (rule_key) para set_rule. Revísalo en configuración.',
         };
       }
-      if (!response.ok) {
-        const t = await response.text().catch(() => '');
-        if (response.status === 409) {
-          console.warn(`⚠️ Modo bloqueado por el panel (409): ${t}`);
-        } else {
-          console.error(`❌ Error cambiando modo (${response.status}): ${t}`);
-        }
-        return {
-          ok: false,
-          errorMessage: this.formatPanelApiErrorMessage(response.status, t),
-        };
-      }
-
-      const data = (await response.json().catch(() => ({}))) as Record<string, unknown>;
-      if (data.queued === true) {
-        const result = (data.result || {}) as Record<string, unknown>;
-        const pendingRuleKey = String(
-          result.pending_manual_mode || result.rule || payload.rule_key || '',
-        ).trim();
-        const blockedInputs = Array.isArray(result.blocked_inputs)
-          ? result.blocked_inputs.map((c) => String(c))
-          : [];
-        const queueMessage =
-          typeof result.reason === 'string' ? result.reason : undefined;
-        console.log('[Tablet] Modo en cola:', pendingRuleKey, blockedInputs);
-        void this.releaseDoorBlocksForQueuedMode(blockedInputs);
-        return {
-          ok: true,
-          queued: true,
-          pendingRuleKey: pendingRuleKey || String(payload.rule_key || ''),
-          blockedInputs,
-          queueMessage,
-        };
-      }
-
-      await new Promise(resolve => setTimeout(resolve, 300));
-      const currentMode = await this.getCurrentModeFromAPI2();
-      if (currentMode) {
-        this.mockSystemStatus.mode = currentMode;
-      }
-      this.mockSystemStatus.lastSync = new Date().toISOString();
-      this.notifyStatusChange();
-      return { ok: true };
+      return this.setPanelRuleActive(rk, true);
     } catch (error) {
       console.error('❌ Error cambiando modo:', error);
       return {
@@ -2344,25 +2575,32 @@ class DoorControlService {
           errorMessage: this.formatPanelApiErrorMessage(response.status, t),
         };
       }
-      await emergencyService.deactivateEmergency();
-
-      const prevRule = await emergencyService.getPreviousPanelModeRuleKey();
-      if (prevRule) {
-        const restoreResp = await this.authenticatedRequest(saved, 'POST', endpoint, {
-          action: 'set_rule',
-          rule_key: prevRule,
-          active: true,
-        });
-        if (!restoreResp?.ok) {
-          const txt = restoreResp ? await restoreResp.text().catch(() => '') : '';
-          console.warn(
-            'No se pudo restaurar el modo anterior del panel:',
-            restoreResp
-              ? this.formatPanelApiErrorMessage(restoreResp.status, txt)
-              : 'sin respuesta',
-          );
-        }
+      let deactivatePayload: Record<string, unknown> = {};
+      try {
+        deactivatePayload = await response.json();
+      } catch {
+        deactivatePayload = {};
       }
+      const restoredMode =
+        typeof deactivatePayload.restored_mode === 'string'
+          ? deactivatePayload.restored_mode
+          : null;
+      const panelDeactivated =
+        deactivatePayload.deactivated === true ||
+        deactivatePayload.cleared === true ||
+        deactivatePayload.toggle_off === true;
+      if (!panelDeactivated) {
+        const reason =
+          typeof deactivatePayload.reason === 'string'
+            ? deactivatePayload.reason
+            : 'La emergencia no estaba activa en el panel.';
+        console.warn('⚠️ Desactivar emergencia en panel sin efecto:', deactivatePayload);
+        return { ok: false, errorMessage: reason };
+      }
+      if (restoredMode) {
+        console.log(`✅ Horario restaurado por el panel: ${restoredMode}`);
+      }
+      await emergencyService.deactivateEmergency();
       await emergencyService.clearPreviousPanelModeRuleKey();
 
       const m = await this.getCurrentModeFromAPI2();
@@ -2379,6 +2617,18 @@ class DoorControlService {
           error instanceof Error ? error.message : 'Error inesperado al desactivar emergencia.',
       };
     }
+  }
+
+  async activateFire(): Promise<PanelApiResult> {
+    const config = await this.getSavedAppConfig();
+    const ruleKey = await this.resolveFireRuleKey(config);
+    return this.setPanelRuleActive(ruleKey, true);
+  }
+
+  async deactivateFire(): Promise<PanelApiResult> {
+    const config = await this.getSavedAppConfig();
+    const ruleKey = await this.resolveFireRuleKey(config);
+    return this.setPanelRuleActive(ruleKey, false);
   }
 
   /**
@@ -2411,8 +2661,8 @@ class DoorControlService {
       }
 
       const panelKey = await this.getPanelCurrentModeRuleKey();
-      const rk = String(config.rule_key || '').trim();
-      const fromPanel = !!rk && !!panelKey && panelKey === rk;
+      const modeStatus = await this.getPanelModeStatus();
+      const fromPanel = this.isEmergencyActiveOnPanel(config, panelKey, modeStatus.activeToggleRules);
       const local = await emergencyService.getEmergencyState();
       const isActive = fromPanel || !!local?.isActive;
 
@@ -2448,6 +2698,35 @@ class DoorControlService {
     const path = this.normalizeApiPath('/api/v1/ws/calls');
     const wsHost = `ws://${host}:${port}`;
     return `${wsHost}${path}?token=${encodeURIComponent(token)}`;
+  }
+
+  /** Historial de mensajes COCE (solo lectura). */
+  async fetchCoceMessages(limit = 100): Promise<
+    Array<{
+      id: string;
+      title: string;
+      body: string;
+      urgent: boolean;
+      received_at: string;
+    }>
+  > {
+    const config = await this.getSavedAppConfig();
+    if (!config?.network?.consoleIP) return [];
+    const response = await this.authenticatedRequest(
+      config,
+      'GET',
+      `/api/v1/coce-messages?limit=${Math.max(1, Math.min(limit, 200))}`,
+    );
+    if (!response?.ok) return [];
+    const data = await response.json().catch(() => ({}));
+    const rows = Array.isArray(data?.messages) ? data.messages : [];
+    return rows.map((row: any) => ({
+      id: String(row.id || ''),
+      title: String(row.title || ''),
+      body: String(row.body || ''),
+      urgent: Boolean(row.urgent),
+      received_at: String(row.received_at || ''),
+    }));
   }
 
   /** Defaults de sucursal configurados en el panel web. */

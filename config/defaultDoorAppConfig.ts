@@ -218,6 +218,13 @@ export const DEFAULT_DOOR_APP_CONFIGURATION: ConfigurationData = {
   officeWithATM: false,
   emergency: {
     enabled: true,
+    rule_key: 'pulsador_emergencia_verde_puerta_oficina',
+    action: 'set_rule',
+    output_code: '',
+    output_on: true,
+  },
+  fireSignal: {
+    enabled: true,
     rule_key: 'senal_de_incendio_activada',
     action: 'set_rule',
     output_code: '',
@@ -268,6 +275,13 @@ export const DEFAULT_DOOR_APP_CONFIGURATION: ConfigurationData = {
     },
     manual: {
       rule_key: 'horario_manual',
+      action: 'set_rule',
+      enabled: true,
+      output_code: '',
+      output_on: true,
+    },
+    incendio: {
+      rule_key: 'senal_de_incendio_activada',
       action: 'set_rule',
       enabled: true,
       output_code: '',

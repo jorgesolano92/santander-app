@@ -33,6 +33,8 @@ export default function SwipeToActivate({
   const compact = variant === 'compact';
   const thumbSize = compact ? 34 : 52;
   const trackPadding = compact ? 3 : 4;
+  /** Rectángulo con bordes redondeados (mismo lenguaje visual que el resto de la app). */
+  const cornerRadius = compact ? 8 : 10;
 
   const trackWidth = useRef(0);
   const dragX = useRef(new Animated.Value(0)).current;
@@ -105,7 +107,7 @@ export default function SwipeToActivate({
           styles.track,
           {
             height: trackHeight,
-            borderRadius: trackHeight / 2,
+            borderRadius: cornerRadius,
             paddingHorizontal: trackPadding,
           },
           disabled && styles.trackDisabled,
@@ -129,7 +131,7 @@ export default function SwipeToActivate({
             {
               width: thumbSize,
               height: thumbSize,
-              borderRadius: thumbSize / 2,
+              borderRadius: cornerRadius,
               transform: [{ translateX: dragX }],
             },
             disabled && styles.thumbDisabled,

@@ -8,6 +8,8 @@ import {
 import { sipService, SipCallState, SipEventType } from '../services/SipService';
 import { startSipIntercom, stopSipIntercom } from '../services/intercomSip';
 import { IntercomConfig } from '../components/IntercomConfigurationModal';
+import { tabletCallService, type PanelLivePayload } from '../services/tabletCallService';
+import { fireService } from '../services/FireService';
 import { emergencyService } from '../services/EmergencyService';
 import { showOperationError } from '@/utils/showOperationError';
 
@@ -19,6 +21,7 @@ export interface UseDoorControlReturn {
   currentScheduleMode: string | null;
   changeMode: (mode: string) => Promise<PanelApiResult>;
   toggleEmergency: (newState: boolean) => Promise<PanelApiResult>;
+  toggleFire: (newState: boolean) => Promise<PanelApiResult>;
   configure: (config: ConfigurationData) => Promise<boolean>;
   validateDevice: () => Promise<boolean>;
   determineScheduleMode: () => string;
@@ -68,30 +71,50 @@ export function useDoorControl(): UseDoorControlReturn {
       }
       setError(null);
       setConnectionStatus('connecting');
-      
-      const status = await doorControlService.getSystemStatus();
-      
-      if (!isMountedRef.current) return;
-      
-      // Verificar el estado de emergencia desde AsyncStorage (rápido, sin petición al servidor)
-      const emergencyState = await emergencyService.getEmergencyState();
-      const isEmergencyActiveLocal = emergencyState?.isActive || false;
-      const emergencyConfig = await emergencyService.getEmergencyConfig();
 
-      const panelRuleKey = await doorControlService.getPanelCurrentModeRuleKey();
-      const emergRule = String(emergencyConfig?.rule_key || '').trim();
-      const emergencyActive =
-        !!emergencyConfig?.enabled &&
-        ((!!panelRuleKey && !!emergRule && panelRuleKey === emergRule) || isEmergencyActiveLocal);
+      const panelMode = await doorControlService.getPanelModeStatus();
+      const status = await doorControlService.getSystemStatus();
+
+      if (!isMountedRef.current) return;
+
+      if (panelMode.currentRuleKey) {
+        await doorControlService.syncModeFromPanelRuleKey(panelMode.currentRuleKey);
+      }
+
+      const emergencyConfig = await emergencyService.getEmergencyConfig();
+      const fireConfig = await fireService.getFireConfig();
+      const emergencyActive = doorControlService.isEmergencyActiveOnPanel(
+        emergencyConfig,
+        panelMode.currentRuleKey,
+        panelMode.activeToggleRules,
+      );
+      const fireActive = doorControlService.isFireActiveOnPanel(
+        fireConfig,
+        panelMode.currentRuleKey,
+      );
+      if (emergencyActive) {
+        await emergencyService.activateEmergency();
+      } else {
+        const localEmerg = await emergencyService.getEmergencyState();
+        if (localEmerg?.isActive) await emergencyService.deactivateEmergency();
+      }
+      if (fireActive) {
+        await fireService.activateFire();
+      } else {
+        const localFire = await fireService.getFireState();
+        if (localFire?.isActive) await fireService.deactivateFire();
+      }
 
       const updatedStatus = {
         ...status,
         emergencyActive,
         emergencyConfigured: emergencyConfig?.enabled || false,
+        fireActive,
+        fireConfigured: fireConfig?.enabled || false,
       };
       
       setSystemStatus(updatedStatus);
-      setConnectionStatus('connected');
+      setConnectionStatus(panelMode.panelReachable ? 'connected' : 'disconnected');
       
       // Determine current mode from system status
       const mode = determineScheduleMode();
@@ -194,6 +217,28 @@ export function useDoorControl(): UseDoorControlReturn {
       if (isMountedRef.current) {
         setIsLoading(false);
       }
+    }
+  }, [updateSystemStatus]);
+
+  const toggleFire = useCallback(async (newState: boolean): Promise<PanelApiResult> => {
+    try {
+      if (!isMountedRef.current) return { ok: false, errorMessage: 'Operación cancelada.' };
+      setIsLoading(true);
+      setError(null);
+      const result = newState
+        ? await doorControlService.activateFire()
+        : await doorControlService.deactivateFire();
+      if (result.ok) {
+        await updateSystemStatus(false);
+      }
+      return result;
+    } catch (err) {
+      return {
+        ok: false,
+        errorMessage: err instanceof Error ? err.message : 'Error en modo incendio',
+      };
+    } finally {
+      if (isMountedRef.current) setIsLoading(false);
     }
   }, [updateSystemStatus]);
 
@@ -467,9 +512,27 @@ export function useDoorControl(): UseDoorControlReturn {
         updateSystemStatus(false); // NO mostrar loader en cambios de estado
       }
     });
+
+    const onPanelLive = (payload: PanelLivePayload) => {
+      if (!isMountedRef.current) return;
+      void (async () => {
+        if (payload.currentMode) {
+          await doorControlService.syncModeFromPanelRuleKey(payload.currentMode);
+        }
+        await doorControlService.syncPanelLiveState(
+          payload.currentMode,
+          payload.activeToggleRules,
+        );
+        if (isMountedRef.current) {
+          await updateSystemStatus(false);
+        }
+      })();
+    };
+    tabletCallService.on('panel_live', onPanelLive);
     
     return () => {
       isMountedRef.current = false;
+      tabletCallService.off('panel_live', onPanelLive);
       // Clean up SIP service listeners
       sipService.removeAllListeners();
     };
@@ -508,6 +571,7 @@ export function useDoorControl(): UseDoorControlReturn {
     currentScheduleMode,
     changeMode,
     toggleEmergency,
+    toggleFire,
     configure,
     validateDevice,
     determineScheduleMode,

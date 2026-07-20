@@ -57,7 +57,7 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingVertical: 6,
     paddingHorizontal: 4,
-    borderRadius: 10,
+    borderRadius: 8,
   },
   selectedRow: {
     backgroundColor: '#FFF5F5',
@@ -66,6 +66,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFF5F5',
     borderWidth: 2,
     borderColor: '#EC1C24',
+    borderRadius: 8,
     paddingVertical: 8,
     paddingHorizontal: 12,
     justifyContent: 'space-between',
@@ -97,7 +98,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#EC1C24',
     paddingHorizontal: 12,
     paddingVertical: 6,
-    borderRadius: 6,
+    borderRadius: 8,
   },
   activeBadgeText: {
     color: '#FFFFFF',

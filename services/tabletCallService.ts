@@ -17,9 +17,26 @@ export type ModeChangedPayload = {
   currentMode: string | null;
 };
 
+export type ToggleRulesChangedPayload = {
+  activeToggleRules: string[];
+};
+
+export type PanelLivePayload = {
+  currentMode: string | null;
+  activeToggleRules: string[];
+};
+
 export type ModeQueuedPayload = {
   pendingMode: string | null;
   blockedInputs: string[];
+};
+
+export type CoceNotificationPayload = {
+  id: string;
+  title: string;
+  body: string;
+  urgent: boolean;
+  receivedAt: string;
 };
 
 export type CallAcceptedPayload = {
@@ -43,6 +60,10 @@ class TabletCallService extends EventEmitter {
   private stopped = true;
   private clientId: string | null = null;
   private intercomStatus: IntercomStatus = { busy: false };
+  private livePanelState: PanelLivePayload = {
+    currentMode: null,
+    activeToggleRules: [],
+  };
   private pendingClaim:
     | { resolve: (ok: boolean) => void; timer: ReturnType<typeof setTimeout> }
     | null = null;
@@ -172,6 +193,10 @@ class TabletCallService extends EventEmitter {
     }
   }
 
+  private emitPanelLive(): void {
+    this.emit('panel_live', { ...this.livePanelState } satisfies PanelLivePayload);
+  }
+
   private handleMessage(data: Record<string, unknown>): void {
     const type = String(data.type || '');
     switch (type) {
@@ -253,7 +278,21 @@ class TabletCallService extends EventEmitter {
             ? null
             : String(data.current_mode);
         console.log('[TabletCall] mode_changed WS', currentMode);
+        this.livePanelState.currentMode = currentMode;
         this.emit('mode_changed', { currentMode } satisfies ModeChangedPayload);
+        this.emitPanelLive();
+        break;
+      }
+      case 'toggle_rules_changed': {
+        const activeToggleRules = Array.isArray(data.active_toggle_rules)
+          ? data.active_toggle_rules.map((k) => String(k))
+          : [];
+        console.log('[TabletCall] toggle_rules_changed WS', activeToggleRules);
+        this.livePanelState.activeToggleRules = activeToggleRules;
+        this.emit('toggle_rules_changed', {
+          activeToggleRules,
+        } satisfies ToggleRulesChangedPayload);
+        this.emitPanelLive();
         break;
       }
       case 'mode_queued': {
@@ -266,6 +305,19 @@ class TabletCallService extends EventEmitter {
           : [];
         console.log('[TabletCall] mode_queued WS', pendingMode);
         this.emit('mode_queued', { pendingMode, blockedInputs } satisfies ModeQueuedPayload);
+        break;
+      }
+      case 'coce_notification': {
+        const payload: CoceNotificationPayload = {
+          id: String(data.id || ''),
+          title: String(data.title || ''),
+          body: String(data.body || ''),
+          urgent: Boolean(data.urgent),
+          receivedAt: String(data.received_at || new Date().toISOString()),
+        };
+        if (!payload.id || !payload.title) break;
+        console.log('[TabletCall] coce_notification', payload.id, payload.urgent);
+        this.emit('coce_notification', payload);
         break;
       }
       default:
