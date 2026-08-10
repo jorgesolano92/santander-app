@@ -11,6 +11,7 @@ import {
 import React, { useState, useEffect, useMemo } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import ModeSwipeRow from '@/components/ModeSwipeRow';
+import ModeIcon, { ModeDiagram } from '@/components/ModeIcon';
 import {
   MODE_DEFINITIONS,
   MODE_CATEGORY_LABELS,
@@ -90,8 +91,10 @@ export default function ModeSelectionModal({
   const selectedModeDetails = visibleModes.find((mode) => mode.id === selectedMode);
   const mainModes = visibleModes.filter((m) => m.id !== BLOQUEO_OFICINA_ID);
 
-  const renderModeRow = (mode: ModeDefinition) => (    <ModeSwipeRow
+  const renderModeRow = (mode: ModeDefinition) => (
+    <ModeSwipeRow
       key={mode.id}
+      modeId={mode.id}
       modeName={mode.name}
       isSelected={selectedMode === mode.id}
       isActive={activeModeId === mode.id}
@@ -121,7 +124,7 @@ export default function ModeSelectionModal({
       paddingVertical: isSmallTablet ? 12 : isLargeTablet ? 20 : 16,
     },
     modalHeaderTitle: {
-      fontSize: isSmallTablet ? 16 : isLargeTablet ? 20 : 18,
+      fontSize: isSmallTablet ? 18 : isLargeTablet ? 22 : 20,
       fontWeight: '600',
       color: '#FFFFFF',
       letterSpacing: 0.5,
@@ -135,8 +138,11 @@ export default function ModeSelectionModal({
     },
     leftPanel: {
       backgroundColor: '#FFFFFF',
-      borderRadius: 0,
+      borderRadius: 12,
       flex: 1,
+      maxWidth: isSmallTablet ? 380 : isLargeTablet ? 480 : 430,
+      borderWidth: 1,
+      borderColor: '#E9ECEF',
     },
     leftPanelContent: {
       flexGrow: 1,
@@ -154,10 +160,10 @@ export default function ModeSelectionModal({
       paddingBottom: 0,
     },
     modeList: {
-      gap: 10,
+      gap: 12,
     },
     sectionTitleStatic: {
-      fontSize: 13,
+      fontSize: 15,
       fontWeight: '700',
       color: '#212529',
       textAlign: 'left',
@@ -167,11 +173,11 @@ export default function ModeSelectionModal({
       paddingHorizontal: 4,
     },
     swipeHelp: {
-      fontSize: 11,
+      fontSize: 13,
       color: '#868E96',
       marginBottom: 14,
       paddingHorizontal: 4,
-      lineHeight: 16,
+      lineHeight: 18,
     },
     bloqueoSection: {
       marginTop: 'auto',
@@ -181,66 +187,74 @@ export default function ModeSelectionModal({
       borderTopColor: '#DEE2E6',
     },
     rightPanel: {
-      flex: 2,
+      flex: 2.4,
+    },
+    rightPanelContent: {
+      flexGrow: 1,
       justifyContent: 'space-between',
       alignItems: 'center',
+      paddingBottom: 8,
     },
     rightPanelMain: {
       width: '100%',
       alignItems: 'center',
       justifyContent: 'flex-start',
-      flexGrow: 0,
-      flexShrink: 1,
     },
     logoSection: {
       alignItems: 'center',
       marginBottom: isSmallTablet ? 10 : isLargeTablet ? 14 : 12,
     },
     santanderLogo: {
-      width: isSmallTablet ? 240 : isLargeTablet ? 340 : 290,
-      height: isSmallTablet ? 68 : isLargeTablet ? 98 : 83,
-    },
-    detailsScrollView: {
-      width: '100%',
-      flexGrow: 0,
-      maxHeight: '70%',
+      width: isSmallTablet ? 160 : isLargeTablet ? 220 : 190,
+      height: isSmallTablet ? 46 : isLargeTablet ? 64 : 55,
     },
     detailsCard: {
       backgroundColor: '#FFFFFF',
       borderRadius: 12,
-      padding: isSmallTablet ? 20 : isLargeTablet ? 32 : 24,
-      flexDirection: 'row',
-      alignItems: 'flex-start',
+      padding: isSmallTablet ? 20 : isLargeTablet ? 28 : 24,
+      flexDirection: 'column',
+      alignItems: 'stretch',
       width: '100%',
       maxWidth: isSmallTablet ? 600 : isLargeTablet ? 900 : 750,
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.08,
-      shadowRadius: 12,
-      elevation: 4,
+      borderWidth: 1,
+      borderColor: '#E9ECEF',
+      gap: 14,
+    },
+    detailsHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
     },
     detailsContent: {
-      flex: 1,
+      width: '100%',
     },
     detailsTitle: {
-      fontSize: isSmallTablet ? 18 : isLargeTablet ? 24 : 21,
+      flex: 1,
+      fontSize: isSmallTablet ? 20 : isLargeTablet ? 26 : 22,
       fontWeight: '700',
       color: '#212529',
-      marginBottom: isSmallTablet ? 12 : isLargeTablet ? 16 : 14,
       letterSpacing: 0.3,
     },
     detailsDescription: {
-      fontSize: isSmallTablet ? 13 : isLargeTablet ? 16 : 14,
+      fontSize: isSmallTablet ? 15 : isLargeTablet ? 18 : 16,
       color: '#6C757D',
-      lineHeight: isSmallTablet ? 18 : isLargeTablet ? 24 : 20,
+      lineHeight: isSmallTablet ? 22 : isLargeTablet ? 28 : 24,
       fontWeight: '400',
+    },
+    diagramBelow: {
+      width: '100%',
+      maxWidth: isSmallTablet ? 600 : isLargeTablet ? 900 : 750,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginTop: 16,
+      marginBottom: 8,
     },
     actionArea: {
       width: '100%',
       maxWidth: 420,
       alignItems: 'center',
       paddingBottom: 8,
-      marginTop: 'auto',
+      marginTop: 16,
     },
     volverButton: {
       backgroundColor: '#FFFFFF',
@@ -253,7 +267,7 @@ export default function ModeSelectionModal({
       alignItems: 'center',
     },
     volverButtonText: {
-      fontSize: 16,
+      fontSize: 17,
       fontWeight: '700',
       color: '#495057',
       letterSpacing: 1,
@@ -300,7 +314,11 @@ export default function ModeSelectionModal({
               </View>
             </ScrollView>
 
-            <View style={styles.rightPanel}>
+            <ScrollView
+              style={styles.rightPanel}
+              contentContainerStyle={styles.rightPanelContent}
+              showsVerticalScrollIndicator={false}
+            >
               <View style={styles.rightPanelMain}>
                 <View style={styles.logoSection}>
                   <Image
@@ -310,15 +328,25 @@ export default function ModeSelectionModal({
                   />
                 </View>
 
-                <ScrollView style={styles.detailsScrollView}>
-                  <View style={styles.detailsCard}>
-                    <View style={styles.detailsContent}>
-                      <Text style={styles.detailsTitle}>{selectedModeDetails?.name}</Text>
-                      <Text style={styles.detailsDescription}>
-                        {selectedModeDetails?.previewDescription}
-                      </Text>                    </View>
+                <View style={styles.detailsCard}>
+                  <View style={styles.detailsHeader}>
+                    <ModeIcon mode={selectedMode} size={36} color="#EC1C24" />
+                    <Text style={styles.detailsTitle}>{selectedModeDetails?.name}</Text>
                   </View>
-                </ScrollView>
+                  <View style={styles.detailsContent}>
+                    <Text style={styles.detailsDescription}>
+                      {selectedModeDetails?.previewDescription}
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={styles.diagramBelow}>
+                  <ModeDiagram
+                    mode={selectedMode}
+                    width={isSmallTablet ? 280 : isLargeTablet ? 360 : 320}
+                    height={isSmallTablet ? 130 : 150}
+                  />
+                </View>
               </View>
 
               <View style={styles.actionArea}>
@@ -326,7 +354,7 @@ export default function ModeSelectionModal({
                   <Text style={styles.volverButtonText}>VOLVER</Text>
                 </TouchableOpacity>
               </View>
-            </View>
+            </ScrollView>
           </View>
         </View>
       </View>

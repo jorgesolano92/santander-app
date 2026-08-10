@@ -3,15 +3,17 @@ import {
   View,
   Text,
   TouchableOpacity,
-  ScrollView,
   StyleSheet,
   Vibration,
   Platform,
   BackHandler,
+  Dimensions,
 } from 'react-native';
 import { Phone, PhoneOff } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 
+import DoorVideoStream from '@/components/DoorVideoStream';
+import type { IntercomConfig } from '@/components/IntercomConfigurationModal';
 import { startCallRingtone, stopCallRingtone } from '@/services/callRingtone';
 import type { IncomingCallPayload } from '@/services/tabletCallService';
 
@@ -22,14 +24,25 @@ type Props = {
   onAnswer: (call: IncomingCallPayload) => void;
   onReject: (call: IncomingCallPayload) => void;
   onExpired?: (call: IncomingCallPayload) => void;
+  /** Config RTSP del videoportero que llama (sin audio). */
+  intercomConfig?: IntercomConfig | null;
+  doorName?: string;
 };
 
-export default function IncomingCallOverlay({ call, onAnswer, onReject, onExpired }: Props) {
+export default function IncomingCallOverlay({
+  call,
+  onAnswer,
+  onReject,
+  onExpired,
+  intercomConfig,
+  doorName,
+}: Props) {
   const [remaining, setRemaining] = useState(0);
   const vibrateTimer = useRef<ReturnType<typeof setInterval> | null>(null);
   const expiredRef = useRef(false);
   const callRef = useRef(call);
   callRef.current = call;
+  const screen = Dimensions.get('window');
 
   useEffect(() => {
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
@@ -80,75 +93,70 @@ export default function IncomingCallOverlay({ call, onAnswer, onReject, onExpire
   }, [call.callId, onExpired]);
 
   const handleAnswer = () => {
-    console.log('[TabletCall] UI contestar', call.callId);
     void stopCallRingtone();
     Vibration.cancel();
     onAnswer(call);
   };
 
   const handleReject = () => {
-    console.log('[TabletCall] UI rechazar', call.callId);
     void stopCallRingtone();
     Vibration.cancel();
     onReject(call);
   };
 
   return (
-    <ScrollView
-      style={styles.overlay}
-      contentContainerStyle={[
-        styles.scrollContent,
-        {
-          paddingTop: 40,
-          paddingBottom: 32,
-        },
-      ]}
-      keyboardShouldPersistTaps="handled"
-      showsVerticalScrollIndicator
-      bounces={false}
-    >
-      <View style={styles.header}>
-        <Text style={styles.kicker}>LLAMADA ENTRANTE</Text>
-        <Text style={styles.title}>{call.doorLabel}</Text>
-        <Text style={styles.subtitle}>Visitante en la puerta exterior</Text>
-        <Text style={styles.timer}>
-          {remaining > 0 ? `Contestar en ${remaining} s` : 'Tiempo agotado'}
-        </Text>
-      </View>
+    <View style={styles.overlay}>
+      {intercomConfig?.cameraIP ? (
+        <View style={styles.videoLayer} pointerEvents="none">
+          <DoorVideoStream
+            intercomConfig={intercomConfig}
+            doorName={doorName || call.doorLabel}
+            forceMuted
+            autoStartInline
+            hideControls
+            isExpanded
+            expandedVideoHeight={screen.height}
+          />
+        </View>
+      ) : (
+        <View style={styles.fallbackBg} />
+      )}
 
-      <View style={styles.pulseRing}>
-        <View style={styles.pulseInner}>
-          <Phone size={64} color="#FFFFFF" />
+      <View style={styles.scrim} />
+
+      <View style={styles.content}>
+        <View style={styles.header}>
+          <Text style={styles.kicker}>LLAMADA ENTRANTE</Text>
+          <Text style={styles.title}>{call.doorLabel}</Text>
+          <Text style={styles.subtitle}>Visitante en videoportero</Text>
+          <Text style={styles.timer}>
+            {remaining > 0 ? `Contestar en ${remaining} s` : 'Tiempo agotado'}
+          </Text>
+        </View>
+
+        <View style={styles.actions}>
+          <TouchableOpacity
+            style={[styles.actionButton, styles.rejectButton]}
+            onPress={handleReject}
+            activeOpacity={0.85}
+            accessibilityLabel="Rechazar llamada"
+          >
+            <PhoneOff size={28} color="#FFFFFF" />
+            <Text style={styles.actionText}>RECHAZAR</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.actionButton, styles.answerButton]}
+            onPress={handleAnswer}
+            activeOpacity={0.85}
+            accessibilityLabel="Contestar llamada"
+          >
+            <Phone size={28} color="#FFFFFF" />
+            <Text style={styles.actionText}>CONTESTAR</Text>
+          </TouchableOpacity>
         </View>
       </View>
-
-      <Text style={styles.scrollHint}></Text>
-      {/* <Text style={styles.scrollHint}>Desliza hacia abajo si no ves los botones</Text> */}
-
-      <View style={styles.actions}>
-        <TouchableOpacity
-          style={[styles.actionButton, styles.rejectButton]}
-          onPress={handleReject}
-          onPressIn={() => console.log('[TabletCall] press IN rechazar')}
-          activeOpacity={0.85}
-          accessibilityLabel="Rechazar llamada"
-        >
-          <PhoneOff size={28} color="#FFFFFF" />
-          <Text style={styles.actionText}>RECHAZAR</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.actionButton, styles.answerButton]}
-          onPress={handleAnswer}
-          onPressIn={() => console.log('[TabletCall] press IN contestar')}
-          activeOpacity={0.85}
-          accessibilityLabel="Contestar llamada"
-        >
-          <Phone size={28} color="#FFFFFF" />
-          <Text style={styles.actionText}>CONTESTAR</Text>
-        </TouchableOpacity>
-      </View>
-    </ScrollView>
+    </View>
   );
 }
 
@@ -157,28 +165,45 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#1a1d21',
   },
-  scrollContent: {
-    flexGrow: 1,
+  videoLayer: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  fallbackBg: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: '#1a1d21',
+  },
+  scrim: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+  },
+  content: {
+    flex: 1,
+    justifyContent: 'space-between',
     paddingHorizontal: 24,
-    gap: 24,
+    paddingTop: 48,
+    paddingBottom: 40,
   },
   header: {
     alignItems: 'center',
   },
   kicker: {
-    color: '#9aa0a6',
+    color: '#E2E8F0',
     fontSize: 14,
     letterSpacing: 2,
     marginBottom: 12,
+    fontWeight: '700',
   },
   title: {
     color: '#FFFFFF',
     fontSize: 32,
     fontWeight: '700',
     textAlign: 'center',
+    textShadowColor: 'rgba(0,0,0,0.6)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
   },
   subtitle: {
-    color: '#c4c7cc',
+    color: '#F1F5F9',
     fontSize: 18,
     marginTop: 8,
     textAlign: 'center',
@@ -187,56 +212,31 @@ const styles = StyleSheet.create({
     color: '#7dd3fc',
     fontSize: 16,
     marginTop: 20,
-  },
-  pulseRing: {
-    alignSelf: 'center',
-    width: 160,
-    height: 160,
-    borderRadius: 80,
-    backgroundColor: 'rgba(34, 197, 94, 0.15)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginVertical: 8,
-  },
-  pulseInner: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: '#16a34a',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  scrollHint: {
-    color: '#6b7280',
-    fontSize: 13,
-    textAlign: 'center',
-    marginTop: -8,
+    fontWeight: '600',
   },
   actions: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 16,
-    marginTop: 8,
+    justifyContent: 'center',
+    gap: 28,
   },
   actionButton: {
-    flex: 1,
-    minHeight: 88,
-    borderRadius: 16,
-    justifyContent: 'center',
+    width: 140,
+    height: 140,
+    borderRadius: 70,
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 8,
-    paddingVertical: 12,
   },
   rejectButton: {
-    backgroundColor: '#dc2626',
+    backgroundColor: '#DC3545',
   },
   answerButton: {
-    backgroundColor: '#16a34a',
+    backgroundColor: '#28A745',
   },
   actionText: {
     color: '#FFFFFF',
-    fontSize: 16,
     fontWeight: '700',
-    letterSpacing: 1,
+    fontSize: 14,
+    letterSpacing: 0.5,
   },
 });

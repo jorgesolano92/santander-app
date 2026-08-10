@@ -85,6 +85,7 @@ export default function ManualModeModal({
   const [expandedVideoDoorId, setExpandedVideoDoorId] = useState<string | null>(null);
   const [sdkIntercomDoorId, setSdkIntercomDoorId] = useState<string | null>(null);
   const [sdkIntercomLoading, setSdkIntercomLoading] = useState<string | null>(null);
+  const [autoStartCameras, setAutoStartCameras] = useState(true);
   
   // Filter enabled doors for styling calculations
   const enabledDoors = currentIntercomConfigs.filter(door => door.enabled);
@@ -151,6 +152,7 @@ export default function ManualModeModal({
           manualStateParsed && typeof manualStateParsed === 'object' ? manualStateParsed : {}
         );
         if (parsedConfig.doors) {
+          setAutoStartCameras(parsedConfig.visualization?.autoStartCameras !== false);
           // Migrar configuraciones antiguas que no tienen campos SDIO12
           const migratedDoors = parsedConfig.doors.map((door: any, index: number) => {
             if (door.intercom) {
@@ -384,11 +386,17 @@ export default function ManualModeModal({
     }
   };
 
-  const renderDoorControlButton = (doorId: string, doorName: string, floating = false) => (
+  const renderDoorControlButton = (
+    doorId: string,
+    doorName: string,
+    floating = false,
+    overlay = false,
+  ) => (
     <TouchableOpacity
       style={[
         styles.doorControlButton,
         floating && styles.doorControlButtonFloating,
+        overlay && styles.doorControlButtonOverlay,
         getDoorStatus(doorId).isOpen && styles.doorControlButtonClose,
         (isDoorButtonDisabled(doorId) || isDoorVerifying(doorId)) && styles.doorControlButtonDisabled,
       ]}
@@ -399,11 +407,12 @@ export default function ManualModeModal({
         <>
           <ActivityIndicator
             size="small"
-            color={getDoorStatus(doorId).isOpen ? '#FFFFFF' : '#495057'}
+            color={overlay || getDoorStatus(doorId).isOpen ? '#FFFFFF' : '#495057'}
           />
           <Text
             style={[
               styles.doorControlButtonText,
+              overlay && styles.doorControlButtonOverlayText,
               getDoorStatus(doorId).isOpen && styles.doorControlButtonCloseText,
             ]}
           >
@@ -413,16 +422,26 @@ export default function ManualModeModal({
       ) : sendingPulse.has(doorId) ? (
         <>
           <ActivityIndicator size="small" color="#FFC107" />
-          <Text style={[styles.doorControlButtonText, { color: '#FFC107' }]}>
+          <Text
+            style={[
+              styles.doorControlButtonText,
+              overlay && styles.doorControlButtonOverlayText,
+              { color: '#FFC107' },
+            ]}
+          >
             {getDoorButtonTextLocal(doorId as 'P1' | 'P2')}
           </Text>
         </>
       ) : (
         <>
-          <DoorOpen size={16} color={getDoorStatus(doorId).isOpen ? '#FFFFFF' : '#495057'} />
+          <DoorOpen
+            size={overlay ? 18 : 16}
+            color={overlay || getDoorStatus(doorId).isOpen ? '#FFFFFF' : '#495057'}
+          />
           <Text
             style={[
               styles.doorControlButtonText,
+              overlay && styles.doorControlButtonOverlayText,
               getDoorStatus(doorId).isOpen && styles.doorControlButtonCloseText,
             ]}
           >
@@ -586,10 +605,10 @@ export default function ManualModeModal({
       alignItems: 'flex-start',
     },
     doorControlSection: {
-      minWidth: isSmallTablet ? 280 : isLargeTablet ? 320 : 300,
-      maxWidth: isSmallTablet ? 320 : isLargeTablet ? 400 : 350,
+      minWidth: isSmallTablet ? 300 : isLargeTablet ? 420 : 360,
+      maxWidth: isSmallTablet ? 380 : isLargeTablet ? 520 : 450,
       flex: enabledDoors.length <= 2 ? 1 : 0,
-      marginBottom: isSmallTablet ? 16 : isLargeTablet ? 24 : 20,
+      marginBottom: isSmallTablet ? 12 : isLargeTablet ? 16 : 14,
     },
     doorControlTitle: {
       fontSize: isSmallTablet ? 16 : isLargeTablet ? 20 : 18,
@@ -602,8 +621,8 @@ export default function ManualModeModal({
     doorControlCard: {
       backgroundColor: '#FFFFFF',
       borderRadius: 12,
-      padding: isSmallTablet ? 12 : isLargeTablet ? 24 : 18,
-      alignItems: 'center',
+      padding: isSmallTablet ? 8 : isLargeTablet ? 12 : 10,
+      alignItems: 'stretch',
       shadowColor: '#000',
       shadowOffset: { width: 0, height: 4 },
       shadowOpacity: 0.08,
@@ -611,6 +630,7 @@ export default function ManualModeModal({
       elevation: 4,
       borderWidth: 1,
       borderColor: '#E9ECEF',
+      gap: 8,
     },
     doorControlImagePlaceholder: {
       width: isSmallTablet ? 200 : isLargeTablet ? 260 : 230,
@@ -678,11 +698,27 @@ export default function ManualModeModal({
       shadowRadius: 4,
       elevation: 2,
     },
+    doorControlButtonOverlay: {
+      flexDirection: 'row',
+      minHeight: 0,
+      paddingVertical: 10,
+      paddingHorizontal: 12,
+      borderRadius: 8,
+      backgroundColor: 'rgba(0,0,0,0.72)',
+      borderColor: 'rgba(255,255,255,0.25)',
+      shadowOpacity: 0.25,
+      elevation: 8,
+    },
     doorControlButtonText: {
-      fontSize: isSmallTablet ? 12 : isLargeTablet ? 16 : 14,
-      fontWeight: '600',
+      fontSize: isSmallTablet ? 13 : isLargeTablet ? 15 : 14,
+      fontWeight: '700',
       color: '#495057',
-      letterSpacing: 0.5,
+      letterSpacing: 0.4,
+      textAlign: 'center',
+    },
+    doorControlButtonOverlayText: {
+      color: '#FFFFFF',
+      fontSize: 12,
     },
     doorControlButtonCommunicating: {
       backgroundColor: '#28A745',
@@ -739,8 +775,13 @@ export default function ManualModeModal({
     },
     bottomButtons: {
       flexDirection: 'row',
-      gap: isSmallTablet ? 16 : isLargeTablet ? 24 : 20,
-      marginBottom: isSmallTablet ? 12 : isLargeTablet ? 24 : 18,
+      gap: isSmallTablet ? 12 : isLargeTablet ? 20 : 16,
+      paddingHorizontal: isSmallTablet ? 12 : isLargeTablet ? 20 : 16,
+      paddingTop: 8,
+      paddingBottom: Platform.OS === 'web' ? 4 : 6,
+      backgroundColor: '#F8F9FA',
+      borderTopWidth: 1,
+      borderTopColor: '#DEE2E6',
     },
     emergencyButton: {
       flex: 1,
@@ -759,6 +800,27 @@ export default function ManualModeModal({
       fontSize: isSmallTablet ? 13 : isLargeTablet ? 18 : 15,
       fontWeight: '700',
       color: '#FFFFFF',
+      letterSpacing: 1,
+    },
+    changeModeBottomButton: {
+      flex: 1,
+      backgroundColor: '#FFFFFF',
+      paddingVertical: isSmallTablet ? 14 : isLargeTablet ? 20 : 17,
+      borderRadius: 12,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderWidth: 1,
+      borderColor: '#DEE2E6',
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.08,
+      shadowRadius: 4,
+      elevation: 2,
+    },
+    changeModeBottomButtonText: {
+      fontSize: isSmallTablet ? 13 : isLargeTablet ? 18 : 15,
+      fontWeight: '700',
+      color: '#495057',
       letterSpacing: 1,
     },
     visualizationButton: {
@@ -818,8 +880,10 @@ export default function ManualModeModal({
       elevation: 30,
     },
     doorControlButtonFloating: {
+      flexDirection: 'row',
       minWidth: 180,
       maxWidth: 240,
+      minHeight: 0,
       paddingVertical: 11,
       paddingHorizontal: 20,
       borderRadius: 28,
@@ -867,23 +931,6 @@ export default function ManualModeModal({
         ) : null}
 
         <View style={[styles.content, activeExpandedDoorId ? styles.contentExpanded : null]}>
-          {!activeExpandedDoorId ? (
-          <View style={styles.modeHeader}>
-            <View style={styles.infoIcon}>
-              <Text style={styles.infoIconText}>i</Text>
-            </View>
-            <View style={styles.modeHeaderContent}>
-              <Text style={styles.modeTitle}>BLOQUEO OFICINA</Text>
-            </View>
-            <TouchableOpacity 
-              style={styles.changeModeButton}
-              onPress={onChangeMode}
-            >
-              <Text style={styles.changeModeButtonText}>CAMBIAR MODO</Text>
-            </TouchableOpacity>
-          </View>
-          ) : null}
-
           <View
             style={[
               styles.doorControlsContainer,
@@ -904,9 +951,6 @@ export default function ManualModeModal({
                   key={doorId}
                   style={isDoorExpanded ? styles.doorControlSectionExpanded : styles.doorControlSection}
                 >
-                  {!isDoorExpanded ? (
-                    <Text style={styles.doorControlTitle}>{door.name.toUpperCase()}</Text>
-                  ) : null}
                   <View
                     style={[
                       styles.doorControlCard,
@@ -920,12 +964,20 @@ export default function ManualModeModal({
                           doorName={door.name}
                           suspendStream={false}
                           muteAmbientDuringIntercom={intercomEstablished}
+                          forceMuted={!isDoorExpanded}
+                          autoStartInline={autoStartCameras && !isDoorExpanded}
+                          inlineHeight={isSmallTablet ? 300 : isLargeTablet ? 400 : 360}
                           isExpanded={isDoorExpanded}
                           expandedVideoHeight={expandedVideoHeight}
                           onExpandedChange={
                             isVideoportero
                               ? undefined
                               : (expanded) => setExpandedVideoDoorId(expanded ? doorId : null)
+                          }
+                          videoOverlay={
+                            !isDoorExpanded
+                              ? renderDoorControlButton(doorId, door.name, false, true)
+                              : null
                           }
                         />
                         {isDoorExpanded ? (
@@ -997,38 +1049,38 @@ export default function ManualModeModal({
                         )}
                       </TouchableOpacity>
                     ) : null}
-
-                    {!isDoorExpanded ? (
-                      <View style={styles.doorControlButtons}>
-                        {renderDoorControlButton(doorId, door.name)}
-                      </View>
-                    ) : null}
                   </View>
                 </View>
               );
             })}
           </View>
+        </View>
+        </ScrollView>
 
-          {!activeExpandedDoorId ? (
+        {!activeExpandedDoorId ? (
           <View style={styles.bottomButtons}>
-            <TouchableOpacity 
+            <TouchableOpacity
               style={styles.emergencyButton}
               onPress={handleEmergency}
             >
               <Text style={styles.emergencyButtonText}>EMERGENCIA</Text>
             </TouchableOpacity>
-            
-            <TouchableOpacity 
+
+            <TouchableOpacity
+              style={styles.changeModeBottomButton}
+              onPress={onChangeMode}
+            >
+              <Text style={styles.changeModeBottomButtonText}>CAMBIAR MODO</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
               style={styles.visualizationButton}
               onPress={onClose}
             >
               <Text style={styles.visualizationButtonText}>VOLVER</Text>
             </TouchableOpacity>
           </View>
-          ) : null}
-
-        </View>
-        </ScrollView>
+        ) : null}
       </View>
     </Modal>
   );

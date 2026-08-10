@@ -63,6 +63,14 @@ export interface ConfigurationData {
   modes: ModesConfig;
   /** Configuración de llamadas P1 → tablets (defaults de sucursal en panel). */
   tabletCall?: TabletCallConfig;
+  visualization?: VisualizationConfig;
+  cargaCajero?: CargaCajeroConfig;
+  /** Seed/reset de acceso a configuración desde el PC industrial. */
+  configLogin?: {
+    ordinal: string;
+    password: string;
+    revision: string;
+  };
 }
 
 export interface TabletCallConfig {
@@ -70,4 +78,14 @@ export interface TabletCallConfig {
   timeoutSeconds: number;
   modes: string;
   pulsadores: string;
+}
+
+export interface VisualizationConfig {
+  /** Arrancar cámaras RTSP al abrir Visualización (sin audio). */
+  autoStartCameras: boolean;
+}
+
+export interface CargaCajeroConfig {
+  /** Puerta cuyo videoportero se muestra en modo Carga Cajero (P1, P2, …). */
+  videoporteroDoorId: string;
 }

@@ -160,8 +160,8 @@ export default function LoginModal({ visible, onClose, onSuccess }: LoginModalPr
       paddingVertical: isSmallTablet ? 12 : isLargeTablet ? 20 : 16,
     },
     santanderLogo: {
-      width: isSmallTablet ? 260 : isLargeTablet ? 380 : 320,
-      height: isSmallTablet ? 75 : isLargeTablet ? 110 : 92,
+      width: isSmallTablet ? 180 : isLargeTablet ? 260 : 220,
+      height: isSmallTablet ? 52 : isLargeTablet ? 75 : 64,
     },
     testCredentials: {
       backgroundColor: '#E3F2FD',

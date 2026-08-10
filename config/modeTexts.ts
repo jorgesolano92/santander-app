@@ -71,7 +71,7 @@ export const MODE_DEFINITIONS: ModeDefinition[] = [
   {
     id: 'manual',
     category: 'INDIVIDUAL',
-    name: 'BLOQUEO OFICINA',
+    name: 'BLOQUEO DE PUERTAS',
     previewDescription:
       'Toda apertura requiere autorización desde la consola de control.\n\nEntrada y salida por ambas puertas: al pulsar el botón de llamada, exterior o interior, se genera una llamada a la consola. La puerta se abre solo cuando se autoriza desde ella. La apertura únicamente se permite cuando la puerta contraria está completamente cerrada.',
     activeDescription:
@@ -115,6 +115,9 @@ const labelToIdMap: Record<string, string> = {
   manual: 'manual',
   'horario manual': 'manual',
   'bloqueo oficina': 'manual',
+  'bloqueo de oficina': 'manual',
+  'bloqueo de puertas': 'manual',
+  'bloqueo puertas': 'manual',
 };
 
 const modeIdToApiName: Record<string, string> = {
@@ -133,6 +136,9 @@ const apiNameToModeId: Record<string, string> = {
   'HORARIO MANUAL': 'manual',
   MANUAL: 'manual',
   'BLOQUEO OFICINA': 'manual',
+  'BLOQUEO DE OFICINA': 'manual',
+  'BLOQUEO DE PUERTAS': 'manual',
+  'BLOQUEO PUERTAS': 'manual',
   EMERGENCIA: 'emergencia',
 };
 
@@ -191,7 +197,8 @@ export function formatModeApiName(mode: string): string {
 
 /** Ej.: "COMERCIAL AUTOMÁTICO" → "Comercial Automático" */
 export function formatModeDisplayName(mode: string): string {
-  const label = formatModeApiName(mode);
+  const def = getModeDefinition(mode);
+  const label = def?.name || formatModeApiName(mode);
   return label
     .toLowerCase()
     .split(' ')

@@ -1,8 +1,10 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import SwipeToActivate from '@/components/SwipeToActivate';
+import ModeIcon from '@/components/ModeIcon';
 
 interface ModeSwipeRowProps {
+  modeId: string;
   modeName: string;
   isSelected: boolean;
   isActive: boolean;
@@ -11,12 +13,15 @@ interface ModeSwipeRowProps {
 }
 
 export default function ModeSwipeRow({
+  modeId,
   modeName,
   isSelected,
   isActive,
   onPreview,
   onActivate,
 }: ModeSwipeRowProps) {
+  const iconColor = isActive || isSelected ? '#EC1C24' : '#495057';
+
   if (isActive) {
     return (
       <TouchableOpacity
@@ -24,7 +29,12 @@ export default function ModeSwipeRow({
         onPress={onPreview}
         activeOpacity={0.85}
       >
-        <Text style={[styles.modeName, styles.modeNameActive]}>{modeName}</Text>
+        <View style={styles.labelAreaActive}>
+          <ModeIcon mode={modeId} size={26} color={iconColor} />
+          <Text style={[styles.modeName, styles.modeNameActive]} numberOfLines={1}>
+            {modeName}
+          </Text>
+        </View>
         <View style={styles.activeBadge}>
           <Text style={styles.activeBadgeText}>ACTIVO</Text>
         </View>
@@ -35,16 +45,13 @@ export default function ModeSwipeRow({
   return (
     <View style={[styles.row, isSelected && styles.selectedRow]}>
       <TouchableOpacity style={styles.labelArea} onPress={onPreview} activeOpacity={0.7}>
-        <Text style={[styles.modeName, isSelected && styles.modeNameSelected]} numberOfLines={2}>
+        <ModeIcon mode={modeId} size={24} color={iconColor} />
+        <Text style={[styles.modeName, isSelected && styles.modeNameSelected]} numberOfLines={1}>
           {modeName}
         </Text>
       </TouchableOpacity>
       <View style={styles.swipeArea}>
-        <SwipeToActivate
-          variant="compact"
-          showHint={false}
-          onActivate={onActivate}
-        />
+        <SwipeToActivate variant="compact" showHint={false} onActivate={onActivate} />
       </View>
     </View>
   );
@@ -54,41 +61,54 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    paddingVertical: 6,
-    paddingHorizontal: 4,
-    borderRadius: 8,
+    gap: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: '#DEE2E6',
+    backgroundColor: '#FFFFFF',
+    minHeight: 56,
   },
   selectedRow: {
-    backgroundColor: '#FFF5F5',
+    backgroundColor: '#FFFFFF',
+    borderColor: '#EC1C24',
   },
   activeRow: {
-    backgroundColor: '#FFF5F5',
+    backgroundColor: '#FFFFFF',
     borderWidth: 2,
     borderColor: '#EC1C24',
-    borderRadius: 8,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
     justifyContent: 'space-between',
   },
   labelArea: {
-    width: '38%',
-    minHeight: 44,
-    justifyContent: 'center',
+    width: '52%',
+    minHeight: 48,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
     paddingRight: 4,
   },
+  labelAreaActive: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingRight: 8,
+  },
   modeName: {
-    fontSize: 11,
+    flexShrink: 1,
+    flexGrow: 1,
+    fontSize: 14,
     fontWeight: '700',
     color: '#495057',
-    letterSpacing: 0.4,
+    letterSpacing: 0.3,
   },
   modeNameSelected: {
     color: '#EC1C24',
   },
   modeNameActive: {
     color: '#B8161E',
-    fontSize: 12,
+    fontSize: 14,
   },
   swipeArea: {
     flex: 1,
@@ -102,7 +122,7 @@ const styles = StyleSheet.create({
   },
   activeBadgeText: {
     color: '#FFFFFF',
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '800',
     letterSpacing: 0.8,
   },

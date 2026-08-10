@@ -1,7 +1,5 @@
 import { useCallback, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, Platform, TouchableOpacity } from 'react-native';
-import { useEventListener } from 'expo';
-import { useVideoPlayer, VideoView } from 'expo-video';
+import { View, Text, StyleSheet, Image, TouchableOpacity } from 'react-native';
 import * as SplashScreen from 'expo-splash-screen';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -10,13 +8,15 @@ interface SplashVideoScreenProps {
   onFinished: () => void;
 }
 
-const SPLASH_VIDEO = require('@/assets/splash.mp4');
+/** GIF compatible con tablets Akuvox (el MP4/H.264 a menudo no se reproduce). */
+const SPLASH_GIF = require('@/assets/splash.gif');
 
-/** Tiempo máximo por si el vídeo no dispara fin o falla al cargar. */
-const MAX_SPLASH_MS = 90_000;
+const MAX_SPLASH_MS = 8_000;
+const MIN_SPLASH_MS = 2_200;
 
 export default function SplashVideoScreen({ onFinished }: SplashVideoScreenProps) {
   const finishedRef = useRef(false);
+  const startedAt = useRef(Date.now());
 
   const finish = useCallback(() => {
     if (finishedRef.current) return;
@@ -25,48 +25,26 @@ export default function SplashVideoScreen({ onFinished }: SplashVideoScreenProps
     onFinished();
   }, [onFinished]);
 
-  const player = useVideoPlayer(SPLASH_VIDEO, (p) => {
-    p.loop = false;
-    p.muted = true;
-    p.play();
-  });
-
-  useEventListener(player, 'playToEnd', () => {
-    finish();
-  });
-
-  useEventListener(player, 'statusChange', ({ status, error }) => {
-    if (status === 'error') {
-      console.warn('Splash video error:', error);
-      finish();
-    }
-    if (status === 'readyToPlay') {
-      SplashScreen.hideAsync().catch(() => {});
-      if (Platform.OS === 'web' && !player.playing) {
-        player.muted = true;
-        player.play();
-      }
-    }
-  });
-
   useEffect(() => {
-    const timer = setTimeout(finish, MAX_SPLASH_MS);
-    return () => clearTimeout(timer);
+    SplashScreen.hideAsync().catch(() => {});
+    const maxTimer = setTimeout(finish, MAX_SPLASH_MS);
+    return () => clearTimeout(maxTimer);
   }, [finish]);
 
-  useEffect(() => {
-    player.muted = true;
-    player.play();
-  }, [player]);
+  const handleLoadEnd = () => {
+    const elapsed = Date.now() - startedAt.current;
+    const wait = Math.max(0, MIN_SPLASH_MS - elapsed);
+    setTimeout(finish, wait + 3_500);
+  };
 
   return (
     <View style={styles.container}>
-      <VideoView
-        style={styles.video}
-        player={player}
-        contentFit="cover"
-        nativeControls={false}
-        allowsFullscreen={false}
+      <Image
+        source={SPLASH_GIF}
+        style={styles.media}
+        resizeMode="cover"
+        onLoadEnd={handleLoadEnd}
+        onError={() => finish()}
       />
       <View style={styles.skipBar} pointerEvents="box-none">
         <TouchableOpacity
@@ -74,7 +52,7 @@ export default function SplashVideoScreen({ onFinished }: SplashVideoScreenProps
           onPress={finish}
           activeOpacity={0.85}
           accessibilityRole="button"
-          accessibilityLabel="Saltar vídeo introductorio"
+          accessibilityLabel="Saltar introducción"
         >
           <Text style={styles.skipButtonText}>SALTAR</Text>
         </TouchableOpacity>
@@ -90,18 +68,16 @@ const styles = StyleSheet.create({
     height: '100%',
     backgroundColor: '#000000',
   },
-  video: {
+  media: {
     width: '100%',
     height: '100%',
   },
   skipBar: {
     position: 'absolute',
-    // left: 0,
     right: 20,
     bottom: 18,
     alignItems: 'center',
     justifyContent: 'center',
-
   },
   skipButton: {
     backgroundColor: '#FFFFFF',
@@ -109,12 +85,12 @@ const styles = StyleSheet.create({
     borderColor: '#495057',
     borderRadius: 8,
     paddingHorizontal: 18,
-    paddingVertical: 8,
-    minWidth: 96,
+    paddingVertical: 10,
+    minWidth: 110,
     alignItems: 'center',
   },
   skipButtonText: {
-    fontSize: 12,
+    fontSize: 14,
     fontWeight: '700',
     color: '#495057',
     letterSpacing: 1,

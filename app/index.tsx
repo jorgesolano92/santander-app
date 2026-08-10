@@ -34,10 +34,20 @@ import {
 } from '@/services/tabletCallService';
 import { CoceMessageToast } from '@/components/CoceMessageToast';
 import { CoceMessagesModal } from '@/components/CoceMessagesModal';
+import DoorVideoStream from '@/components/DoorVideoStream';
 import { coceMessageService, type CoceMessage } from '@/services/CoceMessageService';
+import { wakeTablet } from '@/services/tabletWake';
 import { showOperationError, showOperationInfo } from '@/utils/showOperationError';
 import type { ConfigurationData } from '@/types/configurationData';
 import { getModeActiveDescription, formatModeDisplayName } from '@/config/modeTexts';
+import UnauthorizedDeviceScreen from '@/components/UnauthorizedDeviceScreen';
+import ModeIcon from '@/components/ModeIcon';
+import { getTabletAndroidId } from '@/services/DeviceIdentityService';
+import {
+  initializeTabletConfigOnBoot,
+  pullAndApplyPanelDefaults,
+} from '@/services/tabletPanelConfigService';
+import { cloneDefaultDoorAppConfig } from '@/config/defaultDoorAppConfig';
 // (Eliminar) import * as FileSystem from 'expo-file-system';
 
 // Function to format mode names for display
@@ -46,21 +56,22 @@ const formatModeForDisplay = (mode: string): string => {
     'comercial_automatico': 'COMERCIAL AUTOMÁTICO',
     'comercial_esclusa': 'COMERCIAL ESCLUSA',
     'horario_extendido': 'HORARIO EXTENDIDO',
-    'horario_manual': 'BLOQUEO OFICINA',
+    'horario_manual': 'BLOQUEO DE PUERTAS',
     'horario_autoservicio': 'HORARIO AUTOSERVICIO',
     'oficina_cerrada': 'OFICINA CERRADA',
     'carga_cajero': 'CARGA DE CAJERO',
     'emergencia': 'EMERGENCIA',
-    'manual': 'BLOQUEO OFICINA',
+    'manual': 'BLOQUEO DE PUERTAS',
     'COMERCIAL AUTOMATICO': 'COMERCIAL AUTOMÁTICO',
     'COMERCIAL ESCLUSA': 'COMERCIAL ESCLUSA',
     'HORARIO EXTENDIDO': 'HORARIO EXTENDIDO',
-    'HORARIO MANUAL': 'BLOQUEO OFICINA',
+    'HORARIO MANUAL': 'BLOQUEO DE PUERTAS',
     'HORARIO AUTOSERVICIO': 'HORARIO AUTOSERVICIO',
     'OFICINA CERRADA': 'OFICINA CERRADA',
     'CARGA DE CAJERO': 'CARGA DE CAJERO',
     'EMERGENCIA': 'EMERGENCIA',
-    'MANUAL': 'BLOQUEO OFICINA',
+    'MANUAL': 'BLOQUEO DE PUERTAS',
+    'BLOQUEO OFICINA': 'BLOQUEO DE PUERTAS',
   };
   
   return modeMap[mode] || mode;
@@ -140,6 +151,33 @@ export default function MainScreen() {
   const [coceMessages, setCoceMessages] = useState<CoceMessage[]>([]);
   const [coceToastMessage, setCoceToastMessage] = useState<CoceMessage | null>(null);
   const [coceUnreadCount, setCoceUnreadCount] = useState(0);
+  const [needsInitialSetup, setNeedsInitialSetup] = useState(false);
+  const [configBootReady, setConfigBootReady] = useState(false);
+  const [deviceAuthStatus, setDeviceAuthStatus] = useState<'loading' | 'authorized' | 'unauthorized'>(
+    'loading',
+  );
+  const [tabletAndroidId, setTabletAndroidId] = useState('');
+  const [deviceAuthReason, setDeviceAuthReason] = useState<string | null>(null);
+  const [deviceAuthChecking, setDeviceAuthChecking] = useState(false);
+
+  const runDeviceAuthorizationCheck = useCallback(async () => {
+    setDeviceAuthChecking(true);
+    setDeviceAuthStatus((prev) => (prev === 'authorized' ? prev : 'loading'));
+    try {
+      const id = await getTabletAndroidId();
+      setTabletAndroidId(id);
+      const result = await doorControlService.checkDeviceAuthorization();
+      setTabletAndroidId(result.androidId || id);
+      setDeviceAuthReason(result.reason || null);
+      setDeviceAuthStatus(result.authorized ? 'authorized' : 'unauthorized');
+    } catch (e) {
+      console.error('Error en autorización de tablet:', e);
+      setDeviceAuthReason('panel_unreachable');
+      setDeviceAuthStatus('unauthorized');
+    } finally {
+      setDeviceAuthChecking(false);
+    }
+  }, []);
 
   const applyPendingMode = useCallback(async (ruleKey: string | null) => {
     setPendingModeRuleKey(ruleKey);
@@ -166,20 +204,34 @@ export default function MainScreen() {
   //   console.log(`🔧 Modo ${isSandboxMode ? 'SANDBOX' : 'REAL'} activado`);
   // }, [isSandboxMode]);
 
-  // Cargar configuración del sistema al iniciar
+  // Cargar configuración del sistema al iniciar (fuerza pull del panel si hay IP)
   useEffect(() => {
     const loadSystemConfig = async () => {
       try {
-        const config = await initializeTabletConfigOnBoot();
-        setSystemConfig(config);
-        console.log('📋 Configuración del sistema cargada:', config);
+        const result = await initializeTabletConfigOnBoot();
+        setSystemConfig(result.config);
+        setNeedsInitialSetup(result.needsIpSetup);
+        console.log('📋 Configuración del sistema cargada:', result);
       } catch (error) {
         console.error('❌ Error cargando configuración del sistema:', error);
+        setNeedsInitialSetup(true);
+        setSystemConfig(cloneDefaultDoorAppConfig());
+      } finally {
+        setConfigBootReady(true);
       }
     };
 
     loadSystemConfig();
   }, []);
+
+  useEffect(() => {
+    if (!configBootReady) return;
+    if (needsInitialSetup) {
+      setShowNewConfigModal(true);
+      return;
+    }
+    void runDeviceAuthorizationCheck();
+  }, [configBootReady, needsInitialSetup, runDeviceAuthorizationCheck, systemConfig?.network?.consoleIP]);
 
   useEffect(() => {
     if (!systemConfig?.network?.consoleIP) return;
@@ -196,10 +248,12 @@ export default function MainScreen() {
       setCoceUnreadCount(coceMessageService.getUnreadCount());
     };
     const onToast = (message: CoceMessage) => {
+      wakeTablet();
       setCoceToastMessage(message);
       refreshCoceMessages();
     };
     const onCoceNotification = (payload: CoceNotificationPayload) => {
+      wakeTablet();
       void coceMessageService.ingestFromWs({
         id: payload.id,
         title: payload.title,
@@ -221,6 +275,7 @@ export default function MainScreen() {
 
   useEffect(() => {
     const onModeChanged = (payload: ModeChangedPayload) => {
+      wakeTablet();
       void doorControlService.syncModeFromPanelRuleKey(payload.currentMode);
       if (payload.currentMode && pendingModeRuleKey && payload.currentMode === pendingModeRuleKey) {
         void applyPendingMode(null);
@@ -353,19 +408,13 @@ export default function MainScreen() {
     setEmergencyFlashColor('#F8F9FA');
   }, [isFireActive, isEmergencyActive]);
 
-  // Validar dispositivo al iniciar
+  // Autorización se dispara tras boot (efecto de configBootReady)
+
   useEffect(() => {
-    const checkDevice = async () => {
-      const isValid = await validateDevice();
-      if (!isValid) {
-        console.error('🚫 Dispositivo no autorizado');
-        // En producción, aquí mostrarías un error y cerrarías la app
-      } else {
-        console.log('✅ Dispositivo autorizado - Modo Sandbox Activo');
-      }
-    };
-    checkDevice();
-  }, [validateDevice]);
+    if (deviceAuthStatus === 'authorized') {
+      void validateDevice();
+    }
+  }, [deviceAuthStatus, validateDevice]);
 
   // Función para alternar modo sandbox - DESHABILITADA
   // const handleToggleSandboxMode = (newMode: boolean) => {
@@ -373,30 +422,58 @@ export default function MainScreen() {
   // };
 
   const handleConfigSave = async (config: any) => {
-    console.log('💾 Configuración guardada (Sandbox):', config);
+    console.log('💾 Configuración guardada:', config);
     
-    // Configurar el servicio con los datos de la nueva configuración
+    const androidId = tabletAndroidId || (await getTabletAndroidId());
     const configData = {
       serverIP: config.network?.consoleIP || '',
-      apiPort: config.api?.port || 443,
+      apiPort: config.api?.port || 8000,
       apiUsername: config.api?.username || 'inviasistemas',
-      apiPassword: config.api?.password || 'zASB66vDm6y7u6T4pIoN',
-      username: 'admin', // Usuario de la app
+      apiPassword: config.api?.password || '12345678',
+      username: 'admin',
       updateServerURL: 'http://192.168.1.200/updates',
-      deviceId: 'device_id_placeholder',
+      deviceId: androidId,
     };
     
-    const success = await configure(configData);
-    if (success) {
-      console.log('✅ Configuración aplicada correctamente (Sandbox)');
+    await configure(configData);
+
+    // Solo en configuración inicial: descargar defaults del panel una vez.
+    // En guardados normales NO pisar lo que el usuario acaba de guardar.
+    if (needsInitialSetup) {
+      try {
+        const pulled = await pullAndApplyPanelDefaults(config);
+        if (pulled) {
+          const merged = {
+            ...pulled,
+            network: { ...pulled.network, ...config.network },
+            api: { ...pulled.api, ...config.api },
+          };
+          await AsyncStorage.setItem('new_door_config', JSON.stringify(merged));
+          setSystemConfig(merged);
+          setNeedsInitialSetup(false);
+          setShowNewConfigModal(false);
+          console.log('✅ Configuración inicial descargada del panel');
+        } else {
+          setSystemConfig(config);
+          if (String(config?.network?.consoleIP || '').trim()) {
+            setNeedsInitialSetup(false);
+            setShowNewConfigModal(false);
+          }
+          showOperationInfo(
+            'Configuración local',
+            'No se pudo descargar del panel; comprueba IP y red.',
+          );
+        }
+      } catch (e) {
+        console.error(e);
+        setSystemConfig(config);
+      }
     } else {
-      console.error('❌ Error aplicando configuración');
+      setSystemConfig(config);
+      setShowNewConfigModal(false);
     }
-    
-    // Recargar la configuración del sistema después de guardar
-    await reloadSystemConfig();
-    
-    // Migración SDK: sin modo proxy/directo legado.
+
+    void runDeviceAuthorizationCheck();
   };
 
   const handleLoginSuccess = () => {
@@ -619,7 +696,7 @@ export default function MainScreen() {
       borderColor: 'rgba(255, 255, 255, 0.2)',
     },
     dateTimeText: {
-      fontSize: isSmallTablet ? 12 : isLargeTablet ? 16 : 14,
+      fontSize: isSmallTablet ? 14 : isLargeTablet ? 18 : 16,
       fontWeight: '600',
       color: '#FFFFFF',
       fontFamily: 'monospace',
@@ -637,7 +714,7 @@ export default function MainScreen() {
       gap: 6,
     },
     notificationsButtonText: {
-      fontSize: isSmallTablet ? 14 : isLargeTablet ? 18 : 16,
+      fontSize: isSmallTablet ? 15 : isLargeTablet ? 18 : 16,
       fontWeight: '600',
       color: '#FFFFFF',
       letterSpacing: 0.5,
@@ -798,12 +875,12 @@ export default function MainScreen() {
     },
     logoSection: {
       alignItems: 'center',
-      marginBottom: isSmallTablet ? 20 : isLargeTablet ? 32 : 24,
-      marginTop: 8,
+      marginBottom: isSmallTablet ? 12 : isLargeTablet ? 18 : 14,
+      marginTop: 4,
     },
     santanderLogo: {
-      width: isSmallTablet ? 280 : isLargeTablet ? 400 : 340,
-      height: isSmallTablet ? 90 : isLargeTablet ? 130 : 110,
+      width: isSmallTablet ? 180 : isLargeTablet ? 260 : 220,
+      height: isSmallTablet ? 58 : isLargeTablet ? 84 : 70,
     },
     operationSection: {
       flex: 1,
@@ -831,16 +908,20 @@ export default function MainScreen() {
     modeContent: {
       flex: 1,
     },
+    modeTitleRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+      marginBottom: isSmallTablet ? 10 : isLargeTablet ? 14 : 12,
+    },
     modeTitle: {
-      fontSize: isSmallTablet ? 18 : isLargeTablet ? 24 : 21,
+      flex: 1,
+      fontSize: isSmallTablet ? 22 : isLargeTablet ? 28 : 24,
       fontWeight: '700',
       color: '#212529',
-      marginBottom: isSmallTablet ? 8 : isLargeTablet ? 12 : 10,
       letterSpacing: 0.3,
-      textTransform: 'uppercase',
     },
     modeTitleValue: {
-      textTransform: 'none',
       fontWeight: '600',
     },
     pendingModeBanner: {
@@ -852,22 +933,22 @@ export default function MainScreen() {
       marginBottom: isSmallTablet ? 8 : 10,
     },
     pendingModeBannerTitle: {
-      fontSize: 11,
+      fontSize: 13,
       fontWeight: '800',
       color: '#C2410C',
       letterSpacing: 1,
       marginBottom: 4,
     },
     pendingModeBannerText: {
-      fontSize: isSmallTablet ? 12 : 13,
+      fontSize: isSmallTablet ? 14 : 15,
       color: '#9A3412',
-      lineHeight: 18,
+      lineHeight: 20,
       fontWeight: '600',
     },
     modeDescription: {
-      fontSize: isSmallTablet ? 13 : isLargeTablet ? 16 : 14,
+      fontSize: isSmallTablet ? 15 : isLargeTablet ? 18 : 16,
       color: '#6C757D',
-      lineHeight: isSmallTablet ? 18 : isLargeTablet ? 24 : 20,
+      lineHeight: isSmallTablet ? 22 : isLargeTablet ? 28 : 24,
       fontWeight: '400',
     },
     changeModeButton: {
@@ -885,7 +966,7 @@ export default function MainScreen() {
       elevation: 1,
     },
     changeModeButtonText: {
-      fontSize: isSmallTablet ? 13 : isLargeTablet ? 16 : 14,
+      fontSize: isSmallTablet ? 15 : isLargeTablet ? 17 : 16,
       fontWeight: '600',
       color: '#495057',
       letterSpacing: 0.5,
@@ -1009,8 +1090,8 @@ export default function MainScreen() {
       flexDirection: 'row',
       gap: isSmallTablet ? 12 : isLargeTablet ? 24 : 18,
       paddingHorizontal: isSmallTablet ? 16 : isLargeTablet ? 32 : 24,
-      paddingTop: isSmallTablet ? 12 : isLargeTablet ? 16 : 14,
-      paddingBottom: isSmallTablet ? 14 : isLargeTablet ? 24 : 18,
+      paddingTop: 8,
+      paddingBottom: Platform.OS === 'web' ? 4 : 6,
       backgroundColor: '#F8F9FA',
       borderTopWidth: 1,
       borderTopColor: '#DEE2E6',
@@ -1092,17 +1173,41 @@ export default function MainScreen() {
       flex: 1,
     },
     cargaCajeroTitle: {
-      fontSize: 18,
+      flex: 1,
+      fontSize: isSmallTablet ? 20 : 24,
       fontWeight: '700',
       color: '#4A5D23',
-      marginBottom: 8,
       letterSpacing: 0.3,
     },
     cargaCajeroDescription: {
-      fontSize: 13,
+      fontSize: isSmallTablet ? 15 : 16,
       color: '#5D6B2F',
-      lineHeight: 18,
+      lineHeight: 22,
       fontWeight: '400',
+    },
+    cargaCajeroVideoWrap: {
+      marginTop: 10,
+      width: '100%',
+      borderRadius: 8,
+      overflow: 'hidden',
+      backgroundColor: '#000',
+    },
+    cargaCajeroVideoOutside: {
+      marginTop: 16,
+      width: '100%',
+      borderRadius: 12,
+      overflow: 'hidden',
+      backgroundColor: '#000',
+      borderWidth: 1,
+      borderColor: '#E9ECEF',
+    },
+    cargaCajeroVideoLabel: {
+      fontSize: 12,
+      fontWeight: '700',
+      color: '#FFFFFF',
+      backgroundColor: '#212529',
+      paddingHorizontal: 10,
+      paddingVertical: 6,
     },
     changeModeButtonCarga: {
       backgroundColor: '#F5F5DC',
@@ -1294,8 +1399,86 @@ export default function MainScreen() {
       color: '#495057',
       letterSpacing: 0.5,
     },
+    deviceIdFooter: {
+      paddingVertical: 6,
+      paddingHorizontal: 12,
+      alignItems: 'center',
+      backgroundColor: 'rgba(0,0,0,0.04)',
+      borderTopWidth: 1,
+      borderTopColor: '#DEE2E6',
+    },
+    deviceIdFooterText: {
+      fontSize: 11,
+      color: '#6C757D',
+      fontFamily: 'monospace',
+    },
   });
 
+  if (!configBootReady || needsInitialSetup) {
+    return (
+      <View style={{ flex: 1, backgroundColor: '#F8F9FA' }}>
+        {!needsInitialSetup ? (
+          <View style={{ flex: 1, justifyContent: 'center', justifyContent: 'center', alignItems: 'center' }}>
+            <Text style={{ color: '#495057', fontSize: 16 }}>Cargando configuración…</Text>
+          </View>
+        ) : (
+          <View style={{ flex: 1, justifyContent: 'center', justifyContent: 'center', alignItems: 'center', padding: 24 }}>
+            <Text style={{ color: '#212529', fontSize: 20, fontWeight: '700', marginBottom: 8 }}>
+              Configuración inicial
+            </Text>
+            <Text style={{ color: '#6C757D', fontSize: 15, textAlign: 'center' }}>
+              Indica la IP del panel para descargar la configuración de la sucursal.
+            </Text>
+          </View>
+        )}
+        <NewConfigurationModal
+          visible={needsInitialSetup}
+          onClose={() => {}}
+          onSave={handleConfigSave}
+          initialSandboxMode={false}
+          onToggleSandboxMode={() => {}}
+          requireNetworkSetup
+        />
+      </View>
+    );
+  }
+
+  if (deviceAuthStatus === 'loading') {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', justifyContent: 'center', alignItems: 'center', backgroundColor: '#1f2937' }}>
+        <Text style={{ color: '#E5E7EB', marginBottom: 12, fontSize: 16 }}>Verificando autorización…</Text>
+        {tabletAndroidId ? (
+          <Text style={{ color: '#9CA3AF', fontFamily: 'monospace', fontSize: 13 }}>ID: {tabletAndroidId}</Text>
+        ) : null}
+      </View>
+    );
+  }
+
+  if (deviceAuthStatus === 'unauthorized') {
+    return (
+      <View style={{ flex: 1 }}>
+        <UnauthorizedDeviceScreen
+          androidId={tabletAndroidId}
+          reason={deviceAuthReason}
+          checking={deviceAuthChecking}
+          onRetry={() => void runDeviceAuthorizationCheck()}
+          onOpenConfig={() => setShowLoginModal(true)}
+        />
+        <LoginModal
+          visible={showLoginModal}
+          onClose={() => setShowLoginModal(false)}
+          onSuccess={handleLoginSuccess}
+        />
+        <NewConfigurationModal
+          visible={showNewConfigModal}
+          onClose={() => setShowNewConfigModal(false)}
+          onSave={handleConfigSave}
+          initialSandboxMode={false}
+          onToggleSandboxMode={() => {}}
+        />
+      </View>
+    );
+  }
 
   return (
     <View style={[styles.container, { backgroundColor: emergencyFlashColor }]}>
@@ -1452,7 +1635,12 @@ export default function MainScreen() {
 
           <View style={styles.cargaCajeroCard}>
             <View style={styles.cargaCajeroContent}>
-              <Text style={styles.cargaCajeroTitle}>CARGA CAJERO</Text>
+              <View style={styles.modeTitleRow}>
+                <ModeIcon mode={currentMode} size={32} color="#212529" />
+                <Text style={styles.cargaCajeroTitle}>
+                  {formatModeDisplayName(currentMode)}
+                </Text>
+              </View>
               {pendingModeLabel ? (
                 <View style={styles.pendingModeBanner}>
                   <Text style={styles.pendingModeBannerTitle}>EN COLA</Text>
@@ -1472,6 +1660,25 @@ export default function MainScreen() {
               <Text style={styles.changeModeButtonTextCarga}>CAMBIAR MODO</Text>
             </TouchableOpacity>
           </View>
+
+          {(() => {
+            const doorId = systemConfig?.cargaCajero?.videoporteroDoorId || 'P2';
+            const doorIndex = Math.max(0, Number(String(doorId).replace(/\D/g, '')) - 1);
+            const door = systemConfig?.doors?.[doorIndex];
+            if (!door?.enabled || !door.intercom?.cameraIP) return null;
+            return (
+              <View style={styles.cargaCajeroVideoOutside}>
+                <DoorVideoStream
+                  intercomConfig={door.intercom}
+                  doorName={door.name || doorId}
+                  forceMuted
+                  autoStartInline
+                  hideControls
+                  inlineHeight={isSmallTablet ? 280 : isLargeTablet ? 380 : 340}
+                />
+              </View>
+            );
+          })()}
         </View>
       ) : (
         /* Vista normal para todos los modos excepto emergencia y carga cajero */
@@ -1487,12 +1694,12 @@ export default function MainScreen() {
           <View style={styles.operationSection}>
             <View style={styles.modeCard}>
               <View style={styles.modeContent}>
-                <Text style={styles.modeTitle}>
-                  MODO DE OPERACIÓN ACTUAL:{' '}
-                  <Text style={styles.modeTitleValue}>
+                <View style={styles.modeTitleRow}>
+                  <ModeIcon mode={currentMode} size={34} color="#EC1C24" />
+                  <Text style={styles.modeTitle}>
                     {formatModeDisplayName(currentMode)}
                   </Text>
-                </Text>
+                </View>
                 {pendingModeLabel ? (
                   <View style={styles.pendingModeBanner}>
                     <Text style={styles.pendingModeBannerTitle}>EN COLA</Text>
@@ -1518,6 +1725,11 @@ export default function MainScreen() {
       </ScrollView>
 
       {!isEmergencyActive && !isFireActive && renderBottomActions()}
+      <View style={styles.deviceIdFooter}>
+        <Text style={styles.deviceIdFooterText} selectable>
+          ID: {tabletAndroidId || '—'}
+        </Text>
+      </View>
       </View>
 
       <LoginModal

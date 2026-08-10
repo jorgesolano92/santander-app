@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" role="img" aria-label="Oficina cerrada">
+  <rect x="13" y="21" width="22" height="18" rx="2"/>
+  <path d="M17 21 L17 15 A7 7 0 0 1 31 15 L31 21"/>
+  <circle cx="24" cy="29" r="2"/>
+  <line x1="24" y1="31" x2="24" y2="34"/>
+</svg>

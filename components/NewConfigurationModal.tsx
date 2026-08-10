@@ -1,6 +1,6 @@
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, Modal, ScrollView, Switch, Platform } from 'react-native';
 import { useState, useEffect, useRef } from 'react';
-import { Save, X, RefreshCw, Settings } from 'lucide-react-native';
+import { Save, X, RefreshCw, Settings, Clock } from 'lucide-react-native';
 import { useWindowDimensions } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { doorControlService, ApiResponse } from '@/services/DoorControlService';
@@ -8,12 +8,14 @@ import ApiResponseDisplayModal from './ApiResponseDisplayModal';
 import IntercomConfigurationModal, { IntercomConfig } from './IntercomConfigurationModal';
 import ActionSelector from './ActionSelector';
 import ConfirmDialogModal from './ConfirmDialogModal';
+import TabletSchedulesPanel from './TabletSchedulesPanel';
 import { emergencyService } from '@/services/EmergencyService';
 import { fireService } from '@/services/FireService';
 import {
   markLocalConfigOverrides,
   restorePanelDefaultsOnDevice,
 } from '@/services/tabletPanelConfigService';
+import { configCredentialsService } from '@/services/ConfigCredentialsService';
 import { cloneDefaultDoorAppConfig } from '@/config/defaultDoorAppConfig';
 import { INTERCOM_BRIDGE_ONLY } from '@/config/intercomFeatures';
 import { showOperationError, showOperationInfo } from '@/utils/showOperationError';
@@ -29,6 +31,8 @@ interface NewConfigurationModalProps {
   onSave: (config: ConfigurationData) => void;
   initialSandboxMode: boolean;
   onToggleSandboxMode: (isSandbox: boolean) => void;
+  /** Obliga a indicar IP de consola; no se puede cerrar sin guardar. */
+  requireNetworkSetup?: boolean;
 }
 
 export default function NewConfigurationModal({ 
@@ -36,7 +40,8 @@ export default function NewConfigurationModal({
   onClose, 
   onSave, 
   initialSandboxMode, 
-  onToggleSandboxMode 
+  onToggleSandboxMode,
+  requireNetworkSetup = false,
 }: NewConfigurationModalProps) {
   const { width = 0 } = useWindowDimensions();
   const isSmallTablet = width < 900;
@@ -51,11 +56,22 @@ export default function NewConfigurationModal({
   const [selectedDoorIndex, setSelectedDoorIndex] = useState<number>(0);
   const [confirmAction, setConfirmAction] = useState<ConfigConfirmAction | null>(null);
   const [confirmBusy, setConfirmBusy] = useState(false);
+  const [loginOrdinal, setLoginOrdinal] = useState('admin');
+  const [loginPassword, setLoginPassword] = useState('');
+  const [loginPasswordConfirm, setLoginPasswordConfirm] = useState('');
+  const [loginCredsMsg, setLoginCredsMsg] = useState<string | null>(null);
+  const [showSchedulesModal, setShowSchedulesModal] = useState(false);
   const defaultConfigRef = useRef<ConfigurationData>(cloneDefaultDoorAppConfig());
 
   useEffect(() => {
     if (visible) {
       loadSavedConfiguration();
+      void configCredentialsService.get().then((c) => {
+        setLoginOrdinal(c.ordinal);
+        setLoginPassword('');
+        setLoginPasswordConfirm('');
+        setLoginCredsMsg(null);
+      });
     }
   }, [visible]);
 
@@ -270,6 +286,12 @@ export default function NewConfigurationModal({
 
   const handleSave = async () => {
     try {
+      const ip = String(config.network?.consoleIP || '').trim();
+      if (!ip) {
+        showOperationError('IP de consola', 'Debes indicar la IP del panel para continuar.');
+        return;
+      }
+
       await saveConfiguration(config);
       await markLocalConfigOverrides();
       
@@ -490,6 +512,72 @@ export default function NewConfigurationModal({
     headerIconButton: {
       padding: 8,
     },
+    headerSchedulesButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      backgroundColor: 'rgba(255, 255, 255, 0.15)',
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      borderRadius: 8,
+      marginRight: 4,
+    },
+    headerSchedulesButtonText: {
+      color: '#FFFFFF',
+      fontSize: isSmallTablet ? 12 : 14,
+      fontWeight: '700',
+      letterSpacing: 0.4,
+    },
+    headerSaveButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      backgroundColor: 'rgba(255, 255, 255, 0.18)',
+      paddingHorizontal: 14,
+      paddingVertical: 10,
+      borderRadius: 8,
+      marginRight: 4,
+    },
+    headerSaveButtonText: {
+      color: '#FFFFFF',
+      fontSize: isSmallTablet ? 13 : 15,
+      fontWeight: '700',
+    },
+    initialSetupBanner: {
+      backgroundColor: '#FFF7ED',
+      borderBottomWidth: 1,
+      borderBottomColor: '#FDBA74',
+      paddingHorizontal: 16,
+      paddingVertical: 12,
+    },
+    initialSetupBannerText: {
+      color: '#9A3412',
+      fontSize: 14,
+      lineHeight: 20,
+      fontWeight: '600',
+    },
+    schedulesModalRoot: {
+      flex: 1,
+      backgroundColor: '#F8F9FA',
+    },
+    schedulesModalHeader: {
+      backgroundColor: '#495057',
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      paddingHorizontal: isSmallTablet ? 16 : 24,
+      paddingVertical: isSmallTablet ? 12 : 16,
+    },
+    schedulesModalTitle: {
+      fontSize: isSmallTablet ? 14 : 18,
+      fontWeight: '600',
+      color: '#FFFFFF',
+      letterSpacing: 0.5,
+    },
+    schedulesModalBody: {
+      flex: 1,
+      padding: isSmallTablet ? 12 : 20,
+    },
     sandboxModeContainer: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -532,7 +620,7 @@ export default function NewConfigurationModal({
     doorCard: {
       backgroundColor: '#FFFFFF',
       borderRadius: 8,
-      padding: isSmallTablet ? 12 : isLargeTablet ? 20 : 16,
+      padding: isSmallTablet ? 10 : isLargeTablet ? 12 : 10,
       flex: 1,
       minWidth: isSmallTablet ? 200 : isLargeTablet ? 280 : 240,
       maxWidth: isSmallTablet ? '48%' : isLargeTablet ? '45%' : '46%',
@@ -548,7 +636,7 @@ export default function NewConfigurationModal({
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      marginBottom: isSmallTablet ? 8 : isLargeTablet ? 12 : 10,
+      marginBottom: 6,
     },
     doorNameInput: {
       flex: 1,
@@ -940,7 +1028,7 @@ export default function NewConfigurationModal({
       paddingHorizontal: isSmallTablet ? 8 : isLargeTablet ? 12 : 10,
       paddingVertical: isSmallTablet ? 6 : isLargeTablet ? 10 : 8,
       borderRadius: 6,
-      marginTop: isSmallTablet ? 6 : isLargeTablet ? 10 : 8,
+      marginTop: 6,
       shadowColor: '#17A2B8',
       shadowOffset: { width: 0, height: 2 },
       shadowOpacity: 0.2,
@@ -962,12 +1050,14 @@ export default function NewConfigurationModal({
       animationType="slide"
       transparent={false}
       statusBarTranslucent
-      onRequestClose={onClose}
+      onRequestClose={requireNetworkSetup ? () => {} : onClose}
     >
       <View style={styles.container}>
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.headerTitle}>CONFIGURACIÓN DEL SISTEMA</Text>
+          <Text style={styles.headerTitle}>
+            {requireNetworkSetup ? 'CONFIGURACIÓN INICIAL' : 'CONFIGURACIÓN DEL SISTEMA'}
+          </Text>
           
           {/* Toggle de sandbox deshabilitado */}
           {/* <View style={styles.sandboxModeContainer}>
@@ -982,14 +1072,35 @@ export default function NewConfigurationModal({
           </View> */}
           
           <View style={styles.headerActions}>
-            <TouchableOpacity style={styles.headerIconButton} onPress={handleSave}>
-              <Save size={22} color="#FFFFFF" />
+            {!requireNetworkSetup ? (
+              <TouchableOpacity
+                style={styles.headerSchedulesButton}
+                onPress={() => setShowSchedulesModal(true)}
+              >
+                <Clock size={16} color="#FFFFFF" />
+                <Text style={styles.headerSchedulesButtonText}>HORARIOS</Text>
+              </TouchableOpacity>
+            ) : null}
+            <TouchableOpacity style={styles.headerSaveButton} onPress={handleSave}>
+              <Save size={18} color="#FFFFFF" />
+              <Text style={styles.headerSaveButtonText}>Guardar configuración</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.headerIconButton} onPress={onClose}>
-              <X size={24} color="#FFFFFF" />
-            </TouchableOpacity>
+            {!requireNetworkSetup ? (
+              <TouchableOpacity style={styles.headerIconButton} onPress={onClose}>
+                <X size={24} color="#FFFFFF" />
+              </TouchableOpacity>
+            ) : null}
           </View>
         </View>
+
+        {requireNetworkSetup ? (
+          <View style={styles.initialSetupBanner}>
+            <Text style={styles.initialSetupBannerText}>
+              Introduce la IP del panel para descargar la configuración de la sucursal. Sin IP no se
+              puede continuar.
+            </Text>
+          </View>
+        ) : null}
 
         <ScrollView style={styles.scrollView} contentContainerStyle={styles.content}>
           {/* Configuración de Puertas */}
@@ -1039,6 +1150,74 @@ export default function NewConfigurationModal({
                   )}
                 </View>
               ))}
+            </View>
+          </View>
+
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>ACCESO A CONFIGURACIÓN (LOCAL)</Text>
+            <View style={styles.officeCard}>
+              <Text style={[styles.officeLabel, { marginBottom: 10 }]}>
+                Cambiar ordinal y contraseña en esta tablet (como un router). También se pueden
+                resetear desde el PC industrial.
+              </Text>
+              <View style={styles.networkRow}>
+                <Text style={styles.networkLabel}>Ordinal:</Text>
+                <TextInput
+                  style={styles.networkInput}
+                  value={loginOrdinal}
+                  onChangeText={setLoginOrdinal}
+                  autoCapitalize="none"
+                />
+              </View>
+              <View style={styles.networkRow}>
+                <Text style={styles.networkLabel}>Nueva contraseña:</Text>
+                <TextInput
+                  style={styles.networkInput}
+                  value={loginPassword}
+                  onChangeText={setLoginPassword}
+                  secureTextEntry
+                  autoCapitalize="none"
+                />
+              </View>
+              <View style={styles.networkRow}>
+                <Text style={styles.networkLabel}>Confirmar:</Text>
+                <TextInput
+                  style={styles.networkInput}
+                  value={loginPasswordConfirm}
+                  onChangeText={setLoginPasswordConfirm}
+                  secureTextEntry
+                  autoCapitalize="none"
+                />
+              </View>
+              {loginCredsMsg ? (
+                <Text style={{ marginTop: 8, color: '#15803d', fontWeight: '600' }}>{loginCredsMsg}</Text>
+              ) : null}
+              <TouchableOpacity
+                style={[styles.intercomConfigButton, { marginTop: 12 }]}
+                onPress={() => {
+                  void (async () => {
+                    if (!loginOrdinal.trim()) {
+                      setLoginCredsMsg('El ordinal no puede estar vacío');
+                      return;
+                    }
+                    if (!loginPassword) {
+                      setLoginCredsMsg('Introduce la nueva contraseña');
+                      return;
+                    }
+                    if (loginPassword !== loginPasswordConfirm) {
+                      setLoginCredsMsg('Las contraseñas no coinciden');
+                      return;
+                    }
+                    await configCredentialsService.changeLocal(loginOrdinal, loginPassword);
+                    setLoginPassword('');
+                    setLoginPasswordConfirm('');
+                    setLoginCredsMsg('Credenciales locales actualizadas');
+                    showOperationInfo('Credenciales de configuración guardadas en la tablet');
+                  })();
+                }}
+              >
+                <Text style={styles.intercomConfigButtonText}>GUARDAR CREDENCIALES LOCALES</Text>
+              </TouchableOpacity>
             </View>
           </View>
 
@@ -1181,6 +1360,67 @@ export default function NewConfigurationModal({
             </View>
           </View>
 
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>VISUALIZACIÓN Y CARGA CAJERO</Text>
+            <View style={styles.officeCard}>
+              <View style={styles.officeRow}>
+                <Text style={styles.officeLabel}>Arrancar cámaras RTSP al abrir Visualización (sin audio)</Text>
+                <Switch
+                  value={config.visualization?.autoStartCameras !== false}
+                  onValueChange={(value) =>
+                    setConfig((prev) => ({
+                      ...prev,
+                      visualization: {
+                        autoStartCameras: value,
+                      },
+                    }))
+                  }
+                  trackColor={{ false: '#CED4DA', true: '#28A745' }}
+                  thumbColor="#FFFFFF"
+                />
+              </View>
+              <View style={[styles.officeRow, { marginTop: 12 }]}>
+                <Text style={styles.officeLabel}>Videoportero en Carga Cajero</Text>
+                <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                  {config.doors
+                    .map((door, index) => ({
+                      door,
+                      doorId: `P${index + 1}` as const,
+                    }))
+                    .filter(
+                      ({ door }) =>
+                        door.enabled && !!(door.intercom?.cameraIP || '').trim(),
+                    )
+                    .map(({ door, doorId }) => {
+                      const selected =
+                        (config.cargaCajero?.videoporteroDoorId || 'P2') === doorId;
+                      return (
+                        <TouchableOpacity
+                          key={doorId}
+                          onPress={() =>
+                            setConfig((prev) => ({
+                              ...prev,
+                              cargaCajero: { videoporteroDoorId: doorId },
+                            }))
+                          }
+                          style={{
+                            paddingHorizontal: 12,
+                            paddingVertical: 8,
+                            borderRadius: 8,
+                            backgroundColor: selected ? '#28A745' : '#E9ECEF',
+                          }}
+                        >
+                          <Text style={{ color: selected ? '#FFF' : '#495057', fontWeight: '700' }}>
+                            {door.name || doorId}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                </View>
+              </View>
+            </View>
+          </View>
+
           {/* SECCIÓN DE CONFIGURACIÓN DE MODOS */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>CONFIGURACIÓN DE MODOS DE OPERACIÓN</Text>
@@ -1197,7 +1437,7 @@ export default function NewConfigurationModal({
                   autoservicio: 'AUTOSERVICIO',
                   oficinaCerrada: 'OFICINA CERRADA',
                   cargaCajero: 'CARGA DE CAJERO',
-                  manual: 'BLOQUEO OFICINA',
+                  manual: 'BLOQUEO DE PUERTAS',
                   incendio: 'SEÑAL DE INCENDIO',
                 }).map(([key, label], idx, arr) => (
                   <View
@@ -1450,6 +1690,28 @@ export default function NewConfigurationModal({
           doorName={config.doors[selectedDoorIndex]?.name || ''}
           initialConfig={config.doors[selectedDoorIndex]?.intercom}
         />
+
+        <Modal
+          visible={showSchedulesModal}
+          animationType="slide"
+          transparent={false}
+          onRequestClose={() => setShowSchedulesModal(false)}
+        >
+          <View style={styles.schedulesModalRoot}>
+            <View style={styles.schedulesModalHeader}>
+              <Text style={styles.schedulesModalTitle}>HORARIOS SEMANALES</Text>
+              <TouchableOpacity
+                style={styles.headerIconButton}
+                onPress={() => setShowSchedulesModal(false)}
+              >
+                <X size={24} color="#FFFFFF" />
+              </TouchableOpacity>
+            </View>
+            <ScrollView style={styles.schedulesModalBody} contentContainerStyle={{ paddingBottom: 24 }}>
+              <TabletSchedulesPanel />
+            </ScrollView>
+          </View>
+        </Modal>
       </View>
     </Modal>
   );

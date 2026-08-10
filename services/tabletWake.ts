@@ -5,7 +5,7 @@ type TabletWakeNative = {
 };
 
 /** Enciende pantalla y muestra la app sobre salvapantallas/bloqueo (Android). */
-export function wakeTabletForIncomingCall(): void {
+export function wakeTablet(): void {
   if (Platform.OS !== 'android') return;
   try {
     const mod = NativeModules.TabletWake as TabletWakeNative | undefined;
@@ -13,4 +13,9 @@ export function wakeTabletForIncomingCall(): void {
   } catch (error) {
     console.warn('[TabletWake] No se pudo despertar pantalla:', error);
   }
+}
+
+/** @deprecated Prefer wakeTablet() */
+export function wakeTabletForIncomingCall(): void {
+  wakeTablet();
 }

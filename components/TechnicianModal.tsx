@@ -2,6 +2,7 @@ import { View, Text, StyleSheet, TextInput, TouchableOpacity, Modal } from 'reac
 import { useState } from 'react';
 import { User, X, Search } from 'lucide-react-native';
 import { useWindowDimensions } from 'react-native';
+import { doorControlService } from '@/services/DoorControlService';
 
 interface TechnicianModalProps {
   visible: boolean;
@@ -15,32 +16,6 @@ interface TechnicianData {
   empresa: string;
   validez: string;
 }
-
-// Base de datos simulada de técnicos
-const TECHNICIANS_DB: TechnicianData[] = [
-  {
-    dni: '12345678A',
-    nombre: 'Juan',
-    apellido: 'García López',
-    empresa: 'SAIMA Seguridad',
-    validez: '2025-12-31'
-  },
-  {
-    dni: '87654321B',
-    nombre: 'María',
-    apellido: 'Rodríguez Martín',
-    empresa: 'Técnicos Santander',
-    validez: '2025-06-30'
-  },
-  {
-    dni: '11223344C',
-    nombre: 'Carlos',
-    apellido: 'Fernández Silva',
-    empresa: 'SAIMA Seguridad',
-    validez: '2024-12-31'
-  }
-];
-
 export default function TechnicianModal({ visible, onClose }: TechnicianModalProps) {
   const { width = 0 } = useWindowDimensions();
   const isSmallTablet = width < 900;
@@ -53,24 +28,32 @@ export default function TechnicianModal({ visible, onClose }: TechnicianModalPro
 
   const handleConsult = () => {
     console.log('🔍 Consultando DNI:', dni);
+    if (!dni.trim()) {
+      return;
+    }
     setIsLoading(true);
-    
-    // Simular consulta a base de datos
-    setTimeout(() => {
-      const foundTechnician = TECHNICIANS_DB.find(
-        tech => tech.dni.toLowerCase() === dni.trim().toLowerCase()
-      );
-      
-      console.log('📋 Resultado búsqueda:', foundTechnician ? 'ENCONTRADO' : 'NO ENCONTRADO');
-      
-      if (foundTechnician) {
-        setTechnicianData(foundTechnician);
-        setCurrentView('result');
-      } else {
+    void (async () => {
+      try {
+        const result = await doorControlService.lookupTechnician(dni.trim());
+        if (result.found && result.technician) {
+          const t = result.technician;
+          setTechnicianData({
+            dni: t.dni,
+            nombre: t.nombre,
+            apellido: t.apellidos,
+            empresa: t.empresa,
+            validez: t.valido_hasta || '—',
+          });
+          setCurrentView('result');
+        } else {
+          setCurrentView('notfound');
+        }
+      } catch {
         setCurrentView('notfound');
+      } finally {
+        setIsLoading(false);
       }
-      setIsLoading(false);
-    }, 1000);
+    })();
   };
 
   const handleClose = () => {

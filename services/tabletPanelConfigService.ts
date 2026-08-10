@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { cloneDefaultDoorAppConfig } from '@/config/defaultDoorAppConfig';
 import type { ConfigurationData } from '@/types/configurationData';
+import { configCredentialsService } from '@/services/ConfigCredentialsService';
 import { doorControlService } from '@/services/DoorControlService';
 import { emergencyService } from '@/services/EmergencyService';
 import { fireService } from '@/services/FireService';
@@ -83,6 +84,13 @@ export async function applyPanelDefaults(record: PanelDefaultsRecord): Promise<C
   await AsyncStorage.setItem(PANEL_DEFAULTS_KEY, JSON.stringify(record));
   await saveEffectiveConfig(record.config);
   await clearLocalConfigOverrides();
+  try {
+    await configCredentialsService.applyPanelSeed(
+      (record.config as ConfigurationData & { configLogin?: unknown }).configLogin,
+    );
+  } catch (error) {
+    console.warn('[TabletConfig] No se pudo aplicar configLogin del panel:', error);
+  }
   return record.config;
 }
 
@@ -112,26 +120,59 @@ export async function pullAndApplyPanelDefaults(
   });
 }
 
-/** Primera instalación o arranque sin config local. */
-export async function initializeTabletConfigOnBoot(): Promise<ConfigurationData> {
-  const saved = await AsyncStorage.getItem(EFFECTIVE_CONFIG_KEY);
-  if (saved) {
-    const config = JSON.parse(saved) as ConfigurationData;
-    await saveEffectiveConfig(config);
-    return config;
+/** Primera instalación o arranque. Solo descarga defaults del panel si no hay cambios locales. */
+export async function initializeTabletConfigOnBoot(): Promise<{
+  config: ConfigurationData;
+  needsIpSetup: boolean;
+  pulledFromPanel: boolean;
+}> {
+  const savedRaw = await AsyncStorage.getItem(EFFECTIVE_CONFIG_KEY);
+  let local: ConfigurationData | null = null;
+  if (savedRaw) {
+    try {
+      local = JSON.parse(savedRaw) as ConfigurationData;
+      await saveEffectiveConfig(local);
+    } catch {
+      local = null;
+    }
   }
 
-  console.log('[TabletConfig] Primera instalación: importando defaults del panel…');
-  const bootstrap = cloneDefaultDoorAppConfig();
-  const applied = await pullAndApplyPanelDefaults(bootstrap);
+  const consoleIP = String(local?.network?.consoleIP || '').trim();
+  if (!consoleIP) {
+    const bootstrap = local || cloneDefaultDoorAppConfig();
+    bootstrap.network = { ...bootstrap.network, consoleIP: '' };
+    console.warn('[TabletConfig] Sin IP de consola: se requiere configuración inicial');
+    return { config: bootstrap, needsIpSetup: true, pulledFromPanel: false };
+  }
+
+  // Si el usuario ya personalizó la config en la tablet, no sobrescribir
+  if (local && (await hasLocalConfigOverrides())) {
+    console.log('[TabletConfig] Conservando configuración local (hay cambios en tablet)');
+    return { config: local, needsIpSetup: false, pulledFromPanel: false };
+  }
+
+  console.log('[TabletConfig] Descargando configuración del panel…');
+  const applied = await pullAndApplyPanelDefaults(local || cloneDefaultDoorAppConfig());
   if (applied) {
-    console.log('[TabletConfig] Defaults del panel aplicados');
-    return applied;
+    // Conservar IP/credenciales que ya tenía la tablet
+    const merged: ConfigurationData = {
+      ...applied,
+      network: { ...applied.network, ...(local?.network || {}) },
+      api: { ...applied.api, ...(local?.api || {}) },
+    };
+    await saveEffectiveConfig(merged);
+    console.log('[TabletConfig] Configuración del panel aplicada');
+    return { config: merged, needsIpSetup: false, pulledFromPanel: true };
   }
 
-  console.warn('[TabletConfig] Fallback a defaults locales (sin conexión al panel)');
+  if (local) {
+    console.warn('[TabletConfig] Panel no disponible; usando configuración local');
+    return { config: local, needsIpSetup: false, pulledFromPanel: false };
+  }
+
+  const bootstrap = cloneDefaultDoorAppConfig();
   await saveEffectiveConfig(bootstrap);
-  return bootstrap;
+  return { config: bootstrap, needsIpSetup: false, pulledFromPanel: false };
 }
 
 /** Botón «Restaurar datos por defecto» en la tablet. */

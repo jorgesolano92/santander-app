@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" role="img" aria-label="Autoservicio">
+  <rect x="14" y="8" width="20" height="32" rx="2"/>
+  <rect x="18" y="12" width="12" height="9" rx="1.5"/>
+  <line x1="18" y1="28" x2="22" y2="28"/>
+  <line x1="26" y1="28" x2="30" y2="28"/>
+  <line x1="18" y1="33" x2="22" y2="33"/>
+  <line x1="26" y1="33" x2="30" y2="33"/>
+</svg>

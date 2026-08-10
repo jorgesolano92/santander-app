@@ -87,7 +87,7 @@ const defaultIntercomConfig: IntercomConfig = {
   cameraIP: '192.168.1.120',
   httpPort: 80,
   httpsPort: 443,
-  onvifUsername: 'ceroideas',
+  onvifUsername: 'inviasistemas',
   onvifPassword: 'Cero21264712-',
   rtspPort: 554,
   videoProfile: 'MainStream',

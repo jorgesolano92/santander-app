@@ -11,7 +11,6 @@ import {
   type StyleProp,
 } from 'react-native';
 import {
-  Camera,
   Video,
   VideoOff,
   Wifi,
@@ -37,10 +36,20 @@ interface DoorVideoStreamProps {
   suspendStream?: boolean;
   /** Silencia audio ambiente RTSP con intercom activo (vídeo sigue; audio va por el intercom). */
   muteAmbientDuringIntercom?: boolean;
+  /** Fuerza mute permanente (sin audio ambiente ni toggles). */
+  forceMuted?: boolean;
+  /** Arranca el stream RTSP inline al montar (sin pulsar iniciar). */
+  autoStartInline?: boolean;
+  /** Alto del vídeo en modo inline (px). */
+  inlineHeight?: number;
+  /** Oculta botones de control (iniciar/audio/expandir). */
+  hideControls?: boolean;
   isExpanded?: boolean;
   onExpandedChange?: (expanded: boolean) => void;
   /** Alto del área de vídeo en pantalla completa (px). */
   expandedVideoHeight?: number;
+  /** Acciones encima del vídeo (p. ej. Abrir puerta), junto a pantalla completa. */
+  videoOverlay?: React.ReactNode;
 }
 
 type ConnectionState = 'idle' | 'connecting' | 'connected' | 'error';
@@ -100,14 +109,21 @@ export default function DoorVideoStream({
   doorName,
   suspendStream = false,
   muteAmbientDuringIntercom = false,
+  forceMuted = false,
+  autoStartInline = false,
+  inlineHeight,
+  hideControls = false,
   isExpanded = false,
   onExpandedChange,
   expandedVideoHeight,
+  videoOverlay,
 }: DoorVideoStreamProps) {
   const [connectionState, setConnectionState] = useState<ConnectionState>('idle');
   const [error, setError] = useState<string | null>(null);
   const [streamActive, setStreamActive] = useState(false);
-  const [ambientAudioOn, setAmbientAudioOn] = useState(intercomConfig.hasAudio !== false);
+  const [ambientAudioOn, setAmbientAudioOn] = useState(
+    forceMuted ? false : intercomConfig.hasAudio !== false,
+  );
   const [playerSession, setPlayerSession] = useState(0);
   const [proxyStreamUrl, setProxyStreamUrl] = useState<string | null>(null);
   const [proxyActive, setProxyActive] = useState(false);
@@ -122,7 +138,7 @@ export default function DoorVideoStream({
   const useWebProxy = Platform.OS === 'web';
   const proxyBaseUrl = (intercomConfig.proxyUrl || 'http://localhost:3001').replace(/\/+$/, '');
 
-  const inlineVideoHeight = 200;
+  const inlineVideoHeight = inlineHeight ?? 200;
   const window = Dimensions.get('window');
   const fullscreenVideoHeight = expandedVideoHeight ?? window.height;
 
@@ -277,6 +293,10 @@ export default function DoorVideoStream({
   ]);
 
   useEffect(() => {
+    if (forceMuted) setAmbientAudioOn(false);
+  }, [forceMuted]);
+
+  useEffect(() => {
     if (suspendStream && streamActive) {
       stopAndroidRtsp();
     }
@@ -416,27 +436,77 @@ export default function DoorVideoStream({
     setConnectionState('idle');
   };
 
+  /** Arranque automático en modo inline (visualización / carga cajero / overlays). */
+  useEffect(() => {
+    if (!autoStartInline || isExpanded || suspendStream) return;
+    if (!intercomConfig.cameraIP?.trim()) return;
+    if (useAndroidRtsp && !streamActive && connectionState === 'idle') {
+      startAndroidRtsp();
+      return;
+    }
+    if (useWebProxy && !proxyActive && connectionState === 'idle') {
+      void startProxyStream();
+    }
+  }, [
+    autoStartInline,
+    isExpanded,
+    useAndroidRtsp,
+    useWebProxy,
+    suspendStream,
+    streamActive,
+    proxyActive,
+    connectionState,
+    startAndroidRtsp,
+    intercomConfig.cameraIP,
+  ]);
+
   const isConnected = connectionState === 'connected';
   const isConnecting = connectionState === 'connecting';
   const showAndroidPlayer = useAndroidRtsp && streamActive && !!NativeVideo;
+  const showWebPlayer = useWebProxy && !!proxyStreamUrl;
   const showAmbientAudioToggle =
-    showAndroidPlayer && isConnected && intercomConfig.hasAudio !== false && !isExpanded;
+    !hideControls &&
+    !forceMuted &&
+    showAndroidPlayer &&
+    isConnected &&
+    intercomConfig.hasAudio !== false &&
+    !isExpanded;
 
   const rtspAudioMuted =
-    suspendStream || muteAmbientDuringIntercom || !ambientAudioOn;
+    forceMuted || suspendStream || muteAmbientDuringIntercom || !ambientAudioOn;
 
   const activeVideoHeight = isExpanded ? fullscreenVideoHeight : inlineVideoHeight;
 
   const videoHostStyle: StyleProp<ViewStyle> = isExpanded
     ? [styles.previewBoxExpanded, { height: activeVideoHeight, width: '100%' }]
-    : [styles.previewBox, showAndroidPlayer && styles.previewBoxActive];
+    : [
+        styles.previewBox,
+        { height: activeVideoHeight },
+        (showAndroidPlayer || showWebPlayer) && styles.previewBoxActive,
+      ];
 
   const nativeVideoStyle: StyleProp<ViewStyle> = isExpanded
     ? { width: '100%', height: activeVideoHeight, backgroundColor: '#000', alignSelf: 'stretch' }
     : { width: '100%', height: activeVideoHeight, backgroundColor: '#000' };
 
+  const startInline = () => {
+    if (useAndroidRtsp) startAndroidRtsp();
+    else if (useWebProxy) void startProxyStream();
+  };
+
   return (
-    <View style={[styles.container, isExpanded && styles.containerExpanded]}>
+    <View style={[styles.container, isExpanded && styles.containerExpanded, hideControls && styles.containerCompact]}>
+      {!isExpanded ? (
+        <View style={styles.compactHeader}>
+          <Text style={styles.compactTitle} numberOfLines={1}>
+            {doorName}
+          </Text>
+          <Text style={styles.compactIp} numberOfLines={1}>
+            {intercomConfig.cameraIP || 'Sin IP'}
+          </Text>
+        </View>
+      ) : null}
+
       <View style={videoHostStyle} collapsable={false}>
         {showAndroidPlayer ? (
           <>
@@ -467,7 +537,44 @@ export default function DoorVideoStream({
                 onError={onNativeVideoError}
               />
             )}
-            {isConnected && !isExpanded && (
+          </>
+        ) : showWebPlayer ? (
+          React.createElement('video', {
+            ref: videoElementRef,
+            controls: false,
+            autoPlay: true,
+            muted: true,
+            playsInline: true,
+            preload: 'auto',
+            onLoadedMetadata: (ev: any) => {
+              ev?.currentTarget?.play?.().catch(() => {});
+            },
+            onError: () => setError('El navegador no pudo reproducir HLS'),
+            style: { width: '100%', height: '100%', backgroundColor: '#000' },
+          })
+        ) : (
+          <TouchableOpacity
+            style={styles.idleTap}
+            onPress={startInline}
+            disabled={isConnecting}
+            activeOpacity={0.85}
+          >
+            {isConnecting ? (
+              <ActivityIndicator color="#FFFFFF" />
+            ) : (
+              <Video size={28} color="#ADB5BD" />
+            )}
+            <Text style={styles.idleTapText}>
+              {isConnecting ? 'Conectando…' : 'Toca para iniciar vídeo'}
+            </Text>
+            {!!error ? <Text style={styles.idleError}>{error}</Text> : null}
+          </TouchableOpacity>
+        )}
+
+        {!isExpanded && (videoOverlay || (isConnected && !hideControls && onExpandedChange)) ? (
+          <View style={styles.videoOverlayBar} pointerEvents="box-none">
+            {videoOverlay}
+            {isConnected && !hideControls && onExpandedChange ? (
               <TouchableOpacity
                 style={styles.expandOverlay}
                 onPress={enterExpanded}
@@ -475,106 +582,56 @@ export default function DoorVideoStream({
               >
                 <Maximize2 size={22} color="#FFF" />
               </TouchableOpacity>
-            )}
-          </>
-        ) : (
-          <>
-            <Camera size={30} color={isExpanded ? '#ADB5BD' : '#6C757D'} />
-            <Text style={[styles.title, isExpanded && styles.titleExpanded]}>
-              Cámara {doorName}
-            </Text>
-            <Text style={[styles.subtitle, isExpanded && styles.subtitleExpanded]}>
-              {intercomConfig.cameraIP || 'Sin IP'}
-            </Text>
-            <Text style={[styles.infoText, isExpanded && styles.infoTextExpanded]}>
-              {isConnecting
-                ? 'Conectando RTSP…'
-                : useAndroidRtsp
-                  ? 'RTSP directo (TCP) · vídeo y audio ambiente'
-                  : 'Proxy HLS para pruebas en navegador'}
-            </Text>
-            {isExpanded && isConnecting && (
-              <ActivityIndicator color="#FFFFFF" style={{ marginTop: 16 }} />
-            )}
-            {isExpanded && !!error && (
-              <Text style={styles.errorTextExpanded}>• {error}</Text>
-            )}
-          </>
-        )}
+            ) : null}
+          </View>
+        ) : null}
       </View>
 
-      {!isExpanded && useWebProxy && (
-        <View style={styles.webVideoContainer}>
-          {proxyStreamUrl ? (
-            React.createElement('video', {
-              ref: videoElementRef,
-              controls: true,
-              autoPlay: true,
-              muted: !ambientAudioOn,
-              playsInline: true,
-              preload: 'auto',
-              onLoadedMetadata: (ev: any) => {
-                ev?.currentTarget?.play?.().catch(() => {});
-              },
-              onError: () => setError('El navegador no pudo reproducir HLS'),
-              style: { width: '100%', height: '100%', borderRadius: 8, backgroundColor: '#000' },
-            })
-          ) : (
-            <Text style={styles.infoText}>Pulsa Iniciar vídeo para cargar el stream.</Text>
-          )}
-        </View>
-      )}
-
-      {!isExpanded && (
+      {!isExpanded && !hideControls && (
         <>
           <View style={styles.statusRow}>
-            {isConnected ? <Wifi size={14} color="#28A745" /> : <WifiOff size={14} color="#DC3545" />}
-            <Text style={[styles.statusText, { color: isConnected ? '#28A745' : '#DC3545' }]}>
-              {isConnected ? 'EN VIVO' : isConnecting ? 'CONECTANDO...' : 'DETENIDO'}
+            {isConnected || showWebPlayer ? (
+              <Wifi size={14} color="#28A745" />
+            ) : (
+              <WifiOff size={14} color="#DC3545" />
+            )}
+            <Text
+              style={[
+                styles.statusText,
+                { color: isConnected || showWebPlayer ? '#28A745' : '#DC3545' },
+              ]}
+            >
+              {isConnected || showWebPlayer
+                ? 'EN VIVO'
+                : isConnecting
+                  ? 'CONECTANDO...'
+                  : 'DETENIDO'}
             </Text>
           </View>
 
-          {!!error && <Text style={styles.errorText}>• {error}</Text>}
-
           {useAndroidRtsp && (
-            <>
-              <View style={styles.controls}>
-                <TouchableOpacity
-                  style={[styles.button, styles.liveButton, (isConnecting || streamActive) && styles.disabled]}
-                  onPress={startAndroidRtsp}
-                  disabled={isConnecting || streamActive}
-                >
-                  {isConnecting && !isConnected ? (
-                    <ActivityIndicator color="#FFF" />
-                  ) : (
-                    <Video size={16} color="#FFF" />
-                  )}
-                  <Text style={styles.buttonText}>INICIAR VÍDEO</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.button, styles.stopButton, !streamActive && styles.disabled]}
-                  onPress={stopAndroidRtsp}
-                  disabled={!streamActive}
-                >
-                  <VideoOff size={16} color="#FFF" />
-                  <Text style={styles.buttonText}>DETENER</Text>
-                </TouchableOpacity>
-              </View>
-
-              {showAmbientAudioToggle && (
-                <View style={styles.controls}>
-                  <TouchableOpacity
-                    style={[styles.button, ambientAudioOn ? styles.audioOnButton : styles.audioOffButton]}
-                    onPress={() => setAmbientAudioOn((v) => !v)}
-                  >
-                    {ambientAudioOn ? <Volume2 size={16} color="#FFF" /> : <VolumeX size={16} color="#FFF" />}
-                    <Text style={styles.buttonText}>
-                      {ambientAudioOn ? 'AUDIO AMBIENTE ON' : 'AUDIO AMBIENTE OFF'}
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-              )}
-            </>
+            <View style={styles.controls}>
+              <TouchableOpacity
+                style={[styles.button, styles.liveButton, (isConnecting || streamActive) && styles.disabled]}
+                onPress={startAndroidRtsp}
+                disabled={isConnecting || streamActive}
+              >
+                {isConnecting && !isConnected ? (
+                  <ActivityIndicator color="#FFF" />
+                ) : (
+                  <Video size={16} color="#FFF" />
+                )}
+                <Text style={styles.buttonText}>INICIAR VÍDEO</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.button, styles.stopButton, !streamActive && styles.disabled]}
+                onPress={stopAndroidRtsp}
+                disabled={!streamActive}
+              >
+                <VideoOff size={16} color="#FFF" />
+                <Text style={styles.buttonText}>DETENER</Text>
+              </TouchableOpacity>
+            </View>
           )}
 
           {useWebProxy && (
@@ -597,6 +654,20 @@ export default function DoorVideoStream({
               </TouchableOpacity>
             </View>
           )}
+
+          {showAmbientAudioToggle && (
+            <View style={styles.controls}>
+              <TouchableOpacity
+                style={[styles.button, ambientAudioOn ? styles.audioOnButton : styles.audioOffButton]}
+                onPress={() => setAmbientAudioOn((v) => !v)}
+              >
+                {ambientAudioOn ? <Volume2 size={16} color="#FFF" /> : <VolumeX size={16} color="#FFF" />}
+                <Text style={styles.buttonText}>
+                  {ambientAudioOn ? 'AUDIO AMBIENTE ON' : 'AUDIO AMBIENTE OFF'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          )}
         </>
       )}
     </View>
@@ -606,11 +677,18 @@ export default function DoorVideoStream({
 const styles = StyleSheet.create({
   container: {
     width: '100%',
-    backgroundColor: '#F8F9FA',
+    backgroundColor: '#FFFFFF',
     borderRadius: 8,
     borderWidth: 1,
     borderColor: '#E9ECEF',
-    padding: 10,
+    padding: 6,
+    overflow: 'hidden',
+  },
+  containerCompact: {
+    padding: 0,
+    borderWidth: 0,
+    borderRadius: 0,
+    backgroundColor: 'transparent',
   },
   containerExpanded: {
     flex: 1,
@@ -620,17 +698,36 @@ const styles = StyleSheet.create({
     borderWidth: 0,
     padding: 0,
   },
+  compactHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    backgroundColor: '#212529',
+  },
+  compactTitle: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  compactIp: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#ADB5BD',
+  },
   previewBox: {
-    minHeight: 140,
+    width: '100%',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#E9ECEF',
-    borderRadius: 8,
-    padding: 12,
+    backgroundColor: '#000',
+    borderRadius: 0,
+    padding: 0,
     overflow: 'hidden',
   },
   previewBoxActive: {
-    minHeight: 200,
     padding: 0,
     backgroundColor: '#000',
   },
@@ -645,79 +742,54 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  idleTap: {
+    flex: 1,
+    width: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    padding: 12,
+  },
+  idleTapText: {
+    fontSize: 12,
+    color: '#ADB5BD',
+    textAlign: 'center',
+  },
+  idleError: {
+    marginTop: 4,
+    fontSize: 11,
+    color: '#FF6B6B',
+    textAlign: 'center',
+  },
   expandOverlay: {
+    backgroundColor: 'rgba(0,0,0,0.72)',
+    borderRadius: 8,
+    padding: 10,
+  },
+  videoOverlayBar: {
     position: 'absolute',
     right: 8,
     bottom: 8,
-    backgroundColor: 'rgba(0,0,0,0.7)',
-    borderRadius: 6,
-    padding: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
     zIndex: 20,
     elevation: 20,
-  },
-  webVideoContainer: {
-    marginTop: 10,
-    width: '100%',
-    height: 180,
-    borderRadius: 8,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: '#DEE2E6',
-    backgroundColor: '#000',
-  },
-  title: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#343A40',
-    marginTop: 6,
-  },
-  titleExpanded: {
-    color: '#F8F9FA',
-  },
-  subtitle: {
-    fontSize: 12,
-    color: '#6C757D',
-    marginTop: 4,
-  },
-  subtitleExpanded: {
-    color: '#ADB5BD',
-  },
-  infoText: {
-    fontSize: 11,
-    color: '#6C757D',
-    marginTop: 8,
-    textAlign: 'center',
-    paddingHorizontal: 8,
-  },
-  infoTextExpanded: {
-    color: '#CED4DA',
-  },
-  errorTextExpanded: {
-    marginTop: 12,
-    fontSize: 12,
-    color: '#FF6B6B',
-    textAlign: 'center',
-    paddingHorizontal: 16,
   },
   statusRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 10,
+    marginTop: 6,
     gap: 6,
   },
   statusText: {
     fontSize: 11,
     fontWeight: '700',
   },
-  errorText: {
-    marginTop: 6,
-    fontSize: 10,
-    color: '#DC3545',
-  },
   controls: {
     flexDirection: 'row',
     gap: 8,
-    marginTop: 10,
+    marginTop: 6,
   },
   button: {
     flex: 1,
