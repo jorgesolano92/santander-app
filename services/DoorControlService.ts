@@ -2230,39 +2230,61 @@ class DoorControlService {
     }
   }
 
-  // Validación de dispositivo (Device Binding)
+  /**
+   * Comprueba autorización contra el panel (allowlist por Android ID).
+   */
+  async checkDeviceAuthorization(): Promise<{
+    authorized: boolean;
+    androidId: string;
+    reason: string;
+    label?: string | null;
+    enforcementEnabled?: boolean;
+  }> {
+    const { getTabletAndroidId } = await import('./DeviceIdentityService');
+    const androidId = await getTabletAndroidId();
+    try {
+      const saved = await this.getSavedAppConfig();
+      const consoleIP = String(saved?.network?.consoleIP || '').trim();
+      if (!consoleIP) {
+        return {
+          authorized: false,
+          androidId,
+          reason: 'no_config',
+        };
+      }
+      const port = Number(saved?.api?.port || 8000);
+      const baseUrl = this.buildBackendBaseUrl(consoleIP, port);
+      const url = `${baseUrl}/api/v1/authorized-tablets/check?android_id=${encodeURIComponent(androidId)}`;
+      const response = await fetchWithTimeout(url, { method: 'GET' }, 8_000);
+      if (!response.ok) {
+        console.error(`❌ Check autorización HTTP ${response.status}`);
+        return { authorized: false, androidId, reason: 'panel_unreachable' };
+      }
+      const data = await response.json();
+      const authorized = !!data?.authorized;
+      console.log(
+        authorized
+          ? `✅ Tablet autorizada (${androidId})`
+          : `🚫 Tablet NO autorizada (${androidId}): ${data?.reason || 'unknown'}`,
+      );
+      return {
+        authorized,
+        androidId: String(data?.android_id || androidId),
+        reason: String(data?.reason || (authorized ? 'ok' : 'not_registered')),
+        label: data?.label ?? null,
+        enforcementEnabled: data?.enforcement_enabled,
+      };
+    } catch (error) {
+      console.error('Error comprobando autorización de tablet:', error);
+      return { authorized: false, androidId, reason: 'panel_unreachable' };
+    }
+  }
+
+  // Validación de dispositivo (allowlist del panel)
   async validateDevice(): Promise<boolean> {
     try {
-      // Always authorize in development mode
-      if (__DEV__) {
-        console.log('🔧 DEV MODE: Device validation bypassed - AUTHORIZED');
-        return true;
-      }
-
-      // En modo sandbox, siempre validar como autorizado
-      if (this.sandboxMode) {
-        console.log('🔧 SANDBOX MODE: Device validation - AUTHORIZED');
-        return true;
-      }
-
-      // Allow access during initial setup or development
-      if (!this.config || this.config.deviceId === 'device_id_placeholder') {
-        return true;
-      }
-
-      // En un entorno real, esto obtendría el ID del dispositivo Android
-      const deviceId = await this.getDeviceId();
-      
-      // Allow access if device ID is placeholder (development/sandbox)
-      if (deviceId === 'device_id_placeholder') {
-        return true;
-      }
-      
-      if (!this.config?.deviceId) {
-        return false;
-      }
-
-      return deviceId === this.config.deviceId;
+      const result = await this.checkDeviceAuthorization();
+      return result.authorized;
     } catch (error) {
       console.error('Error validating device:', error);
       return false;
@@ -2326,8 +2348,8 @@ class DoorControlService {
   }
 
   private async getDeviceId(): Promise<string> {
-    // ID del dispositivo
-    return this.sandboxMode ? 'sandbox_device_001' : 'device_id_placeholder';
+    const { getTabletAndroidId } = await import('./DeviceIdentityService');
+    return getTabletAndroidId();
   }
 
   // Método para alternar entre modo sandbox y producción - DESHABILITADO
@@ -2708,6 +2730,7 @@ class DoorControlService {
       body: string;
       urgent: boolean;
       received_at: string;
+      seen_at?: string | null;
     }>
   > {
     const config = await this.getSavedAppConfig();
@@ -2726,7 +2749,94 @@ class DoorControlService {
       body: String(row.body || ''),
       urgent: Boolean(row.urgent),
       received_at: String(row.received_at || ''),
+      seen_at: row.seen_at ? String(row.seen_at) : null,
     }));
+  }
+
+  /** Confirma lectura de mensajes COCE hacia el panel (y COCE). */
+  async ackCoceMessages(messageIds: string[]): Promise<void> {
+    const ids = messageIds.map((id) => String(id || '').trim()).filter(Boolean);
+    if (!ids.length) return;
+    const config = await this.getSavedAppConfig();
+    if (!config?.network?.consoleIP) return;
+    await this.authenticatedRequest(config, 'POST', '/api/v1/coce-messages/ack', {
+      message_ids: ids,
+      channel: 'tablet',
+    });
+  }
+
+  async fetchSchedules(): Promise<any> {
+    const config = await this.getSavedAppConfig();
+    if (!config?.network?.consoleIP) {
+      throw new Error('Sin IP de consola configurada');
+    }
+    const response = await this.authenticatedRequest(config, 'GET', '/api/v1/schedules');
+    if (!response?.ok) {
+      const t = await response?.text().catch(() => '');
+      throw new Error(t || 'No se pudieron cargar los horarios');
+    }
+    return response.json();
+  }
+
+  async saveSchedules(payload: Record<string, unknown>): Promise<any> {
+    const config = await this.getSavedAppConfig();
+    if (!config?.network?.consoleIP) {
+      throw new Error('Sin IP de consola configurada');
+    }
+    const response = await this.authenticatedRequest(
+      config,
+      'PUT',
+      '/api/v1/schedules',
+      payload,
+    );
+    if (!response?.ok) {
+      const t = await response?.text().catch(() => '');
+      throw new Error(t || 'No se pudieron guardar los horarios');
+    }
+    return response.json();
+  }
+
+  async fetchModesList(): Promise<Array<{ key: string; enabled?: boolean; type?: string }>> {
+    const config = await this.getSavedAppConfig();
+    if (!config?.network?.consoleIP) return [];
+    const endpoint = config?.api?.urlModes || '/api/v1/modes';
+    const response = await this.authenticatedRequest(config, 'GET', endpoint);
+    if (!response?.ok) return [];
+    const data = await response.json().catch(() => ({}));
+    const rows = Array.isArray(data?.modes) ? data.modes : [];
+    return rows.map((m: any) => ({
+      key: String(m.key || ''),
+      enabled: m.enabled !== false,
+      type: m.type ? String(m.type) : undefined,
+    }));
+  }
+
+  async lookupTechnician(dni: string): Promise<{
+    found: boolean;
+    technician?: {
+      dni: string;
+      nombre: string;
+      apellidos: string;
+      empresa: string;
+      valido_hasta: string | null;
+      active: boolean;
+    };
+    reason?: string;
+  }> {
+    const config = await this.getSavedAppConfig();
+    if (!config?.network?.consoleIP) {
+      return { found: false, reason: 'Sin IP de consola' };
+    }
+    const q = encodeURIComponent(dni.trim());
+    const response = await this.authenticatedRequest(
+      config,
+      'GET',
+      `/api/v1/technicians?dni=${q}`,
+    );
+    if (!response?.ok) {
+      return { found: false, reason: 'Error consultando técnicos' };
+    }
+    return response.json();
   }
 
   /** Defaults de sucursal configurados en el panel web. */

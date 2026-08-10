@@ -36,15 +36,20 @@ class CoceMessageService extends EventEmitter {
 
   async markAllSeen(): Promise<void> {
     const now = new Date().toISOString();
-    let changed = false;
+    const unreadIds: string[] = [];
     this.messages = this.messages.map((m) => {
       if (m.seenAt) return m;
-      changed = true;
+      unreadIds.push(m.id);
       return { ...m, seenAt: now };
     });
-    if (changed) {
+    if (unreadIds.length) {
       await this.persist();
       this.emit('updated');
+      try {
+        await doorControlService.ackCoceMessages(unreadIds);
+      } catch {
+        // ignore ack errors
+      }
     }
   }
 
@@ -97,7 +102,7 @@ class CoceMessageService extends EventEmitter {
           body: row.body,
           urgent: row.urgent,
           receivedAt: row.received_at,
-          seenAt: prev?.seenAt ?? null,
+          seenAt: prev?.seenAt ?? row.seen_at ?? null,
         });
       }
       this.messages = Array.from(byId.values()).sort(
