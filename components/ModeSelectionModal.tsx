@@ -29,6 +29,17 @@ interface ModeSelectionModalProps {
 
 const BLOQUEO_OFICINA_ID = 'manual';
 
+/** id UI → clave en new_door_config.modes */
+const MODE_ID_TO_CONFIG_KEY: Record<string, string> = {
+  comercial_automatico: 'automatico',
+  comercial_esclusa: 'esclusa',
+  horario_extendido: 'extendido',
+  horario_autoservicio: 'autoservicio',
+  oficina_cerrada: 'oficinaCerrada',
+  carga_cajero: 'cargaCajero',
+  manual: 'manual',
+};
+
 const bloqueoOficinaMode = MODE_DEFINITIONS.find((m) => m.id === BLOQUEO_OFICINA_ID)!;
 
 export default function ModeSelectionModal({
@@ -44,6 +55,8 @@ export default function ModeSelectionModal({
   const [selectedMode, setSelectedMode] = useState<string>('comercial_automatico');
   const [isModalReady, setIsModalReady] = useState<boolean>(false);
   const [officeWithATM, setOfficeWithATM] = useState(false);
+  /** Claves de modes.* con enabled === false en ajustes de la tablet. */
+  const [disabledModeKeys, setDisabledModeKeys] = useState<Set<string>>(new Set());
 
   const activeModeId = useMemo(
     () => normalizeModeToId(currentMode),
@@ -57,26 +70,38 @@ export default function ModeSelectionModal({
         if (!raw) return;
         const parsed = JSON.parse(raw);
         setOfficeWithATM(Boolean(parsed?.officeWithATM));
+        const modes = parsed?.modes && typeof parsed.modes === 'object' ? parsed.modes : {};
+        const disabled = new Set<string>();
+        for (const [key, cfg] of Object.entries(modes)) {
+          if (cfg && typeof cfg === 'object' && (cfg as { enabled?: boolean }).enabled === false) {
+            disabled.add(key);
+          }
+        }
+        setDisabledModeKeys(disabled);
       })
       .catch(() => {});
   }, [visible]);
 
-  const visibleModes = useMemo(
-    () =>
-      MODE_DEFINITIONS.filter(
-        (mode) => !mode.requiresAtmInVestibule || officeWithATM
-      ),
-    [officeWithATM]
-  );
+  const visibleModes = useMemo(() => {
+    return MODE_DEFINITIONS.filter((mode) => {
+      if (mode.requiresAtmInVestibule && !officeWithATM) return false;
+      const configKey = MODE_ID_TO_CONFIG_KEY[mode.id];
+      if (!configKey) return true;
+      return !disabledModeKeys.has(configKey);
+    });
+  }, [officeWithATM, disabledModeKeys]);
   useEffect(() => {
     if (visible && !isModalReady) {
-      const preselected = activeModeId || 'comercial_automatico';
+      const preferred = activeModeId || 'comercial_automatico';
+      const preselected = visibleModes.some((m) => m.id === preferred)
+        ? preferred
+        : visibleModes[0]?.id || 'comercial_automatico';
       setSelectedMode(preselected);
       setIsModalReady(true);
     } else if (!visible && isModalReady) {
       setIsModalReady(false);
     }
-  }, [visible, isModalReady, activeModeId]);
+  }, [visible, isModalReady, activeModeId, visibleModes]);
 
   const handlePreview = (modeId: string) => {
     setSelectedMode(modeId);
@@ -90,6 +115,7 @@ export default function ModeSelectionModal({
 
   const selectedModeDetails = visibleModes.find((mode) => mode.id === selectedMode);
   const mainModes = visibleModes.filter((m) => m.id !== BLOQUEO_OFICINA_ID);
+  const showBloqueoOficina = visibleModes.some((m) => m.id === BLOQUEO_OFICINA_ID);
 
   const renderModeRow = (mode: ModeDefinition) => (
     <ModeSwipeRow
@@ -100,6 +126,7 @@ export default function ModeSelectionModal({
       isActive={activeModeId === mode.id}
       onPreview={() => handlePreview(mode.id)}
       onActivate={() => handleActivateMode(mode.id)}
+      compact
     />
   );
 
@@ -120,21 +147,27 @@ export default function ModeSelectionModal({
       flexDirection: 'row',
       justifyContent: 'space-between',
       alignItems: 'center',
-      paddingHorizontal: isSmallTablet ? 20 : isLargeTablet ? 32 : 24,
-      paddingVertical: isSmallTablet ? 12 : isLargeTablet ? 20 : 16,
+      paddingHorizontal: isSmallTablet ? 16 : isLargeTablet ? 28 : 22,
+      paddingVertical: isSmallTablet ? 10 : isLargeTablet ? 14 : 12,
+      gap: 16,
     },
     modalHeaderTitle: {
+      flex: 1,
       fontSize: isSmallTablet ? 18 : isLargeTablet ? 22 : 20,
       fontWeight: '600',
       color: '#FFFFFF',
       letterSpacing: 0.5,
     },
+    headerLogo: {
+      width: isSmallTablet ? 130 : isLargeTablet ? 180 : 155,
+      height: isSmallTablet ? 38 : isLargeTablet ? 52 : 44,
+    },
     content: {
       flex: 1,
       flexDirection: 'row',
-      paddingVertical: 12,
-      paddingHorizontal: isSmallTablet ? 20 : isLargeTablet ? 32 : 24,
-      gap: isSmallTablet ? 20 : isLargeTablet ? 32 : 24,
+      paddingVertical: isSmallTablet ? 8 : 10,
+      paddingHorizontal: isSmallTablet ? 16 : isLargeTablet ? 28 : 22,
+      gap: isSmallTablet ? 14 : isLargeTablet ? 24 : 18,
     },
     leftPanel: {
       backgroundColor: '#FFFFFF',
@@ -143,24 +176,25 @@ export default function ModeSelectionModal({
       maxWidth: isSmallTablet ? 380 : isLargeTablet ? 480 : 430,
       borderWidth: 1,
       borderColor: '#E9ECEF',
+      overflow: 'hidden',
     },
     leftPanelContent: {
       flexGrow: 1,
       minHeight: '100%',
-      paddingTop: isSmallTablet ? 12 : isLargeTablet ? 20 : 16,
-      paddingHorizontal: isSmallTablet ? 12 : isLargeTablet ? 20 : 16,
-      paddingBottom: 12,
+      paddingTop: isSmallTablet ? 8 : 10,
+      paddingHorizontal: isSmallTablet ? 10 : isLargeTablet ? 14 : 12,
+      paddingBottom: isSmallTablet ? 8 : 10,
       justifyContent: 'flex-start',
     },
     section: {
-      marginBottom: 18,
+      marginBottom: isSmallTablet ? 6 : 8,
     },
     modesBlock: {
-      gap: 18,
+      gap: isSmallTablet ? 6 : 8,
       paddingBottom: 0,
     },
     modeList: {
-      gap: 12,
+      gap: isSmallTablet ? 5 : 6,
     },
     sectionTitleStatic: {
       fontSize: 15,
@@ -168,20 +202,20 @@ export default function ModeSelectionModal({
       color: '#212529',
       textAlign: 'left',
       letterSpacing: 0.5,
-      marginBottom: 8,
-      paddingVertical: 4,
-      paddingHorizontal: 4,
+      marginBottom: 4,
+      paddingVertical: 2,
+      paddingHorizontal: 2,
     },
     swipeHelp: {
       fontSize: 13,
       color: '#868E96',
-      marginBottom: 14,
-      paddingHorizontal: 4,
-      lineHeight: 18,
+      marginBottom: isSmallTablet ? 6 : 8,
+      paddingHorizontal: 2,
+      lineHeight: 17,
     },
     bloqueoSection: {
       marginTop: 'auto',
-      paddingTop: 20,
+      paddingTop: isSmallTablet ? 8 : 10,
       paddingBottom: 0,
       borderTopWidth: 2,
       borderTopColor: '#DEE2E6',
@@ -193,32 +227,24 @@ export default function ModeSelectionModal({
       flexGrow: 1,
       justifyContent: 'space-between',
       alignItems: 'center',
-      paddingBottom: 8,
+      paddingBottom: 4,
     },
     rightPanelMain: {
       width: '100%',
       alignItems: 'center',
       justifyContent: 'flex-start',
     },
-    logoSection: {
-      alignItems: 'center',
-      marginBottom: isSmallTablet ? 10 : isLargeTablet ? 14 : 12,
-    },
-    santanderLogo: {
-      width: isSmallTablet ? 160 : isLargeTablet ? 220 : 190,
-      height: isSmallTablet ? 46 : isLargeTablet ? 64 : 55,
-    },
     detailsCard: {
       backgroundColor: '#FFFFFF',
       borderRadius: 12,
-      padding: isSmallTablet ? 20 : isLargeTablet ? 28 : 24,
+      padding: isSmallTablet ? 16 : isLargeTablet ? 24 : 20,
       flexDirection: 'column',
       alignItems: 'stretch',
       width: '100%',
       maxWidth: isSmallTablet ? 600 : isLargeTablet ? 900 : 750,
       borderWidth: 1,
       borderColor: '#E9ECEF',
-      gap: 14,
+      gap: 12,
     },
     detailsHeader: {
       flexDirection: 'row',
@@ -246,15 +272,15 @@ export default function ModeSelectionModal({
       maxWidth: isSmallTablet ? 600 : isLargeTablet ? 900 : 750,
       alignItems: 'center',
       justifyContent: 'center',
-      marginTop: 16,
-      marginBottom: 8,
+      marginTop: 12,
+      marginBottom: 4,
     },
     actionArea: {
       width: '100%',
       maxWidth: 420,
       alignItems: 'center',
-      paddingBottom: 8,
-      marginTop: 16,
+      paddingBottom: 4,
+      marginTop: 12,
     },
     volverButton: {
       backgroundColor: '#FFFFFF',
@@ -280,10 +306,19 @@ export default function ModeSelectionModal({
         <View style={styles.modalContainer}>
           <View style={styles.modalHeader}>
             <Text style={styles.modalHeaderTitle}>SELECCIONAR MODO DE OPERACIÓN</Text>
+            <Image
+              source={require('@/assets/images/banco-santander-seeklogo.png')}
+              style={styles.headerLogo}
+              resizeMode="contain"
+            />
           </View>
 
           <View style={styles.content}>
-            <ScrollView style={styles.leftPanel} contentContainerStyle={styles.leftPanelContent}>
+            <ScrollView
+              style={styles.leftPanel}
+              contentContainerStyle={styles.leftPanelContent}
+              showsVerticalScrollIndicator={false}
+            >
               <Text style={styles.swipeHelp}>
                 Toque el nombre para ver la descripción. Deslice → para activar cada modo. El modo
                 activo no requiere deslizamiento.
@@ -309,9 +344,11 @@ export default function ModeSelectionModal({
                 })}
               </View>
 
-              <View style={styles.bloqueoSection}>
-                {renderModeRow(bloqueoOficinaMode)}
-              </View>
+              {showBloqueoOficina ? (
+                <View style={styles.bloqueoSection}>
+                  {renderModeRow(bloqueoOficinaMode)}
+                </View>
+              ) : null}
             </ScrollView>
 
             <ScrollView
@@ -320,14 +357,6 @@ export default function ModeSelectionModal({
               showsVerticalScrollIndicator={false}
             >
               <View style={styles.rightPanelMain}>
-                <View style={styles.logoSection}>
-                  <Image
-                    source={require('@/assets/images/banco-santander-seeklogo.png')}
-                    style={styles.santanderLogo}
-                    resizeMode="contain"
-                  />
-                </View>
-
                 <View style={styles.detailsCard}>
                   <View style={styles.detailsHeader}>
                     <ModeIcon mode={selectedMode} size={36} color="#EC1C24" />

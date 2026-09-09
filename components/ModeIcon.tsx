@@ -29,7 +29,11 @@ type DiagramProps = {
 
 export function ModeDiagram({ mode, width = 280, height = 130 }: DiagramProps) {
   const id = normalizeModeToId(mode);
-  const xml = id ? MODE_DIAGRAM_SVG[id] : null;
+  let xml = id ? MODE_DIAGRAM_SVG[id] : null;
+  if (xml) {
+    // react-native-svg Android: orient="auto-start-reverse" → NumberFormatException
+    xml = xml.replace(/orient="auto-start-reverse"/g, 'orient="auto"');
+  }
   if (!xml) {
     return (
       <View style={[styles.diagramFallback, { width, height }]}>

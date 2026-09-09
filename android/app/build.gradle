@@ -85,9 +85,9 @@ android {
     buildToolsVersion rootProject.ext.buildToolsVersion
     compileSdk rootProject.ext.compileSdkVersion
 
-    namespace 'com.cess07.puertassantander'
+    namespace 'com.puertas.santander'
     defaultConfig {
-        applicationId 'com.cess07.puertassantander'
+        applicationId 'com.puertas.santander'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1

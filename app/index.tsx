@@ -41,7 +41,7 @@ import { showOperationError, showOperationInfo } from '@/utils/showOperationErro
 import type { ConfigurationData } from '@/types/configurationData';
 import { getModeActiveDescription, formatModeDisplayName } from '@/config/modeTexts';
 import UnauthorizedDeviceScreen from '@/components/UnauthorizedDeviceScreen';
-import ModeIcon from '@/components/ModeIcon';
+import ModeIcon, { ModeDiagram } from '@/components/ModeIcon';
 import { getTabletAndroidId } from '@/services/DeviceIdentityService';
 import {
   initializeTabletConfigOnBoot,
@@ -1193,13 +1193,35 @@ export default function MainScreen() {
       backgroundColor: '#000',
     },
     cargaCajeroVideoOutside: {
-      marginTop: 16,
       width: '100%',
       borderRadius: 12,
       overflow: 'hidden',
       backgroundColor: '#000',
       borderWidth: 1,
       borderColor: '#E9ECEF',
+    },
+    cargaCajeroColumns: {
+      flexDirection: 'row',
+      gap: isSmallTablet ? 12 : isLargeTablet ? 24 : 18,
+      alignItems: 'flex-start',
+    },
+    cargaCajeroLeftColumn: {
+      flex: 1,
+      minWidth: 0,
+    },
+    cargaCajeroRightColumn: {
+      flex: 1,
+      minWidth: 0,
+    },
+    cargaCajeroDiagram: {
+      marginTop: 16,
+      alignItems: 'center',
+      width: '100%',
+    },
+    modeDiagramSection: {
+      marginTop: isSmallTablet ? 16 : isLargeTablet ? 24 : 20,
+      alignItems: 'center',
+      width: '100%',
     },
     cargaCajeroVideoLabel: {
       fontSize: 12,
@@ -1633,52 +1655,66 @@ export default function MainScreen() {
             />
           </View>
 
-          <View style={styles.cargaCajeroCard}>
-            <View style={styles.cargaCajeroContent}>
-              <View style={styles.modeTitleRow}>
-                <ModeIcon mode={currentMode} size={32} color="#212529" />
-                <Text style={styles.cargaCajeroTitle}>
-                  {formatModeDisplayName(currentMode)}
-                </Text>
-              </View>
-              {pendingModeLabel ? (
-                <View style={styles.pendingModeBanner}>
-                  <Text style={styles.pendingModeBannerTitle}>EN COLA</Text>
-                  <Text style={styles.pendingModeBannerText}>
-                    {pendingModeLabel} — se activará cuando se liberen las entradas de bloqueo
+          <View style={styles.cargaCajeroColumns}>
+            <View style={styles.cargaCajeroLeftColumn}>
+              <View style={styles.cargaCajeroCard}>
+                <View style={styles.cargaCajeroContent}>
+                  <View style={styles.modeTitleRow}>
+                    <ModeIcon mode={currentMode} size={32} color="#212529" />
+                    <Text style={styles.cargaCajeroTitle}>
+                      {formatModeDisplayName(currentMode)}
+                    </Text>
+                  </View>
+                  {pendingModeLabel ? (
+                    <View style={styles.pendingModeBanner}>
+                      <Text style={styles.pendingModeBannerTitle}>EN COLA</Text>
+                      <Text style={styles.pendingModeBannerText}>
+                        {pendingModeLabel} — se activará cuando se liberen las entradas de bloqueo
+                      </Text>
+                    </View>
+                  ) : null}
+                  <Text style={styles.cargaCajeroDescription}>
+                    {getModeActiveDescription(currentMode)}
                   </Text>
                 </View>
-              ) : null}
-              <Text style={styles.cargaCajeroDescription}>
-                Es el modo de funcionamiento destinado la carga de cajero en los casos que exista en el uno en el zaguán. La puerta P1 permanece cerrada y es necesario pulsar para que haga llamada a las consolas interiores. La puerta P2 permanece abierta para facilitar el desarrollo de la actividad.
-              </Text>
-            </View>
-            <TouchableOpacity 
-              style={styles.changeModeButtonCarga}
-              onPress={() => setShowModeModal(true)}
-            >
-              <Text style={styles.changeModeButtonTextCarga}>CAMBIAR MODO</Text>
-            </TouchableOpacity>
-          </View>
+                <TouchableOpacity 
+                  style={styles.changeModeButtonCarga}
+                  onPress={() => setShowModeModal(true)}
+                >
+                  <Text style={styles.changeModeButtonTextCarga}>CAMBIAR MODO</Text>
+                </TouchableOpacity>
+              </View>
 
-          {(() => {
-            const doorId = systemConfig?.cargaCajero?.videoporteroDoorId || 'P2';
-            const doorIndex = Math.max(0, Number(String(doorId).replace(/\D/g, '')) - 1);
-            const door = systemConfig?.doors?.[doorIndex];
-            if (!door?.enabled || !door.intercom?.cameraIP) return null;
-            return (
-              <View style={styles.cargaCajeroVideoOutside}>
-                <DoorVideoStream
-                  intercomConfig={door.intercom}
-                  doorName={door.name || doorId}
-                  forceMuted
-                  autoStartInline
-                  hideControls
-                  inlineHeight={isSmallTablet ? 280 : isLargeTablet ? 380 : 340}
+              <View style={styles.cargaCajeroDiagram}>
+                <ModeDiagram
+                  mode={currentMode}
+                  width={isSmallTablet ? 240 : isLargeTablet ? 320 : 280}
+                  height={isSmallTablet ? 110 : isLargeTablet ? 140 : 125}
                 />
               </View>
-            );
-          })()}
+            </View>
+
+            {(() => {
+              const doorId = systemConfig?.cargaCajero?.videoporteroDoorId || 'P2';
+              const doorIndex = Math.max(0, Number(String(doorId).replace(/\D/g, '')) - 1);
+              const door = systemConfig?.doors?.[doorIndex];
+              if (!door?.enabled || !door.intercom?.cameraIP) return null;
+              return (
+                <View style={styles.cargaCajeroRightColumn}>
+                  <View style={styles.cargaCajeroVideoOutside}>
+                    <DoorVideoStream
+                      intercomConfig={door.intercom}
+                      doorName={door.name || doorId}
+                      forceMuted
+                      autoStartInline
+                      hideControls
+                      inlineHeight={isSmallTablet ? 280 : isLargeTablet ? 380 : 340}
+                    />
+                  </View>
+                </View>
+              );
+            })()}
+          </View>
         </View>
       ) : (
         /* Vista normal para todos los modos excepto emergencia y carga cajero */
@@ -1718,6 +1754,14 @@ export default function MainScreen() {
               >
                 <Text style={styles.changeModeButtonText}>CAMBIAR MODO</Text>
               </TouchableOpacity>
+            </View>
+
+            <View style={styles.modeDiagramSection}>
+              <ModeDiagram
+                mode={currentMode}
+                width={isSmallTablet ? 280 : isLargeTablet ? 400 : 340}
+                height={isSmallTablet ? 120 : isLargeTablet ? 160 : 140}
+              />
             </View>
           </View>
         </View>

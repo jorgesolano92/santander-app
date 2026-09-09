@@ -59,7 +59,7 @@ static bool resolveEncodeAudioFrame() {
 }
 
 extern "C" JNIEXPORT jbyteArray JNICALL
-Java_com_cess07_puertassantander_dvrsdk_DvrSdkAudioBridge_encodeAudioFrame(
+Java_com_puertas_santander_dvrsdk_DvrSdkAudioBridge_encodeAudioFrame(
     JNIEnv* env,
     jclass,
     jlong encodeHandle,
@@ -104,7 +104,7 @@ Java_com_cess07_puertassantander_dvrsdk_DvrSdkAudioBridge_encodeAudioFrame(
 }
 
 extern "C" JNIEXPORT jboolean JNICALL
-Java_com_cess07_puertassantander_dvrsdk_DvrSdkAudioBridge_voiceComSendData(
+Java_com_puertas_santander_dvrsdk_DvrSdkAudioBridge_voiceComSendData(
     JNIEnv* env,
     jclass,
     jlong voiceHandle,

@@ -10,6 +10,7 @@ interface ModeSwipeRowProps {
   isActive: boolean;
   onPreview: () => void;
   onActivate: () => void | boolean | Promise<void | boolean>;
+  compact?: boolean;
 }
 
 export default function ModeSwipeRow({
@@ -19,13 +20,19 @@ export default function ModeSwipeRow({
   isActive,
   onPreview,
   onActivate,
+  compact = false,
 }: ModeSwipeRowProps) {
   const iconColor = isActive || isSelected ? '#EC1C24' : '#495057';
 
   if (isActive) {
     return (
       <TouchableOpacity
-        style={[styles.row, styles.activeRow, isSelected && styles.selectedRow]}
+        style={[
+          styles.row,
+          compact && styles.rowCompact,
+          styles.activeRow,
+          isSelected && styles.selectedRow,
+        ]}
         onPress={onPreview}
         activeOpacity={0.85}
       >
@@ -43,7 +50,7 @@ export default function ModeSwipeRow({
   }
 
   return (
-    <View style={[styles.row, isSelected && styles.selectedRow]}>
+    <View style={[styles.row, compact && styles.rowCompact, isSelected && styles.selectedRow]}>
       <TouchableOpacity style={styles.labelArea} onPress={onPreview} activeOpacity={0.7}>
         <ModeIcon mode={modeId} size={24} color={iconColor} />
         <Text style={[styles.modeName, isSelected && styles.modeNameSelected]} numberOfLines={1}>
@@ -69,6 +76,12 @@ const styles = StyleSheet.create({
     borderColor: '#DEE2E6',
     backgroundColor: '#FFFFFF',
     minHeight: 56,
+  },
+  rowCompact: {
+    gap: 8,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    minHeight: 46,
   },
   selectedRow: {
     backgroundColor: '#FFFFFF',

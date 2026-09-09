@@ -2,7 +2,7 @@
 
 ## Objetivo
 
-Compilar sin perder cambios locales del SDK (`android/app/src/main/java/com/cess07/puertassantander/dvrsdk/`).
+Compilar sin perder cambios locales del SDK (`android/app/src/main/java/com/puertas/santander/dvrsdk/`).
 
 ## Reglas para no sobrescribir cambios
 

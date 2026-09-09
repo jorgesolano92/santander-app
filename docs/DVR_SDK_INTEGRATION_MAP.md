@@ -20,7 +20,7 @@ Dejar camino funcional para pruebas de:
 
 ### Bridge nativo Android
 
-- `android/app/src/main/java/com/cess07/puertassantander/dvrsdk/DvrSdkManager.java`
+- `android/app/src/main/java/com/puertas/santander/dvrsdk/DvrSdkManager.java`
   - Login/Logout
   - `startLivePreview(channel, streamType)`
   - `stopLivePreview()`
@@ -29,7 +29,7 @@ Dejar camino funcional para pruebas de:
   - `stopVoiceIntercom()`
   - Implementacion con reflexion para tolerar diferencias de version en `dvrsdk.jar`.
 
-- `android/app/src/main/java/com/cess07/puertassantander/dvrsdk/DvrSdkModule.java`
+- `android/app/src/main/java/com/puertas/santander/dvrsdk/DvrSdkModule.java`
   - Expuesto a React Native:
     - `startLivePreview(channel, streamType)`
     - `stopLivePreview()`

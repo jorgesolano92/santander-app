@@ -1,5 +1,5 @@
 /**
- * Operación actual: solo puente PC (audio_bridge.py).
- * Cambiar a false para volver a mostrar SDK Android y SIP/CSIP en configuración.
+ * false = se puede elegir por puerta: puente PC, SDK o SIP/CSIP (Panphone).
+ * true = fuerza siempre puente PC y oculta el selector.
  */
-export const INTERCOM_BRIDGE_ONLY = true;
+export const INTERCOM_BRIDGE_ONLY = false;
