@@ -419,7 +419,7 @@ export default function IntercomConfigurationModal({
                     {(config.intercomMode ?? 'bridge') === 'sip'
                       ? (config.sipSignaling ?? 'pbx') === 'p2p'
                         ? 'P2P: Panphone marca por SIP UDP a una IP (sin PBX). Vídeo RTSP + call_start. Audio en esta tablet requiere softphone SIP UDP o PBX (sip.js usa WebSocket).'
-                        : 'Al contestar o iniciar intercom: call_start/LED en Panphone y, si hay cuenta SIP, audio por PBX.'
+                        : 'Asterisk/PBX: call_start/LED en Panphone + audio en tablet vía cuenta SIP (WebSocket). Dejad señalización en PBX/Asterisk.'
                       : (config.intercomMode ?? 'bridge') === 'sdk'
                         ? 'Audio directo tablet ↔ cámara vía SDK nativo.'
                         : 'Audio tablet ↔ WS puente PC ↔ cámara (audio_bridge.py).'}
@@ -443,7 +443,7 @@ export default function IntercomConfigurationModal({
                         }}
                         style={styles.picker}
                       >
-                        <Picker.Item label="PBX (centralita)" value="pbx" />
+                        <Picker.Item label="PBX / Asterisk (recomendado)" value="pbx" />
                         <Picker.Item label="P2P / IP (sin centralita)" value="p2p" />
                       </Picker>
                     </View>
@@ -574,7 +574,10 @@ export default function IntercomConfigurationModal({
                       )}
 
                       <Text style={[styles.pickerLabel, { marginTop: 12 }]}>
-                        Cuenta SIP tablet (audio PBX — opcional si solo usáis call_start)
+                        Cuenta SIP tablet (Asterisk / PBX)
+                      </Text>
+                      <Text style={{ fontSize: 11, color: '#6C757D', marginBottom: 8 }}>
+                        Extensión de esta tablet en Asterisk. WS SIP suele ser IP:8088/ws (o 8089/ws con TLS).
                       </Text>
                       <View style={styles.inputRow}>
                         <Text style={styles.inputLabel}>SIP URI:</Text>
@@ -582,7 +585,7 @@ export default function IntercomConfigurationModal({
                           style={styles.textInput}
                           value={config.sipUri}
                           onChangeText={(text) => updateConfig('sipUri', text)}
-                          placeholder="sip:201@pbx.local"
+                          placeholder="sip:201@192.168.1.50"
                           autoCapitalize="none"
                         />
                       </View>
@@ -613,7 +616,7 @@ export default function IntercomConfigurationModal({
                           style={styles.textInput}
                           value={config.sipDomain}
                           onChangeText={(text) => updateConfig('sipDomain', text)}
-                          placeholder="pbx.local"
+                          placeholder="192.168.1.50"
                           autoCapitalize="none"
                         />
                       </View>
@@ -623,7 +626,7 @@ export default function IntercomConfigurationModal({
                           style={styles.textInput}
                           value={config.sipServer || ''}
                           onChangeText={(text) => updateConfig('sipServer', text)}
-                          placeholder="pbx.local:5066"
+                          placeholder="192.168.1.50:8088/ws"
                           autoCapitalize="none"
                         />
                       </View>
@@ -633,7 +636,7 @@ export default function IntercomConfigurationModal({
                           style={styles.textInput}
                           value={config.sipCallDestination || ''}
                           onChangeText={(text) => updateConfig('sipCallDestination', text)}
-                          placeholder="sip:panphone@pbx.local (opcional)"
+                          placeholder="sip:100@192.168.1.50 (ext. Panphone)"
                           autoCapitalize="none"
                         />
                       </View>

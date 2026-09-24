@@ -89,16 +89,23 @@ function buildAor(config: SipConfig): string {
 }
 
 function buildWebSocketServer(config: SipConfig): string {
+  const scheme = config.enableTLS ? 'wss' : 'ws';
+
   if (config.sipServer?.trim()) {
-    const raw = config.sipServer.trim().replace(/^wss?:\/\//i, '');
-    const scheme = config.enableTLS ? 'wss' : 'ws';
-    return `${scheme}://${raw}`;
+    const raw = config.sipServer.trim();
+    // URL completa (ws://… o wss://…)
+    if (/^wss?:\/\//i.test(raw)) {
+      return raw;
+    }
+    // host:puerto[/ruta] — Asterisk suele usar …:8088/ws
+    return `${scheme}://${raw.replace(/^\/+/, '')}`;
   }
+
   const domain = config.sipDomain?.trim() || parseSipTarget(config.sipUri).host;
   if (!domain) {
     throw new Error('No se puede determinar el servidor SIP (sipDomain o sipServer).');
   }
-  const scheme = config.enableTLS ? 'wss' : 'ws';
+  // Sin sipServer explícito: WS en el mismo host (Asterisk: preferid sipServer=IP:8088/ws).
   return `${scheme}://${domain}`;
 }
 
