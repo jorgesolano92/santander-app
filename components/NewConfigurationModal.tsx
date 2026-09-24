@@ -111,6 +111,8 @@ export default function NewConfigurationModal({
                   sdkPassword: door.intercom.sdkPassword ?? '',
                   voiceChannel: door.intercom.voiceChannel ?? -1,
                   intercomMode: INTERCOM_BRIDGE_ONLY ? 'bridge' : (door.intercom.intercomMode ?? 'bridge'),
+                  sipSignaling: door.intercom.sipSignaling ?? 'pbx',
+                  sipP2pPeerIp: door.intercom.sipP2pPeerIp ?? '',
                   bridgeUrl: door.intercom.bridgeUrl ?? 'ws://192.168.1.10:8765',
                   sipServer: door.intercom.sipServer ?? '',
                   sipCallDestination: door.intercom.sipCallDestination ?? '',

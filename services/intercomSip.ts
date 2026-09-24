@@ -18,6 +18,10 @@ export function isSipIntercomActive(doorId?: string): boolean {
   return doorId ? activeDoorId === doorId : true;
 }
 
+function isP2pSignaling(config: IntercomConfig): boolean {
+  return (config.sipSignaling ?? 'pbx') === 'p2p';
+}
+
 async function ensureMicPermission(): Promise<boolean> {
   if (Platform.OS !== 'android') return false;
   const already = await PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.RECORD_AUDIO);
@@ -47,6 +51,18 @@ function resolveCallTarget(config: IntercomConfig): {
   target?: string;
   user?: string;
 } {
+  if (isP2pSignaling(config)) {
+    const peer =
+      config.sipP2pPeerIp?.trim() ||
+      config.csipCallTarget?.trim() ||
+      '';
+    return {
+      target_type: 'ip',
+      target: peer || undefined,
+      user: config.csipCallUser?.trim() || undefined,
+    };
+  }
+
   const targetType = config.csipCallTargetType ?? 'default';
   if (targetType === 'default') {
     return { target_type: 'default' };
@@ -61,19 +77,21 @@ function resolveCallTarget(config: IntercomConfig): {
 function missingSipSetupMessage(config: IntercomConfig): string {
   const parts: string[] = [];
   if (!isCsipApiConfigured(config)) {
-    parts.push(
-      'API CSIP: host, puerto y API key/token (cuando estén disponibles).',
-    );
+    parts.push('API CSIP: host, puerto y API key/token (cuando estén disponibles).');
   }
-  if (!isSipConfigured(buildSipConfig(config))) {
+  if (isP2pSignaling(config)) {
+    const peer = config.sipP2pPeerIp?.trim() || config.csipCallTarget?.trim();
+    if (!peer) {
+      parts.push('P2P: IP del peer SIP (softphone u otra extensión por IP).');
+    }
+  } else if (!isSipConfigured(buildSipConfig(config))) {
     parts.push('Cuenta SIP: URI, usuario, contraseña y dominio/servidor.');
   }
   return parts.join('\n\n');
 }
 
 /**
- * Modo SIP: dispara marcación en tarjeta CSIP (REST) y/o audio SIP en tablet (sip.js).
- * Listo para activar cuando tengáis credenciales; sin ellas muestra aviso claro.
+ * Modo SIP: PBX (sip.js WS) y/o P2P (CSIP call_start target_type=ip, como Panphone modo IP).
  */
 export async function startSipIntercom(doorId: string, config: IntercomConfig): Promise<boolean> {
   if (activeDoorId && activeDoorId !== doorId) {
@@ -81,10 +99,27 @@ export async function startSipIntercom(doorId: string, config: IntercomConfig): 
     return false;
   }
 
+  const p2p = isP2pSignaling(config);
   const hasCsip = isCsipApiConfigured(config);
-  const hasSipClient = isSipConfigured(buildSipConfig(config));
+  const hasSipClient = !p2p && isSipConfigured(buildSipConfig(config));
+  const callTarget = resolveCallTarget(config);
 
-  if (!hasCsip && !hasSipClient) {
+  if (p2p) {
+    if (!hasCsip) {
+      Alert.alert(
+        'Intercom P2P',
+        'Falta la API CSIP (host + API key) para enviar call_start a Panphone.',
+      );
+      return false;
+    }
+    if (!callTarget.target) {
+      Alert.alert(
+        'Intercom P2P',
+        'Indica la IP del peer SIP (softphone Linphone u otra IP que acepte SIP UDP).',
+      );
+      return false;
+    }
+  } else if (!hasCsip && !hasSipClient) {
     Alert.alert(
       'Intercom SIP — pendiente de accesos',
       'El modo SIP está preparado pero faltan credenciales:\n\n' +
@@ -105,12 +140,11 @@ export async function startSipIntercom(doorId: string, config: IntercomConfig): 
   try {
     if (hasCsip) {
       const apiConfig = buildCsipApiConfig(config);
-      const callTarget = resolveCallTarget(config);
       const csipResult = await csipStartCall(apiConfig, {
         ...callTarget,
         recording: config.csipCallRecording ?? false,
       });
-      console.log('[SIP intercom] CSIP call_start:', csipResult);
+      console.log('[SIP intercom] CSIP call_start:', csipResult, p2p ? '(P2P)' : '(PBX)');
 
       try {
         await csipControlLed(apiConfig, {
@@ -120,6 +154,19 @@ export async function startSipIntercom(doorId: string, config: IntercomConfig): 
       } catch (ledError) {
         console.warn('[SIP intercom] LED ocupado no aplicado:', ledError);
       }
+    }
+
+    if (p2p) {
+      Alert.alert(
+        'Intercom P2P',
+        `Marcación enviada a Panphone → SIP UDP ${callTarget.target}` +
+          (callTarget.user ? ` (user ${callTarget.user})` : '') +
+          '.\n\n' +
+          'Esta tablet no termina audio SIP UDP (sip.js usa WebSocket). ' +
+          'Contesta en el softphone del peer o usa señalización PBX para audio en la app.',
+      );
+      activeDoorId = doorId;
+      return true;
     }
 
     if (hasSipClient) {
@@ -149,7 +196,7 @@ export async function startSipIntercom(doorId: string, config: IntercomConfig): 
     return true;
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Error desconocido';
-    Alert.alert('Intercom SIP', message);
+    Alert.alert(p2p ? 'Intercom P2P' : 'Intercom SIP', message);
     return false;
   }
 }
