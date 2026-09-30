@@ -47,7 +47,7 @@ export interface IntercomConfig {
   sipServer?: string;
   /** Destino al marcar desde la tablet (si distinto de sipUri). */
   sipCallDestination?: string;
-  /** API CSIP custom1 — host:puerto del dispositivo. Ej. 192.168.1.50:8090 */
+  /** API CSIP custom1 — host:puerto del dispositivo. Ej. 192.168.1.80:8090 */
   csipApiHost?: string;
   csipApiUseHttps?: boolean;
   csipApiKey?: string;
@@ -98,7 +98,7 @@ interface IntercomConfigurationModalProps {
 
 const defaultIntercomConfig: IntercomConfig = {
   name: '',
-  cameraIP: '192.168.1.70',
+  cameraIP: '192.168.1.80',
   httpPort: 80,
   httpsPort: 443,
   onvifUsername: 'admin',
@@ -106,7 +106,7 @@ const defaultIntercomConfig: IntercomConfig = {
   rtspPort: 554,
   videoProfile: 'MainStream',
   rtspPath: 'video1',
-  snapshotPath: '',
+  snapshotPath: 'camara.php',
   rtspVideoCodec: 'auto',
   proxyUrl: 'http://localhost:3001',
   sdkPort: 9008,
@@ -116,15 +116,16 @@ const defaultIntercomConfig: IntercomConfig = {
   intercomMode: 'sip',
   sipSignaling: 'pbx',
   sipP2pPeerIp: '',
-  bridgeUrl: 'ws://192.168.1.10:8765',
+  bridgeUrl: 'ws://192.168.1.155:8765',
   bridgeMicSource: 'voice_communication',
   sipUri: 'sip:201@192.168.1.154',
   sipUsername: '201',
   sipPassword: 'Santander201',
   sipDomain: '192.168.1.154',
   sipServer: '192.168.1.154:8088/ws',
-  sipCallDestination: 'sip:100@192.168.1.154',
-  csipApiHost: '192.168.1.70:8090',
+  // P1 Calle→101 · P2 Oficina→100 (ajustado por puerta en defaultDoorAppConfig)
+  sipCallDestination: 'sip:101@192.168.1.154',
+  csipApiHost: '192.168.1.80:8090',
   csipApiUseHttps: false,
   csipApiKey: 'f3fb37ac959b795507cf3d6794b1f29b91ed2b1b1d1f06c6',
   csipBearerToken: '',
@@ -463,7 +464,7 @@ export default function IntercomConfigurationModal({
                       style={styles.textInput}
                       value={config.csipApiHost || ''}
                       onChangeText={(text) => updateConfig('csipApiHost', text)}
-                      placeholder="192.168.1.70:8090"
+                      placeholder="192.168.1.80:8090"
                       autoCapitalize="none"
                       autoCorrect={false}
                     />
@@ -563,7 +564,7 @@ export default function IntercomConfigurationModal({
                               style={styles.textInput}
                               value={config.csipCallTarget || ''}
                               onChangeText={(text) => updateConfig('csipCallTarget', text)}
-                              placeholder={config.csipCallTargetType === 'ip' ? '192.168.1.50' : '201'}
+                              placeholder={config.csipCallTargetType === 'ip' ? '192.168.1.80' : '201'}
                               autoCapitalize="none"
                             />
                           </View>
@@ -592,7 +593,7 @@ export default function IntercomConfigurationModal({
                           style={styles.textInput}
                           value={config.sipUri}
                           onChangeText={(text) => updateConfig('sipUri', text)}
-                          placeholder="sip:201@192.168.1.50"
+                          placeholder="sip:201@192.168.1.154"
                           autoCapitalize="none"
                         />
                       </View>
@@ -623,7 +624,7 @@ export default function IntercomConfigurationModal({
                           style={styles.textInput}
                           value={config.sipDomain}
                           onChangeText={(text) => updateConfig('sipDomain', text)}
-                          placeholder="192.168.1.50"
+                          placeholder="192.168.1.154"
                           autoCapitalize="none"
                         />
                       </View>
@@ -633,7 +634,7 @@ export default function IntercomConfigurationModal({
                           style={styles.textInput}
                           value={config.sipServer || ''}
                           onChangeText={(text) => updateConfig('sipServer', text)}
-                          placeholder="192.168.1.50:8088/ws"
+                          placeholder="192.168.1.154:8088/ws"
                           autoCapitalize="none"
                         />
                       </View>
@@ -643,7 +644,7 @@ export default function IntercomConfigurationModal({
                           style={styles.textInput}
                           value={config.sipCallDestination || ''}
                           onChangeText={(text) => updateConfig('sipCallDestination', text)}
-                          placeholder="sip:100@192.168.1.50 (ext. Panphone)"
+                          placeholder="sip:101@192.168.1.154 (ext. Panphone)"
                           autoCapitalize="none"
                         />
                       </View>
