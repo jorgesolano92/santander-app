@@ -141,6 +141,12 @@ components:
           description: "Estado lógico para asignar al LED. Valores permitidos: 'libre','ocupado','abriendo','apagado'. También se aceptan colores/alias: 'green','red','orange'."
           enum: [libre, ocupado, abriendo, apagado, green, red, orange]
           example: libre
+        brightness:
+          type: integer
+          minimum: 1
+          maximum: 9
+          description: "Brillo LED (escala CSIP 1–9)."
+          example: 7
     LedControlResponse:
       type: object
       properties:

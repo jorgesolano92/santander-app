@@ -423,10 +423,15 @@ export function useDoorControl(): UseDoorControlReturn {
       if (isMountedRef.current) {
         setSipCallState(null);
         setActiveSipCallDoorId(null);
+        setError(null);
       }
     } catch (err) {
       if (isMountedRef.current) {
-        setError(err instanceof Error ? err.message : 'Error finalizando llamada SIP');
+        // Al volver atrás el colgado SIP no debe mostrar banner rojo.
+        console.warn('[SIP] endIntercomCall:', err);
+        setSipCallState(null);
+        setActiveSipCallDoorId(null);
+        setError(null);
       }
     } finally {
       if (isMountedRef.current) {
@@ -491,10 +496,13 @@ export function useDoorControl(): UseDoorControlReturn {
         case 'callFailed':
           setSipCallState(null);
           setActiveSipCallDoorId(null);
-          setError('Error en la llamada SIP: ' + (data?.message || 'Error desconocido'));
+          setError(
+            'Error en la llamada SIP: ' +
+              (data?.error || data?.message || 'Error desconocido'),
+          );
           break;
         case 'error':
-          setError('Error SIP: ' + (data?.message || 'Error desconocido'));
+          setError('Error SIP: ' + (data?.error || data?.message || 'Error desconocido'));
           break;
       }
     };

@@ -69,10 +69,6 @@ export default function UnauthorizedDeviceScreen({
           ) : null}
         </View>
       </View>
-
-      <Text style={styles.footerId} selectable>
-        ID: {androidId || '—'}
-      </Text>
     </View>
   );
 }
@@ -160,15 +156,5 @@ const styles = StyleSheet.create({
     color: '#E5E7EB',
     fontWeight: '600',
     fontSize: 14,
-  },
-  footerId: {
-    position: 'absolute',
-    bottom: 16,
-    left: 16,
-    right: 16,
-    textAlign: 'center',
-    color: '#9CA3AF',
-    fontSize: 12,
-    fontFamily: 'monospace',
   },
 });

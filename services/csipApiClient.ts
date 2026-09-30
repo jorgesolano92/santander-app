@@ -97,11 +97,21 @@ async function postJson<T>(
     );
   }
 
-  const response = await fetch(url, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify(body),
-  });
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(body),
+    });
+  } catch (err: unknown) {
+    const raw = err instanceof Error ? err.message : String(err);
+    throw new Error(
+      `No se pudo conectar a CSIP (${url}). ` +
+        `Comprueba host:puerto (ej. 192.168.1.70:8090) y que la tablet llegue a esa IP. ` +
+        `(${raw})`,
+    );
+  }
 
   const text = await response.text();
   let data: T | null = null;

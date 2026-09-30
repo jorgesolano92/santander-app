@@ -1,6 +1,12 @@
 import { EventEmitter } from 'events';
 import { Platform } from 'react-native';
 
+import {
+  setSpeakerphoneOn,
+  startCommunicationAudio,
+  stopCommunicationAudio,
+} from '@/services/tabletWake';
+
 export interface SipConfig {
   sipUri: string;
   sipUsername: string;
@@ -25,6 +31,8 @@ export type SipEventType = 'callStarted' | 'callConnected' | 'callEnded' | 'call
 type SimpleUserLike = {
   connect: () => Promise<void>;
   disconnect: () => Promise<void>;
+  register: () => Promise<void>;
+  unregister: () => Promise<void>;
   call: (destination: string) => Promise<void>;
   hangup: () => Promise<void>;
   mute: () => void;
@@ -32,10 +40,90 @@ type SimpleUserLike = {
   hold: () => Promise<void>;
   unhold: () => Promise<void>;
   isConnected: () => boolean;
-  stateChange: { addListener: (cb: (state: string) => void) => void };
 };
 
 let webrtcGlobalsReady = false;
+let webSocketPatched = false;
+
+/**
+ * sip.js Transport usa ws.addEventListener(...). En React Native el WebSocket
+ * nativo solo expone onopen/onmessage/onerror/onclose → "undefined is not a function".
+ */
+function ensureWebSocketAddEventListener(): void {
+  if (webSocketPatched || Platform.OS === 'web') {
+    webSocketPatched = true;
+    return;
+  }
+
+  // SessionManager también llama window.addEventListener('online'|'beforeunload').
+  const g = global as typeof globalThis & {
+    window?: Window & typeof globalThis;
+  };
+  if (!g.window) {
+    g.window = g as unknown as Window & typeof globalThis;
+  }
+  if (typeof g.window.addEventListener !== 'function') {
+    const noop = () => {};
+    g.window.addEventListener = noop as Window['addEventListener'];
+    g.window.removeEventListener = noop as Window['removeEventListener'];
+  }
+
+  const RNWebSocket = global.WebSocket as typeof WebSocket | undefined;
+  if (!RNWebSocket) {
+    console.warn('[SIP] global.WebSocket no disponible');
+    return;
+  }
+  const proto = RNWebSocket.prototype as WebSocket & {
+    addEventListener?: (type: string, listener: (...args: unknown[]) => void) => void;
+    removeEventListener?: (type: string, listener: (...args: unknown[]) => void) => void;
+  };
+  if (typeof proto.addEventListener === 'function') {
+    webSocketPatched = true;
+    return;
+  }
+
+  proto.addEventListener = function addEventListener(type: string, listener: (...args: unknown[]) => void) {
+    const handler = (event: unknown) => listener(event);
+    switch (type) {
+      case 'open':
+        this.onopen = handler as WebSocket['onopen'];
+        break;
+      case 'message':
+        this.onmessage = handler as WebSocket['onmessage'];
+        break;
+      case 'error':
+        this.onerror = handler as WebSocket['onerror'];
+        break;
+      case 'close':
+        this.onclose = handler as WebSocket['onclose'];
+        break;
+      default:
+        break;
+    }
+  };
+
+  proto.removeEventListener = function removeEventListener(type: string, _listener: (...args: unknown[]) => void) {
+    switch (type) {
+      case 'open':
+        this.onopen = null;
+        break;
+      case 'message':
+        this.onmessage = null;
+        break;
+      case 'error':
+        this.onerror = null;
+        break;
+      case 'close':
+        this.onclose = null;
+        break;
+      default:
+        break;
+    }
+  };
+
+  webSocketPatched = true;
+  console.log('[SIP] WebSocket/window event polyfill activo (React Native)');
+}
 
 function ensureWebRtcGlobals(): void {
   if (webrtcGlobalsReady || Platform.OS === 'web') {
@@ -45,20 +133,30 @@ function ensureWebRtcGlobals(): void {
   try {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const webrtc = require('react-native-webrtc');
-    const g = global as typeof globalThis & {
-      RTCPeerConnection?: unknown;
-      RTCSessionDescription?: unknown;
-      RTCIceCandidate?: unknown;
-      MediaStream?: unknown;
-      navigator?: { mediaDevices?: unknown };
-    };
-    g.RTCPeerConnection = webrtc.RTCPeerConnection;
-    g.RTCSessionDescription = webrtc.RTCSessionDescription;
-    g.RTCIceCandidate = webrtc.RTCIceCandidate;
-    g.MediaStream = webrtc.MediaStream;
-    g.navigator = g.navigator ?? {};
-    g.navigator.mediaDevices = webrtc.mediaDevices;
+    // registerGlobals: MediaStream, MediaStreamTrackEvent, getUserMedia, RTCPeerConnection, etc.
+    if (typeof webrtc.registerGlobals === 'function') {
+      webrtc.registerGlobals();
+    } else {
+      const g = global as typeof globalThis & {
+        RTCPeerConnection?: unknown;
+        RTCSessionDescription?: unknown;
+        RTCIceCandidate?: unknown;
+        MediaStream?: unknown;
+        MediaStreamTrack?: unknown;
+        MediaStreamTrackEvent?: unknown;
+        navigator?: { mediaDevices?: unknown };
+      };
+      g.RTCPeerConnection = webrtc.RTCPeerConnection;
+      g.RTCSessionDescription = webrtc.RTCSessionDescription;
+      g.RTCIceCandidate = webrtc.RTCIceCandidate;
+      g.MediaStream = webrtc.MediaStream;
+      g.MediaStreamTrack = webrtc.MediaStreamTrack;
+      g.MediaStreamTrackEvent = webrtc.MediaStreamTrackEvent;
+      g.navigator = g.navigator ?? {};
+      g.navigator.mediaDevices = webrtc.mediaDevices;
+    }
     webrtcGlobalsReady = true;
+    console.log('[SIP] WebRTC globals listos (react-native-webrtc)');
   } catch (error) {
     console.warn('[SIP] react-native-webrtc no disponible:', error);
   }
@@ -137,6 +235,7 @@ class SipService extends EventEmitter {
         throw new Error('Configuración SIP incompleta.');
       }
 
+      ensureWebSocketAddEventListener();
       ensureWebRtcGlobals();
       this.currentConfig = config;
 
@@ -156,40 +255,88 @@ class SipService extends EventEmitter {
       const options = {
         aor,
         media: {
-          constraints: { audio: true, video: false },
+          constraints: {
+            audio: {
+              echoCancellation: true,
+              noiseSuppression: true,
+              autoGainControl: true,
+            },
+            video: false,
+          },
+        },
+        delegate: {
+          onServerConnect: () => {
+            console.log('[SIP] WS conectado');
+          },
+          onServerDisconnect: (err?: Error) => {
+            console.warn('[SIP] WS desconectado', err?.message);
+            this.isInitialized = false;
+          },
+          onRegistered: () => {
+            console.log('[SIP] REGISTER OK', aor);
+          },
+          onUnregistered: () => {
+            console.log('[SIP] UNREGISTER');
+          },
+          onCallAnswered: () => {
+            if (this.callState.isActive) {
+              this.callState.isConnected = true;
+              startCommunicationAudio(true);
+              this.callState.isSpeakerOn = true;
+              this.startCallDuration();
+              this.emit('callConnected', { remoteUri: this.callState.remoteUri });
+            }
+          },
+          onCallHangup: () => {
+            stopCommunicationAudio();
+            this.resetCallState();
+            this.emit('callEnded', {});
+          },
         },
         userAgentOptions: {
           authorizationUsername: config.sipUsername.trim(),
           authorizationPassword: config.sipPassword,
+          logLevel: 'warn' as const,
           transportOptions: {
             server,
+          },
+          // LAN: candidatos host bastan; STUN público ayuda si hay NAT raro.
+          sessionDescriptionHandlerFactoryOptions: {
+            peerConnectionConfiguration: {
+              iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
+            },
           },
         },
       };
 
+      console.log('[SIP] Conectando WS', server, 'AOR', aor);
       const user = new Web.SimpleUser(server, options) as SimpleUserLike;
-      user.stateChange.addListener((state) => {
-        console.log('[SIP] estado SimpleUser:', state);
-        if (state === 'Established' && this.callState.isActive) {
-          this.callState.isConnected = true;
-          this.startCallDuration();
-          this.emit('callConnected', { remoteUri: this.callState.remoteUri });
-        }
-      });
 
       await user.connect();
+      // sip.js: connect solo abre el WebSocket; el REGISTER es aparte.
+      await user.register();
       this.simpleUser = user;
       this.isInitialized = true;
       console.log('[SIP] Registrado/conectado a', server, 'como', aor);
       return true;
     } catch (error) {
-      console.error('[SIP] Error inicializando:', error);
+      const message =
+        error instanceof Error
+          ? error.message
+          : typeof error === 'string'
+            ? error
+            : 'Error inicializando SIP';
+      let endpoint = '(sip)';
+      try {
+        endpoint = `${buildWebSocketServer(config)} / ${buildAor(config)}`;
+      } catch {
+        // ignore
+      }
+      console.error('[SIP] Error inicializando:', endpoint, message, error);
       this.isInitialized = false;
       this.simpleUser = null;
-      this.emit('error', {
-        error: error instanceof Error ? error.message : 'Error inicializando SIP',
-      });
-      return false;
+      this.emit('error', { error: message });
+      throw new Error(`SIP no registrado (${endpoint}): ${message}`);
     }
   }
 
@@ -208,7 +355,15 @@ class SipService extends EventEmitter {
         throw new Error('Destino SIP vacío');
       }
 
+      // Si quedó una sesión colgada de un intento anterior, limpiar.
+      try {
+        await this.simpleUser.hangup();
+      } catch {
+        // no había sesión activa
+      }
+
       console.log('[SIP] Iniciando llamada a:', destination);
+      startCommunicationAudio(true);
       this.callState = {
         isActive: true,
         isConnected: false,
@@ -222,12 +377,16 @@ class SipService extends EventEmitter {
       await this.simpleUser.call(destination);
       return true;
     } catch (error) {
-      console.error('[SIP] Error iniciando llamada:', error);
+      const message =
+        error instanceof Error
+          ? error.message
+          : typeof error === 'string'
+            ? error
+            : 'Error desconocido iniciando llamada SIP';
+      console.error('[SIP] Error iniciando llamada:', message, error);
       this.callState.isActive = false;
-      this.emit('callFailed', {
-        error: error instanceof Error ? error.message : 'Error desconocido',
-      });
-      return false;
+      this.emit('callFailed', { error: message });
+      throw new Error(`No se pudo iniciar la llamada SIP: ${message}`);
     }
   }
 
@@ -235,16 +394,22 @@ class SipService extends EventEmitter {
     try {
       console.log('[SIP] Finalizando llamada');
       if (this.simpleUser) {
-        await this.simpleUser.hangup();
+        try {
+          await this.simpleUser.hangup();
+        } catch (hangupError) {
+          // Sin sesión activa (p. ej. al pulsar VOLVER sin contestar): no es error de usuario.
+          console.log(
+            '[SIP] hangup omitido/fallido (esperado si no hay sesión):',
+            hangupError instanceof Error ? hangupError.message : hangupError,
+          );
+        }
       }
       this.resetCallState();
       this.emit('callEnded', {});
     } catch (error) {
       console.error('[SIP] Error finalizando llamada:', error);
       this.resetCallState();
-      this.emit('error', {
-        error: error instanceof Error ? error.message : 'Error finalizando llamada',
-      });
+      this.emit('callEnded', {});
     }
   }
 
@@ -259,7 +424,7 @@ class SipService extends EventEmitter {
   }
 
   async setSpeakerphone(enabled: boolean): Promise<void> {
-    // El enrutamiento de altavoz depende del SO; se deja el flag para la UI.
+    setSpeakerphoneOn(enabled);
     this.callState.isSpeakerOn = enabled;
   }
 
@@ -282,6 +447,7 @@ class SipService extends EventEmitter {
   }
 
   private resetCallState(): void {
+    stopCommunicationAudio();
     this.callState = {
       isActive: false,
       isConnected: false,

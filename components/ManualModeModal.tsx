@@ -162,8 +162,8 @@ export default function ManualModeModal({
                 ...door,
                 intercom: {
                   ...intercomRest,
-                  doorControlUsername: door.intercom.doorControlUsername || 'Scati2023',
-                  doorControlPassword: door.intercom.doorControlPassword || 'Scati2023',
+                  doorControlUsername: door.intercom.doorControlUsername || 'ceroideas',
+                  doorControlPassword: door.intercom.doorControlPassword || '12345678',
                   doorControlPCB: door.intercom.doorControlPCB ?? 1,
                   doorControlSwitch: door.intercom.doorControlSwitch ?? (index + 1),
                   doorControlAction: door.intercom.doorControlAction || 'set_output',

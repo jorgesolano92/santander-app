@@ -140,11 +140,19 @@ export async function startSipIntercom(doorId: string, config: IntercomConfig): 
   try {
     if (hasCsip) {
       const apiConfig = buildCsipApiConfig(config);
-      const csipResult = await csipStartCall(apiConfig, {
-        ...callTarget,
-        recording: config.csipCallRecording ?? false,
-      });
-      console.log('[SIP intercom] CSIP call_start:', csipResult, p2p ? '(P2P)' : '(PBX)');
+      try {
+        const csipResult = await csipStartCall(apiConfig, {
+          ...callTarget,
+          recording: config.csipCallRecording ?? false,
+        });
+        console.log('[SIP intercom] CSIP call_start:', csipResult, p2p ? '(P2P)' : '(PBX)');
+      } catch (csipError) {
+        // En PBX el audio va por SIP; un fallo CSIP no debe tumbar toda la llamada.
+        if (p2p || !hasSipClient) {
+          throw csipError;
+        }
+        console.warn('[SIP intercom] CSIP call_start falló; continuo con SIP:', csipError);
+      }
 
       try {
         await csipControlLed(apiConfig, {
@@ -172,16 +180,30 @@ export async function startSipIntercom(doorId: string, config: IntercomConfig): 
     if (hasSipClient) {
       const sipConfig = buildSipConfig(config);
       if (!sipService.isServiceInitialized()) {
-        const initialized = await sipService.initialize(sipConfig);
-        if (!initialized) {
-          throw new Error('No se pudo registrar la cuenta SIP en el servidor.');
+        try {
+          const initialized = await sipService.initialize(sipConfig);
+          if (!initialized) {
+            throw new Error('No se pudo registrar la cuenta SIP en el servidor.');
+          }
+        } catch (sipError: unknown) {
+          const detail = sipError instanceof Error ? sipError.message : String(sipError);
+          throw new Error(
+            detail.includes('SIP no registrado')
+              ? detail
+              : `No se pudo registrar la cuenta SIP en el servidor. ${detail}`,
+          );
         }
       }
 
       const remoteUri = config.sipCallDestination?.trim() || config.sipUri.trim();
-      const callStarted = await sipService.startCall(remoteUri);
-      if (!callStarted) {
-        throw new Error('No se pudo iniciar la llamada SIP desde la tablet.');
+      try {
+        const callStarted = await sipService.startCall(remoteUri);
+        if (!callStarted) {
+          throw new Error('No se pudo iniciar la llamada SIP desde la tablet.');
+        }
+      } catch (callError: unknown) {
+        const detail = callError instanceof Error ? callError.message : String(callError);
+        throw new Error(detail);
       }
     } else if (hasCsip) {
       Alert.alert(

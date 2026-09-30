@@ -38,6 +38,8 @@ export default function IncomingCallOverlay({
   doorName,
 }: Props) {
   const [remaining, setRemaining] = useState(0);
+  /** Retrasa RTSP para no pelear CPU/red con el timbre (Akubox / Android justos). */
+  const [showPreview, setShowPreview] = useState(false);
   const vibrateTimer = useRef<ReturnType<typeof setInterval> | null>(null);
   const expiredRef = useRef(false);
   const callRef = useRef(call);
@@ -53,17 +55,22 @@ export default function IncomingCallOverlay({
   }, [onReject]);
 
   useEffect(() => {
+    let cancelled = false;
     expiredRef.current = false;
+    setShowPreview(false);
     const seconds = Math.max(1, call.remainingSeconds);
     setRemaining(seconds);
     void startCallRingtone();
+    const previewTimer = setTimeout(() => {
+      if (!cancelled) setShowPreview(true);
+    }, 1500);
 
     const tick = setInterval(() => {
       setRemaining((r) => Math.max(0, r - 1));
     }, 1000);
 
     const expireTimer = setTimeout(() => {
-      if (expiredRef.current) return;
+      if (cancelled || expiredRef.current) return;
       expiredRef.current = true;
       void stopCallRingtone();
       Vibration.cancel();
@@ -71,6 +78,7 @@ export default function IncomingCallOverlay({
     }, seconds * 1000);
 
     const pulse = () => {
+      if (cancelled) return;
       if (Platform.OS === 'android') {
         Vibration.vibrate([...RING_PATTERN]);
       } else {
@@ -81,8 +89,10 @@ export default function IncomingCallOverlay({
     vibrateTimer.current = setInterval(pulse, 2800);
 
     return () => {
+      cancelled = true;
       clearInterval(tick);
       clearTimeout(expireTimer);
+      clearTimeout(previewTimer);
       void stopCallRingtone();
       if (vibrateTimer.current) {
         clearInterval(vibrateTimer.current);
@@ -106,7 +116,7 @@ export default function IncomingCallOverlay({
 
   return (
     <View style={styles.overlay}>
-      {intercomConfig?.cameraIP ? (
+      {intercomConfig?.cameraIP && showPreview ? (
         <View style={styles.videoLayer} pointerEvents="none">
           <DoorVideoStream
             intercomConfig={intercomConfig}

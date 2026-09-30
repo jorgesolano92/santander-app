@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Modal, StyleSheet, View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -9,6 +9,7 @@ import {
   invokeExpired,
   invokeReject,
 } from '@/services/incomingCallUiBridge';
+import { stopCallRingtone } from '@/services/callRingtone';
 import { wakeTablet } from '@/services/tabletWake';
 import {
   tabletCallService,
@@ -29,6 +30,14 @@ export default function IncomingCallHost() {
   const [call, setCall] = useState<IncomingCallPayload | null>(null);
   const [intercomConfig, setIntercomConfig] = useState<IntercomConfig | null>(null);
   const [doorName, setDoorName] = useState('');
+  const callRef = useRef<IncomingCallPayload | null>(null);
+  callRef.current = call;
+
+  const clearCallUi = () => {
+    setCall(null);
+    setIntercomConfig(null);
+    void stopCallRingtone();
+  };
 
   useEffect(() => {
     const onIncoming = async (payload: IncomingCallPayload) => {
@@ -54,18 +63,26 @@ export default function IncomingCallHost() {
       setCall(payload);
     };
     const onClear = () => {
-      setCall(null);
-      setIntercomConfig(null);
+      clearCallUi();
     };
 
     tabletCallService.on('incoming_call', onIncoming);
     tabletCallService.on('call_ended', onClear);
     tabletCallService.on('call_accepted', onClear);
+    // Tras colgar, un mode_changed no debe reactivar un Sound huérfano.
+    const onModeChanged = () => {
+      if (!callRef.current) {
+        void stopCallRingtone();
+      }
+    };
+    tabletCallService.on('mode_changed', onModeChanged);
 
     return () => {
       tabletCallService.off('incoming_call', onIncoming);
       tabletCallService.off('call_ended', onClear);
       tabletCallService.off('call_accepted', onClear);
+      tabletCallService.off('mode_changed', onModeChanged);
+      void stopCallRingtone();
     };
   }, []);
 
@@ -78,8 +95,9 @@ export default function IncomingCallHost() {
       presentationStyle="fullScreen"
       onRequestClose={() => {
         if (!call) return;
-        setCall(null);
-        invokeReject(call);
+        const c = call;
+        clearCallUi();
+        invokeReject(c);
       }}
     >
       {call ? (
@@ -89,15 +107,15 @@ export default function IncomingCallHost() {
             intercomConfig={intercomConfig}
             doorName={doorName}
             onAnswer={(c) => {
-              setCall(null);
+              clearCallUi();
               invokeAnswer(c);
             }}
             onReject={(c) => {
-              setCall(null);
+              clearCallUi();
               invokeReject(c);
             }}
             onExpired={(c) => {
-              setCall(null);
+              clearCallUi();
               invokeExpired(c);
             }}
           />

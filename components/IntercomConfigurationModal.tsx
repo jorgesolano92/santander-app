@@ -78,6 +78,12 @@ export interface IntercomConfig {
   doorControlEndpoint?: string;
   /** Solo para set_output: auto = pulso con auto-off, manual = queda ON hasta cerrar. */
   doorOutputMode?: 'auto' | 'manual';
+  /**
+   * Codec de vídeo RTSP para concurrencia en tablet.
+   * auto / vacío = inferir (Panphone→MPEG-4, TVT/AXIS→H.264).
+   * Si Panphone pasa a H.264, poner 'h264' para poder verla junto a TVT.
+   */
+  rtspVideoCodec?: 'auto' | 'h264' | 'mpeg4' | 'hevc';
   deviceType?: 'AXIS-I8116-E' | 'SAFIRE' | 'GENERIC'; // Tipo de dispositivo para control de audio
   supportsIntercom?: boolean; // true si soporta intercomunicación bidireccional
 }
@@ -92,34 +98,35 @@ interface IntercomConfigurationModalProps {
 
 const defaultIntercomConfig: IntercomConfig = {
   name: '',
-  cameraIP: '192.168.1.120',
+  cameraIP: '192.168.1.70',
   httpPort: 80,
   httpsPort: 443,
-  onvifUsername: 'inviasistemas',
-  onvifPassword: 'Cero21264712-',
+  onvifUsername: 'admin',
+  onvifPassword: 'panphone',
   rtspPort: 554,
   videoProfile: 'MainStream',
-  rtspPath: '',
+  rtspPath: 'video1',
   snapshotPath: '',
+  rtspVideoCodec: 'auto',
   proxyUrl: 'http://localhost:3001',
   sdkPort: 9008,
   sdkUsername: 'admin',
   sdkPassword: '',
   voiceChannel: -1,
-  intercomMode: 'bridge',
+  intercomMode: 'sip',
   sipSignaling: 'pbx',
   sipP2pPeerIp: '',
   bridgeUrl: 'ws://192.168.1.10:8765',
   bridgeMicSource: 'voice_communication',
-  sipUri: '',
-  sipUsername: '',
-  sipPassword: '',
-  sipDomain: '',
-  sipServer: '',
-  sipCallDestination: '',
-  csipApiHost: '',
+  sipUri: 'sip:201@192.168.1.154',
+  sipUsername: '201',
+  sipPassword: 'Santander201',
+  sipDomain: '192.168.1.154',
+  sipServer: '192.168.1.154:8088/ws',
+  sipCallDestination: 'sip:100@192.168.1.154',
+  csipApiHost: '192.168.1.70:8090',
   csipApiUseHttps: false,
-  csipApiKey: '',
+  csipApiKey: 'f3fb37ac959b795507cf3d6794b1f29b91ed2b1b1d1f06c6',
   csipBearerToken: '',
   csipCallTargetType: 'default',
   csipCallTarget: '',
@@ -131,8 +138,8 @@ const defaultIntercomConfig: IntercomConfig = {
   preferredResolution: '1920x1080',
   preferredFPS: 25,
   defaultOpenTime: 5,
-  doorControlUsername: 'Scati2023',
-  doorControlPassword: 'Scati2023',
+  doorControlUsername: 'ceroideas',
+  doorControlPassword: '12345678',
   doorControlPCB: 1,
   doorControlSwitch: 1,
   hasAudio: true, // Por defecto las cámaras tienen audio
@@ -750,6 +757,22 @@ export default function IntercomConfigurationModal({
                   placeholder="profile1"
                   autoCapitalize="none"
                 />
+              </View>
+
+              <View style={styles.inputRow}>
+                <Text style={styles.inputLabel}>Codec vídeo RTSP:</Text>
+                <View style={styles.pickerContainer}>
+                  <Picker
+                    selectedValue={config.rtspVideoCodec || 'auto'}
+                    onValueChange={(value) => updateConfig('rtspVideoCodec', value)}
+                    style={styles.picker}
+                  >
+                    <Picker.Item label="Auto (por cámara)" value="auto" />
+                    <Picker.Item label="H.264" value="h264" />
+                    <Picker.Item label="MPEG-4" value="mpeg4" />
+                    <Picker.Item label="H.265 / HEVC" value="hevc" />
+                  </Picker>
+                </View>
               </View>
 
               {/* Ruta Snapshot oculta - no se usa */}

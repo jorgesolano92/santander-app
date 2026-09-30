@@ -4,6 +4,7 @@ import android.app.Activity;
 import android.app.KeyguardManager;
 import android.content.Context;
 import android.content.Intent;
+import android.media.AudioManager;
 import android.os.Build;
 import android.os.PowerManager;
 import android.util.Log;
@@ -24,6 +25,53 @@ public class TabletWakeModule extends ReactContextBaseJavaModule {
     @Override
     public String getName() {
         return MODULE_NAME;
+    }
+
+    private AudioManager audioManager() {
+        return (AudioManager) getReactApplicationContext().getSystemService(Context.AUDIO_SERVICE);
+    }
+
+    /** Modo VoIP + altavoz (llamadas SIP/WebRTC en tablet). */
+    @ReactMethod
+    public void startCommunicationAudio(boolean speakerOn) {
+        try {
+            AudioManager am = audioManager();
+            if (am == null) return;
+            am.setMode(AudioManager.MODE_IN_COMMUNICATION);
+            am.setSpeakerphoneOn(speakerOn);
+            am.setMicrophoneMute(false);
+            Log.i(TAG, "startCommunicationAudio speaker=" + speakerOn);
+        } catch (Exception e) {
+            Log.e(TAG, "startCommunicationAudio", e);
+        }
+    }
+
+    @ReactMethod
+    public void setSpeakerphoneOn(boolean enabled) {
+        try {
+            AudioManager am = audioManager();
+            if (am == null) return;
+            if (am.getMode() != AudioManager.MODE_IN_COMMUNICATION) {
+                am.setMode(AudioManager.MODE_IN_COMMUNICATION);
+            }
+            am.setSpeakerphoneOn(enabled);
+            Log.i(TAG, "setSpeakerphoneOn=" + enabled);
+        } catch (Exception e) {
+            Log.e(TAG, "setSpeakerphoneOn", e);
+        }
+    }
+
+    @ReactMethod
+    public void stopCommunicationAudio() {
+        try {
+            AudioManager am = audioManager();
+            if (am == null) return;
+            am.setSpeakerphoneOn(false);
+            am.setMode(AudioManager.MODE_NORMAL);
+            Log.i(TAG, "stopCommunicationAudio");
+        } catch (Exception e) {
+            Log.e(TAG, "stopCommunicationAudio", e);
+        }
     }
 
     @ReactMethod

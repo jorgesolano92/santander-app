@@ -136,7 +136,10 @@ export default function MainScreen() {
   const [showManualModeModal, setShowManualModeModal] = useState(false);
   const [autoStartIntercomDoorId, setAutoStartIntercomDoorId] = useState<string | null>(null);
   const [videoporteroDoorId, setVideoporteroDoorId] = useState<string | null>(null);
+  /** Remonta el RTSP de home (carga cajero) al cerrar Visualización. */
+  const [homeRtspEpoch, setHomeRtspEpoch] = useState(0);
   const showManualModeModalRef = useRef(showManualModeModal);
+  const manualModeWasOpenRef = useRef(false);
   const manualModeOpenBeforeCallRef = useRef(false);
   const [showEmergencyConfirmModal, setShowEmergencyConfirmModal] = useState(false);
   const [showFireConfirmModal, setShowFireConfirmModal] = useState(false);
@@ -329,6 +332,14 @@ export default function MainScreen() {
   }, [showManualModeModal]);
 
   useEffect(() => {
+    if (manualModeWasOpenRef.current && !showManualModeModal) {
+      // Salimos de Visualización: recrear el stream de la home (carga cajero).
+      setHomeRtspEpoch((n) => n + 1);
+    }
+    manualModeWasOpenRef.current = showManualModeModal;
+  }, [showManualModeModal]);
+
+  useEffect(() => {
     registerIncomingCallUi({
       onAnswer: (call: IncomingCallPayload) => {
         console.log('[TabletCall] handler contestar', call.callId);
@@ -428,7 +439,7 @@ export default function MainScreen() {
     const configData = {
       serverIP: config.network?.consoleIP || '',
       apiPort: config.api?.port || 8000,
-      apiUsername: config.api?.username || 'inviasistemas',
+      apiUsername: config.api?.username || 'ceroideas',
       apiPassword: config.api?.password || '12345678',
       username: 'admin',
       updateServerURL: 'http://192.168.1.200/updates',
@@ -1421,19 +1432,6 @@ export default function MainScreen() {
       color: '#495057',
       letterSpacing: 0.5,
     },
-    deviceIdFooter: {
-      paddingVertical: 6,
-      paddingHorizontal: 12,
-      alignItems: 'center',
-      backgroundColor: 'rgba(0,0,0,0.04)',
-      borderTopWidth: 1,
-      borderTopColor: '#DEE2E6',
-    },
-    deviceIdFooterText: {
-      fontSize: 11,
-      color: '#6C757D',
-      fontFamily: 'monospace',
-    },
   });
 
   if (!configBootReady || needsInitialSetup) {
@@ -1703,11 +1701,13 @@ export default function MainScreen() {
                 <View style={styles.cargaCajeroRightColumn}>
                   <View style={styles.cargaCajeroVideoOutside}>
                     <DoorVideoStream
+                      key={`carga-home-rtsp-${doorId}-${homeRtspEpoch}`}
                       intercomConfig={door.intercom}
                       doorName={door.name || doorId}
                       forceMuted
                       autoStartInline
                       hideControls
+                      suspendStream={showManualModeModal}
                       inlineHeight={isSmallTablet ? 280 : isLargeTablet ? 380 : 340}
                     />
                   </View>
@@ -1769,11 +1769,6 @@ export default function MainScreen() {
       </ScrollView>
 
       {!isEmergencyActive && !isFireActive && renderBottomActions()}
-      <View style={styles.deviceIdFooter}>
-        <Text style={styles.deviceIdFooterText} selectable>
-          ID: {tabletAndroidId || '—'}
-        </Text>
-      </View>
       </View>
 
       <LoginModal

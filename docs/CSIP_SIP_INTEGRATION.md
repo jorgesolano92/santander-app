@@ -43,7 +43,16 @@ Si Asterisk no se monta, alternativa futura: Linphone SDK / PJSIP (UDP nativo). 
 | Destino | `sip:100@192.168.1.50` (Panphone) |
 | TLS/WSS | On solo si usáis `wss` |
 
-6. Backend (LEDs/notify): `CSIP_BASE_URL=http://192.168.1.70:8090/api/custom1`, etc.
+6. Backend (LEDs/notify), **N Panphones** (recomendado):
+
+```env
+CSIP_ENABLED=true
+CSIP_DEVICES={"p1":{"base_url":"http://192.168.1.70:8090/api/custom1","token":"KEY1","led":"p1"},"p2":{"base_url":"http://192.168.1.80:8090/api/custom1","token":"KEY2","led":"p1"}}
+CSIP_LED_BRIGHTNESS=5
+```
+
+Cada placa: `notification_url` → `http://<backend>/api/csip/notify/p1` (o `/p2`, `/p3`…).  
+Legacy (1 placa): `CSIP_BASE_URL=http://192.168.1.70:8090/api/custom1`.
 
 ## Capas técnicas
 

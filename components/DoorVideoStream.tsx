@@ -7,6 +7,7 @@ import {
   ActivityIndicator,
   Platform,
   Dimensions,
+  Image,
   type ViewStyle,
   type StyleProp,
 } from 'react-native';
@@ -21,10 +22,23 @@ import {
 } from 'lucide-react-native';
 import { IntercomConfig } from './IntercomConfigurationModal';
 import Hls from 'hls.js';
+import {
+  claimRtspPlayback,
+  promoteRtspPlayback,
+  releaseRtspPlayback,
+  requestRtspPlayback,
+  yieldRtspPlayback,
+} from '@/services/rtspPlaybackCoordinator';
+import { buildSnapshotPreviewSource } from '@/services/SnapshotService';
+import {
+  resolveRtspCameraFamily,
+} from '@/utils/rtspCameraFamily';
+import { resolveRtspVideoCodec } from '@/utils/rtspVideoCodec';
 
 const PROXY_FETCH_TIMEOUT_MS = 12_000;
 const RTSP_MAX_RETRIES = 8;
 const RTSP_RETRY_DELAY_MS = 1200;
+const SNAPSHOT_PREVIEW_INTERVAL_MS = 1000;
 /** Altura reservada en ManualModeModal para el botón de puerta en pantalla completa */
 export const VIDEO_FULLSCREEN_FOOTER_HEIGHT = 88;
 
@@ -50,6 +64,11 @@ interface DoorVideoStreamProps {
   expandedVideoHeight?: number;
   /** Acciones encima del vídeo (p. ej. Abrir puerta), junto a pantalla completa. */
   videoOverlay?: React.ReactNode;
+  /**
+   * Si true, aplica reglas por codec RTSP (mismo codec en paralelo;
+   * codecs distintos exclusivos). Default: Android.
+   */
+  enforceRtspConcurrency?: boolean;
 }
 
 type ConnectionState = 'idle' | 'connecting' | 'connected' | 'error';
@@ -117,16 +136,24 @@ export default function DoorVideoStream({
   onExpandedChange,
   expandedVideoHeight,
   videoOverlay,
+  enforceRtspConcurrency = Platform.OS === 'android',
 }: DoorVideoStreamProps) {
   const [connectionState, setConnectionState] = useState<ConnectionState>('idle');
   const [error, setError] = useState<string | null>(null);
   const [streamActive, setStreamActive] = useState(false);
+  const [slotAllowed, setSlotAllowed] = useState(true);
+  const [waitingForSlot, setWaitingForSlot] = useState(false);
+  const [snapshotUri, setSnapshotUri] = useState<string | null>(null);
+  const [snapshotHeaders, setSnapshotHeaders] = useState<Record<string, string> | undefined>();
+  const [snapshotRev, setSnapshotRev] = useState(0);
   const [ambientAudioOn, setAmbientAudioOn] = useState(
     forceMuted ? false : intercomConfig.hasAudio !== false,
   );
   const [playerSession, setPlayerSession] = useState(0);
   const [proxyStreamUrl, setProxyStreamUrl] = useState<string | null>(null);
   const [proxyActive, setProxyActive] = useState(false);
+  /** El usuario pulsó DETENER: no rearmar con autoStartInline. */
+  const userStoppedRef = useRef(false);
   const videoElementRef = useRef<any>(null);
   const hlsInstanceRef = useRef<any>(null);
   const connectedRef = useRef(false);
@@ -147,12 +174,63 @@ export default function DoorVideoStream({
     [doorName, intercomConfig.cameraIP]
   );
 
+  const playbackId = useMemo(
+    () =>
+      `${(intercomConfig.cameraIP || '').trim()}:${intercomConfig.rtspPort || 554}:${(
+        intercomConfig.rtspPath || ''
+      ).trim()}:${doorName}`,
+    [intercomConfig.cameraIP, intercomConfig.rtspPort, intercomConfig.rtspPath, doorName],
+  );
+
+  const cameraFamily = useMemo(
+    () => resolveRtspCameraFamily(intercomConfig),
+    [intercomConfig],
+  );
+  const videoCodec = useMemo(
+    () => resolveRtspVideoCodec(intercomConfig),
+    [intercomConfig],
+  );
+
   const clearRetryTimer = useCallback(() => {
     if (retryTimerRef.current) {
       clearTimeout(retryTimerRef.current);
       retryTimerRef.current = null;
     }
   }, []);
+
+  const stopAndroidRtspInternal = useCallback(() => {
+    clearRetryTimer();
+    connectedRef.current = false;
+    retryCountRef.current = 0;
+    setStreamActive(false);
+    setConnectionState('idle');
+    setError(null);
+  }, [clearRetryTimer]);
+
+  const applySlotAllowed = useCallback(
+    (ok: boolean) => {
+      setSlotAllowed(ok);
+      if (!ok) {
+        setWaitingForSlot(true);
+        stopAndroidRtspInternal();
+      } else {
+        setWaitingForSlot(false);
+      }
+    },
+    [stopAndroidRtspInternal],
+  );
+
+  useEffect(() => {
+    if (!enforceRtspConcurrency || !useAndroidRtsp) {
+      setSlotAllowed(true);
+      setWaitingForSlot(false);
+      return;
+    }
+    requestRtspPlayback(playbackId, videoCodec, applySlotAllowed);
+    return () => {
+      releaseRtspPlayback(playbackId);
+    };
+  }, [enforceRtspConcurrency, useAndroidRtsp, playbackId, videoCodec, applySlotAllowed]);
 
   const markConnected = useCallback(() => {
     if (connectedRef.current) return;
@@ -248,46 +326,84 @@ export default function DoorVideoStream({
     };
   }, [proxyStreamUrl, useWebProxy]);
 
-  const startAndroidRtsp = useCallback(() => {
-    if (!intercomConfig.cameraIP) {
-      setError('No hay IP de cámara configurada');
-      setConnectionState('error');
-      return;
-    }
-    if (!NativeVideo) {
-      setError('Reproductor no disponible. Recompila la app Android.');
-      setConnectionState('error');
-      return;
-    }
-    clearRetryTimer();
-    connectedRef.current = false;
-    retryCountRef.current = 0;
-    setPlayerSession((n) => n + 1);
-    setConnectionState('connecting');
-    setError(null);
-    setStreamActive(true);
-  }, [intercomConfig.cameraIP, clearRetryTimer]);
+  const startAndroidRtsp = useCallback(
+    (opts?: { steal?: boolean }) => {
+      if (!intercomConfig.cameraIP) {
+        setError('No hay IP de cámara configurada');
+        setConnectionState('error');
+        return;
+      }
+      if (!NativeVideo) {
+        setError('Reproductor no disponible. Recompila la app Android.');
+        setConnectionState('error');
+        return;
+      }
+      userStoppedRef.current = false;
+      if (enforceRtspConcurrency) {
+        const ok = opts?.steal
+          ? promoteRtspPlayback(playbackId, videoCodec)
+          : claimRtspPlayback(playbackId, videoCodec);
+        if (!ok) {
+          setWaitingForSlot(true);
+          setSlotAllowed(false);
+          setError(null);
+          setConnectionState('idle');
+          setStreamActive(false);
+          return;
+        }
+        setSlotAllowed(true);
+        setWaitingForSlot(false);
+      }
+      clearRetryTimer();
+      connectedRef.current = false;
+      retryCountRef.current = 0;
+      setPlayerSession((n) => n + 1);
+      setConnectionState('connecting');
+      setError(null);
+      setStreamActive(true);
+    },
+    [
+      intercomConfig.cameraIP,
+      clearRetryTimer,
+      enforceRtspConcurrency,
+      playbackId,
+      videoCodec,
+    ],
+  );
 
-  const stopAndroidRtsp = useCallback(() => {
-    clearRetryTimer();
-    connectedRef.current = false;
-    retryCountRef.current = 0;
-    onExpandedChange?.(false);
-    setStreamActive(false);
-    setConnectionState('idle');
-    setError(null);
-  }, [clearRetryTimer, onExpandedChange]);
+  const stopAndroidRtsp = useCallback(
+    (opts?: { userInitiated?: boolean }) => {
+      clearRetryTimer();
+      connectedRef.current = false;
+      retryCountRef.current = 0;
+      if (opts?.userInitiated) {
+        // Evita el bucle: DETENER → idle → autoStart vuelve a arrancar A y “roba” el decoder a B.
+        userStoppedRef.current = true;
+      }
+      onExpandedChange?.(false);
+      setStreamActive(false);
+      setConnectionState('idle');
+      setError(null);
+      if (enforceRtspConcurrency) {
+        yieldRtspPlayback(playbackId);
+      }
+    },
+    [clearRetryTimer, onExpandedChange, enforceRtspConcurrency, playbackId],
+  );
 
-  /** Pantalla completa directa (videoportero): no hay botón INICIAR VÍDEO visible. */
+  /** Pantalla completa: reclamar decoder antes de reproducir. */
   useEffect(() => {
-    if (!isExpanded || !useAndroidRtsp || suspendStream || streamActive) return;
+    if (!isExpanded || !useAndroidRtsp || suspendStream) return;
     if (!intercomConfig.cameraIP?.trim()) return;
-    startAndroidRtsp();
+    if (streamActive && slotAllowed) return;
+    // Pantalla completa / videoportero: el usuario quiere ver esta cámara.
+    startAndroidRtsp({ steal: true });
   }, [
     isExpanded,
     useAndroidRtsp,
     suspendStream,
     streamActive,
+    slotAllowed,
     startAndroidRtsp,
     intercomConfig.cameraIP,
   ]);
@@ -298,9 +414,28 @@ export default function DoorVideoStream({
 
   useEffect(() => {
     if (suspendStream && streamActive) {
+      // Liberar decoder/familia para Visualización; no marcar userStopped.
       stopAndroidRtsp();
     }
   }, [suspendStream, streamActive, stopAndroidRtsp]);
+
+  useEffect(() => {
+    if (suspendStream || userStoppedRef.current) return;
+    if (!autoStartInline || isExpanded) return;
+    if (!useAndroidRtsp || streamActive || connectionState !== 'idle') return;
+    if (!intercomConfig.cameraIP?.trim()) return;
+    // Reanudar tras salir de Visualización (suspendStream pasó a false).
+    startAndroidRtsp();
+  }, [
+    suspendStream,
+    autoStartInline,
+    isExpanded,
+    useAndroidRtsp,
+    streamActive,
+    connectionState,
+    startAndroidRtsp,
+    intercomConfig.cameraIP,
+  ]);
 
   // La cámara TVT suele expulsar RTSP al abrir StartVoiceCom_MR en el PC.
   // Cuando el intercom queda activo, forzamos una reconexión limpia del vídeo.
@@ -439,8 +574,9 @@ export default function DoorVideoStream({
   /** Arranque automático en modo inline (visualización / carga cajero / overlays). */
   useEffect(() => {
     if (!autoStartInline || isExpanded || suspendStream) return;
+    if (userStoppedRef.current) return;
     if (!intercomConfig.cameraIP?.trim()) return;
-    if (useAndroidRtsp && !streamActive && connectionState === 'idle') {
+    if (useAndroidRtsp && !streamActive && connectionState === 'idle' && slotAllowed !== false) {
       startAndroidRtsp();
       return;
     }
@@ -456,14 +592,93 @@ export default function DoorVideoStream({
     streamActive,
     proxyActive,
     connectionState,
+    slotAllowed,
     startAndroidRtsp,
     intercomConfig.cameraIP,
   ]);
 
+  /** Si nos ceden el decoder (el otro hizo Detener), reanudar si había autoStart. */
+  useEffect(() => {
+    if (!slotAllowed || !waitingForSlot) return;
+    if (userStoppedRef.current) return;
+    if (!autoStartInline && !isExpanded) return;
+    if (suspendStream || streamActive) return;
+    startAndroidRtsp(isExpanded ? { steal: true } : undefined);
+  }, [
+    slotAllowed,
+    waitingForSlot,
+    autoStartInline,
+    isExpanded,
+    suspendStream,
+    streamActive,
+    startAndroidRtsp,
+  ]);
+
+  /** Si otro codec tiene el RTSP, mostrar fotos ~1 fps (sin decoder de vídeo). */
+  useEffect(() => {
+    const wantSnapshots =
+      waitingForSlot &&
+      !streamActive &&
+      !suspendStream &&
+      !userStoppedRef.current &&
+      !!intercomConfig.cameraIP?.trim();
+
+    if (!wantSnapshots) {
+      setSnapshotUri(null);
+      setSnapshotHeaders(undefined);
+      return;
+    }
+
+    const base = buildSnapshotPreviewSource({
+      ip: intercomConfig.cameraIP,
+      username:
+        cameraFamily === 'panphone' ? undefined : intercomConfig.onvifUsername,
+      password:
+        cameraFamily === 'panphone' ? undefined : intercomConfig.onvifPassword,
+      snapshotPath:
+        cameraFamily === 'panphone'
+          ? 'camara.php'
+          : intercomConfig.snapshotPath || undefined,
+      httpPort:
+        cameraFamily === 'panphone' ? 8090 : intercomConfig.httpPort || 80,
+      preferHttps: false,
+    });
+
+    if (!base) {
+      setSnapshotUri(null);
+      return;
+    }
+
+    setSnapshotHeaders(base.headers);
+    // Primera foto al instante (URL remota; no depende de FileSystem).
+    setSnapshotUri(`${base.uri}${base.uri.includes('?') ? '&' : '?'}_=${Date.now()}`);
+    setSnapshotRev((n) => n + 1);
+
+    const timer = setInterval(() => {
+      setSnapshotUri(`${base.uri}${base.uri.includes('?') ? '&' : '?'}_=${Date.now()}`);
+      setSnapshotRev((n) => n + 1);
+    }, SNAPSHOT_PREVIEW_INTERVAL_MS);
+
+    return () => {
+      clearInterval(timer);
+    };
+  }, [
+    waitingForSlot,
+    streamActive,
+    suspendStream,
+    intercomConfig.cameraIP,
+    intercomConfig.onvifUsername,
+    intercomConfig.onvifPassword,
+    intercomConfig.snapshotPath,
+    intercomConfig.httpPort,
+    cameraFamily,
+  ]);
+
   const isConnected = connectionState === 'connected';
   const isConnecting = connectionState === 'connecting';
-  const showAndroidPlayer = useAndroidRtsp && streamActive && !!NativeVideo;
+  const showAndroidPlayer = useAndroidRtsp && streamActive && slotAllowed && !!NativeVideo;
   const showWebPlayer = useWebProxy && !!proxyStreamUrl;
+  const showSnapshotPreview = waitingForSlot && !showAndroidPlayer && !showWebPlayer;
   const showAmbientAudioToggle =
     !hideControls &&
     !forceMuted &&
@@ -482,7 +697,8 @@ export default function DoorVideoStream({
     : [
         styles.previewBox,
         { height: activeVideoHeight },
-        (showAndroidPlayer || showWebPlayer) && styles.previewBoxActive,
+        (showAndroidPlayer || showWebPlayer || showSnapshotPreview) &&
+          styles.previewBoxActive,
       ];
 
   const nativeVideoStyle: StyleProp<ViewStyle> = isExpanded
@@ -490,7 +706,7 @@ export default function DoorVideoStream({
     : { width: '100%', height: activeVideoHeight, backgroundColor: '#000' };
 
   const startInline = () => {
-    if (useAndroidRtsp) startAndroidRtsp();
+    if (useAndroidRtsp) startAndroidRtsp({ steal: true });
     else if (useWebProxy) void startProxyStream();
   };
 
@@ -526,7 +742,7 @@ export default function DoorVideoStream({
                 ignoreSilentSwitch="ignore"
                 playInBackground={false}
                 controls={false}
-                useTextureView={false}
+                useTextureView
                 bufferingStrategy={BufferingStrategyType?.DISABLE_BUFFERING}
                 progressUpdateInterval={250}
                 onLoad={onNativeVideoLoad}
@@ -552,6 +768,27 @@ export default function DoorVideoStream({
             onError: () => setError('El navegador no pudo reproducir HLS'),
             style: { width: '100%', height: '100%', backgroundColor: '#000' },
           })
+        ) : showSnapshotPreview && snapshotUri ? (
+          <TouchableOpacity
+            style={styles.snapshotTap}
+            onPress={startInline}
+            activeOpacity={0.92}
+            accessibilityLabel="Iniciar vídeo en vivo"
+          >
+            <Image
+              key={`${snapshotUri}-${snapshotRev}`}
+              source={
+                snapshotHeaders
+                  ? { uri: snapshotUri, headers: snapshotHeaders }
+                  : { uri: snapshotUri }
+              }
+              style={styles.snapshotImage}
+              resizeMode="contain"
+            />
+            <View style={styles.snapshotBadge} pointerEvents="none">
+              <Text style={styles.snapshotBadgeText}>Solo fotos</Text>
+            </View>
+          </TouchableOpacity>
         ) : (
           <TouchableOpacity
             style={styles.idleTap}
@@ -565,7 +802,11 @@ export default function DoorVideoStream({
               <Video size={28} color="#ADB5BD" />
             )}
             <Text style={styles.idleTapText}>
-              {isConnecting ? 'Conectando…' : 'Toca para iniciar vídeo'}
+              {isConnecting
+                ? 'Conectando…'
+                : waitingForSlot
+                  ? 'Solo fotos…'
+                  : 'Toca para iniciar vídeo'}
             </Text>
             {!!error ? <Text style={styles.idleError}>{error}</Text> : null}
           </TouchableOpacity>
@@ -592,20 +833,33 @@ export default function DoorVideoStream({
           <View style={styles.statusRow}>
             {isConnected || showWebPlayer ? (
               <Wifi size={14} color="#28A745" />
+            ) : waitingForSlot && snapshotUri ? (
+              <Wifi size={14} color="#F0AD4E" />
             ) : (
               <WifiOff size={14} color="#DC3545" />
             )}
             <Text
               style={[
                 styles.statusText,
-                { color: isConnected || showWebPlayer ? '#28A745' : '#DC3545' },
+                {
+                  color:
+                    isConnected || showWebPlayer
+                      ? '#28A745'
+                      : waitingForSlot && snapshotUri
+                        ? '#F0AD4E'
+                        : '#DC3545',
+                },
               ]}
             >
               {isConnected || showWebPlayer
                 ? 'EN VIVO'
                 : isConnecting
                   ? 'CONECTANDO...'
-                  : 'DETENIDO'}
+                  : waitingForSlot
+                    ? snapshotUri
+                      ? 'SOLO FOTOS'
+                      : 'EN ESPERA'
+                    : 'DETENIDO'}
             </Text>
           </View>
 
@@ -613,7 +867,7 @@ export default function DoorVideoStream({
             <View style={styles.controls}>
               <TouchableOpacity
                 style={[styles.button, styles.liveButton, (isConnecting || streamActive) && styles.disabled]}
-                onPress={startAndroidRtsp}
+                onPress={() => startAndroidRtsp({ steal: true })}
                 disabled={isConnecting || streamActive}
               >
                 {isConnecting && !isConnected ? (
@@ -625,7 +879,7 @@ export default function DoorVideoStream({
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.button, styles.stopButton, !streamActive && styles.disabled]}
-                onPress={stopAndroidRtsp}
+                onPress={() => stopAndroidRtsp({ userInitiated: true })}
                 disabled={!streamActive}
               >
                 <VideoOff size={16} color="#FFF" />
@@ -760,6 +1014,30 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#FF6B6B',
     textAlign: 'center',
+  },
+  snapshotTap: {
+    flex: 1,
+    width: '100%',
+    height: '100%',
+    backgroundColor: '#000',
+  },
+  snapshotImage: {
+    width: '100%',
+    height: '100%',
+  },
+  snapshotBadge: {
+    position: 'absolute',
+    top: 8,
+    left: 8,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 4,
+  },
+  snapshotBadgeText: {
+    color: '#F8F9FA',
+    fontSize: 11,
+    fontWeight: '600',
   },
   expandOverlay: {
     backgroundColor: 'rgba(0,0,0,0.72)',
