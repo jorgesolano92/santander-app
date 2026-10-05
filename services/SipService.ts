@@ -300,11 +300,13 @@ class SipService extends EventEmitter {
           transportOptions: {
             server,
           },
-          // LAN: candidatos host bastan; STUN público ayuda si hay NAT raro.
+          // FreePBX en la misma LAN: bastan candidatos host. Un STUN público sin salida a
+          // Internet hace que sip.js agote su espera de ICE (5 s por defecto) en cada INVITE.
           sessionDescriptionHandlerFactoryOptions: {
             peerConnectionConfiguration: {
-              iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
+              iceServers: [],
             },
+            iceGatheringTimeout: 500,
           },
         },
       };

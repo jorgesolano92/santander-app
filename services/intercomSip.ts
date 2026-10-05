@@ -171,14 +171,13 @@ export async function startSipIntercom(doorId: string, config: IntercomConfig): 
         );
       }
 
-      try {
-        await csipControlLed(apiConfig, {
-          led: config.csipButtonId ?? doorIdToCsipButton(doorId),
-          estado: 'ocupado',
-        });
-      } catch (ledError) {
+      // El LED no debe retrasar el audio: se envía en paralelo a la llamada SIP.
+      void csipControlLed(apiConfig, {
+        led: config.csipButtonId ?? doorIdToCsipButton(doorId),
+        estado: 'ocupado',
+      }).catch((ledError) => {
         console.warn('[SIP intercom] LED ocupado no aplicado:', ledError);
-      }
+      });
     }
 
     if (p2p) {

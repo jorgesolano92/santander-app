@@ -57,6 +57,8 @@ export interface CsipButtonEvent {
   led_state?: { p1?: string; p2?: string };
 }
 
+const CSIP_REQUEST_TIMEOUT_MS = 3000;
+
 function normalizeHost(host: string): string {
   return host.trim().replace(/^https?:\/\//i, '').replace(/\/+$/, '');
 }
@@ -98,14 +100,22 @@ async function postJson<T>(
   }
 
   let response: Response;
+  const controller = new AbortController();
+  const abortTimer = setTimeout(() => controller.abort(), CSIP_REQUEST_TIMEOUT_MS);
   try {
     response = await fetch(url, {
       method: 'POST',
       headers,
       body: JSON.stringify(body),
+      signal: controller.signal,
     });
   } catch (err: unknown) {
-    const raw = err instanceof Error ? err.message : String(err);
+    clearTimeout(abortTimer);
+    const raw = controller.signal.aborted
+      ? `sin respuesta en ${CSIP_REQUEST_TIMEOUT_MS} ms`
+      : err instanceof Error
+        ? err.message
+        : String(err);
     throw new Error(
       `No se pudo conectar a CSIP (${url}). ` +
         `Comprueba host:puerto (ej. 192.168.1.70:8090) y que la tablet llegue a esa IP. ` +
@@ -113,7 +123,12 @@ async function postJson<T>(
     );
   }
 
-  const text = await response.text();
+  let text: string;
+  try {
+    text = await response.text();
+  } finally {
+    clearTimeout(abortTimer);
+  }
   let data: T | null = null;
   if (text) {
     try {
