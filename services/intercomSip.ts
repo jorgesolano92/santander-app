@@ -92,6 +92,9 @@ function missingSipSetupMessage(config: IntercomConfig): string {
 
 /**
  * Modo SIP: PBX (sip.js WS) y/o P2P (CSIP call_start target_type=ip, como Panphone modo IP).
+ *
+ * PBX con sipCallDestination: solo marca la tablet → extensión Panphone (.80=101 / .70=100).
+ * No se llama call_start (evitar segunda pata que deja el audio abierto al colgar).
  */
 export async function startSipIntercom(doorId: string, config: IntercomConfig): Promise<boolean> {
   if (activeDoorId && activeDoorId !== doorId) {
@@ -137,21 +140,35 @@ export async function startSipIntercom(doorId: string, config: IntercomConfig): 
     }
   }
 
+  // PBX + tablet marca al Panphone (sipCallDestination): no usar call_start.
+  // call_start haría que la placa marque su destino por defecto (p.ej. RG 200 u otra
+  // extensión) en paralelo → dos llamadas, acoplamiento .80/.70 y colgado incompleto.
+  const tabletDialsPanphone =
+    !p2p && hasSipClient && Boolean(config.sipCallDestination?.trim());
+  const shouldCsipCallStart = hasCsip && (p2p || !tabletDialsPanphone);
+
   try {
     if (hasCsip) {
       const apiConfig = buildCsipApiConfig(config);
-      try {
-        const csipResult = await csipStartCall(apiConfig, {
-          ...callTarget,
-          recording: config.csipCallRecording ?? false,
-        });
-        console.log('[SIP intercom] CSIP call_start:', csipResult, p2p ? '(P2P)' : '(PBX)');
-      } catch (csipError) {
-        // En PBX el audio va por SIP; un fallo CSIP no debe tumbar toda la llamada.
-        if (p2p || !hasSipClient) {
-          throw csipError;
+      if (shouldCsipCallStart) {
+        try {
+          const csipResult = await csipStartCall(apiConfig, {
+            ...callTarget,
+            recording: config.csipCallRecording ?? false,
+          });
+          console.log('[SIP intercom] CSIP call_start:', csipResult, p2p ? '(P2P)' : '(PBX)');
+        } catch (csipError) {
+          // En PBX el audio va por SIP; un fallo CSIP no debe tumbar toda la llamada.
+          if (p2p || !hasSipClient) {
+            throw csipError;
+          }
+          console.warn('[SIP intercom] CSIP call_start falló; continuo con SIP:', csipError);
         }
-        console.warn('[SIP intercom] CSIP call_start falló; continuo con SIP:', csipError);
+      } else {
+        console.log(
+          '[SIP intercom] PBX: omito call_start; la tablet marca',
+          config.sipCallDestination?.trim(),
+        );
       }
 
       try {
