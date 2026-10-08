@@ -37,6 +37,7 @@ import { CoceMessagesModal } from '@/components/CoceMessagesModal';
 import DoorVideoStream from '@/components/DoorVideoStream';
 import { coceMessageService, type CoceMessage } from '@/services/CoceMessageService';
 import { wakeTablet } from '@/services/tabletWake';
+import { warmUpSipIntercom } from '@/services/intercomSip';
 import { showOperationError, showOperationInfo } from '@/utils/showOperationError';
 import type { ConfigurationData } from '@/types/configurationData';
 import { getModeActiveDescription, formatModeDisplayName } from '@/config/modeTexts';
@@ -46,6 +47,7 @@ import { getTabletAndroidId } from '@/services/DeviceIdentityService';
 import {
   initializeTabletConfigOnBoot,
   pullAndApplyPanelDefaults,
+  syncTabletConfigFromPanel,
 } from '@/services/tabletPanelConfigService';
 import { cloneDefaultDoorAppConfig } from '@/config/defaultDoorAppConfig';
 // (Eliminar) import * as FileSystem from 'expo-file-system';
@@ -160,6 +162,7 @@ export default function MainScreen() {
     'loading',
   );
   const [tabletAndroidId, setTabletAndroidId] = useState('');
+  const [tabletName, setTabletName] = useState<string | null>(null);
   const [deviceAuthReason, setDeviceAuthReason] = useState<string | null>(null);
   const [deviceAuthChecking, setDeviceAuthChecking] = useState(false);
 
@@ -171,6 +174,7 @@ export default function MainScreen() {
       setTabletAndroidId(id);
       const result = await doorControlService.checkDeviceAuthorization();
       setTabletAndroidId(result.androidId || id);
+      setTabletName(result.name || null);
       setDeviceAuthReason(result.reason || null);
       setDeviceAuthStatus(result.authorized ? 'authorized' : 'unauthorized');
     } catch (e) {
@@ -244,6 +248,26 @@ export default function MainScreen() {
       tabletCallService.stop();
     };
   }, [systemConfig?.network?.consoleIP]);
+
+  useEffect(() => {
+    const syncConfig = () => {
+      void syncTabletConfigFromPanel()
+        .then((updated) => {
+          if (updated) setSystemConfig(updated);
+        })
+        .catch((error) => console.warn('[TabletConfig] Error sincronizando con el panel:', error));
+    };
+    const onRegistered = (payload: { tabletName: string | null }) => {
+      if (payload.tabletName) setTabletName(payload.tabletName);
+      syncConfig();
+    };
+    tabletCallService.on('registered', onRegistered);
+    tabletCallService.on('tablet_config_changed', syncConfig);
+    return () => {
+      tabletCallService.off('registered', onRegistered);
+      tabletCallService.off('tablet_config_changed', syncConfig);
+    };
+  }, []);
 
   useEffect(() => {
     const refreshCoceMessages = () => {
@@ -393,6 +417,19 @@ export default function MainScreen() {
   const isFireActive = systemStatus?.fireActive || false;
   const isCargaCajeroMode = currentMode === 'CARGA DE CAJERO';
 
+  // Bloqueo de puertas abre Visualización en todas las tablets, no solo en la que cambió el modo.
+  const prevPanelModeRef = useRef<string | null>(null);
+  useEffect(() => {
+    const mode = systemStatus?.mode;
+    if (!mode) return;
+    const prev = prevPanelModeRef.current;
+    prevPanelModeRef.current = mode;
+    if (mode === 'MANUAL' && prev !== 'MANUAL') {
+      setShowModeModal(false);
+      setShowManualModeModal(true);
+    }
+  }, [systemStatus?.mode]);
+
   // Mostrar información del modo automático por horario
   useEffect(() => {
     if (currentScheduleMode) {
@@ -426,6 +463,11 @@ export default function MainScreen() {
       void validateDevice();
     }
   }, [deviceAuthStatus, validateDevice]);
+
+  useEffect(() => {
+    if (deviceAuthStatus !== 'authorized' || !systemConfig?.doors) return;
+    warmUpSipIntercom(systemConfig.doors);
+  }, [deviceAuthStatus, systemConfig?.doors]);
 
   // Función para alternar modo sandbox - DESHABILITADA
   // const handleToggleSandboxMode = (newMode: boolean) => {
@@ -482,6 +524,7 @@ export default function MainScreen() {
     } else {
       setSystemConfig(config);
       setShowNewConfigModal(false);
+      void syncTabletConfigFromPanel();
     }
 
     void runDeviceAuthorizationCheck();
@@ -1479,6 +1522,7 @@ export default function MainScreen() {
       <View style={{ flex: 1 }}>
         <UnauthorizedDeviceScreen
           androidId={tabletAndroidId}
+          tabletName={tabletName}
           reason={deviceAuthReason}
           checking={deviceAuthChecking}
           onRetry={() => void runDeviceAuthorizationCheck()}

@@ -257,6 +257,7 @@ class DoorControlService {
   private statusChangeCallback: (() => void) | null = null;
   private verifyingDoors: Set<string> = new Set();
   private bearerToken: string | null = null;
+  private cachedAndroidId: string | null = null;
 
   /** Interpreta cuerpo JSON de error de FastAPI u otros formatos habituales. */
   private formatPanelApiErrorMessage(status: number, bodyText: string): string {
@@ -457,11 +458,17 @@ class DoorControlService {
     return withSlash.replace(/\/{2,}/g, '/');
   }
 
-  private buildBackendBaseUrl(consoleIP: string, port: number): string {
-    const host = String(consoleIP || '').trim();
-    const p = Number(port || 8000);
-    // Para backend FastAPI local normalmente HTTP.
-    return `http://${host}:${p}`;
+  /** HTTPS/WSS validado con la CA de la instalación salvo que la config lo desactive (api.secure=false). */
+  private backendEndpoint(config: any): { secure: boolean; host: string; port: number } {
+    const host = String(config?.network?.consoleIP || '').trim();
+    const secure = config?.api?.secure !== false;
+    const port = secure ? Number(config?.api?.tlsPort || 8443) : Number(config?.api?.port || 8000);
+    return { secure, host, port };
+  }
+
+  private buildBackendBaseUrl(config: any): string {
+    const { secure, host, port } = this.backendEndpoint(config);
+    return `${secure ? 'https' : 'http'}://${host}:${port}`;
   }
 
   private async getSavedAppConfig(): Promise<any | null> {
@@ -499,7 +506,6 @@ class DoorControlService {
   private async authenticateWithConfiguredCredentials(config: any): Promise<string | null> {
     try {
       const consoleIP = config?.network?.consoleIP;
-      const port = Number(config?.api?.port || 8000);
       const username = String(config?.api?.username || '').trim();
       const password = String(config?.api?.password || '').trim();
       const tokenPath = this.normalizeApiPath(config?.api?.urlToken || '/api/v1/auth/token');
@@ -509,7 +515,7 @@ class DoorControlService {
         return null;
       }
 
-      const baseUrl = this.buildBackendBaseUrl(consoleIP, port);
+      const baseUrl = this.buildBackendBaseUrl(config);
       const tokenUrl =
         tokenPath.startsWith('http://') || tokenPath.startsWith('https://')
           ? tokenPath
@@ -547,14 +553,25 @@ class DoorControlService {
     }
   }
 
+  private async getCachedAndroidId(): Promise<string> {
+    if (this.cachedAndroidId) return this.cachedAndroidId;
+    try {
+      const { getTabletAndroidId } = await import('./DeviceIdentityService');
+      this.cachedAndroidId = await getTabletAndroidId();
+    } catch {
+      this.cachedAndroidId = '';
+    }
+    return this.cachedAndroidId;
+  }
+
   private async authenticatedRequest(
     config: any,
-    method: 'GET' | 'POST',
+    method: 'GET' | 'POST' | 'PUT',
     endpointPath: string,
     jsonBody?: any,
     timeoutMs: number = API_FETCH_TIMEOUT_MS,
   ): Promise<Response | null> {
-    const baseUrl = this.buildBackendBaseUrl(config?.network?.consoleIP, Number(config?.api?.port || 8000));
+    const baseUrl = this.buildBackendBaseUrl(config);
     const endpoint = this.normalizeApiPath(endpointPath);
     const requestUrl =
       endpoint.startsWith('http://') || endpoint.startsWith('https://')
@@ -567,10 +584,14 @@ class DoorControlService {
       if (!token) return null;
     }
 
+    const androidId = await this.getCachedAndroidId();
     const makeCall = async (bearer: string) => {
       const headers: Record<string, string> = {
         Authorization: `Bearer ${bearer}`,
       };
+      if (androidId) {
+        headers['X-Tablet-Id'] = androidId;
+      }
       if (jsonBody !== undefined) {
         headers['Content-Type'] = 'application/json';
       }
@@ -2238,6 +2259,7 @@ class DoorControlService {
     androidId: string;
     reason: string;
     label?: string | null;
+    name?: string | null;
     enforcementEnabled?: boolean;
   }> {
     const { getTabletAndroidId } = await import('./DeviceIdentityService');
@@ -2252,8 +2274,7 @@ class DoorControlService {
           reason: 'no_config',
         };
       }
-      const port = Number(saved?.api?.port || 8000);
-      const baseUrl = this.buildBackendBaseUrl(consoleIP, port);
+      const baseUrl = this.buildBackendBaseUrl(saved);
       const url = `${baseUrl}/api/v1/authorized-tablets/check?android_id=${encodeURIComponent(androidId)}`;
       const response = await fetchWithTimeout(url, { method: 'GET' }, 8_000);
       if (!response.ok) {
@@ -2272,6 +2293,7 @@ class DoorControlService {
         androidId: String(data?.android_id || androidId),
         reason: String(data?.reason || (authorized ? 'ok' : 'not_registered')),
         label: data?.label ?? null,
+        name: data?.name ?? null,
         enforcementEnabled: data?.enforcement_enabled,
       };
     } catch (error) {
@@ -2709,17 +2731,18 @@ class DoorControlService {
     return token;
   }
 
-  /** URL ws://…/api/v1/ws/calls?token=… */
+  /** URL wss://…/api/v1/ws/calls?token=…&device_id=… (ws:// solo con api.secure=false) */
   async buildCallsWebSocketUrl(): Promise<string | null> {
     const config = await this.getSavedAppConfig();
-    const host = String(config?.network?.consoleIP || '').trim();
+    const { secure, host, port } = this.backendEndpoint(config);
     if (!host) return null;
     const token = await this.getAuthTokenForCalls();
     if (!token) return null;
-    const port = Number(config?.api?.port || 8000);
     const path = this.normalizeApiPath('/api/v1/ws/calls');
-    const wsHost = `ws://${host}:${port}`;
-    return `${wsHost}${path}?token=${encodeURIComponent(token)}`;
+    const wsHost = `${secure ? 'wss' : 'ws'}://${host}:${port}`;
+    const androidId = await this.getCachedAndroidId();
+    const deviceParam = androidId ? `&device_id=${encodeURIComponent(androidId)}` : '';
+    return `${wsHost}${path}?token=${encodeURIComponent(token)}${deviceParam}`;
   }
 
   /** Historial de mensajes COCE (solo lectura). */
@@ -2866,6 +2889,47 @@ class DoorControlService {
       updated_at: data.updated_at ?? null,
       config: data.config,
     };
+  }
+
+  /** Revisión de la config de esta tablet en el panel (propia o común). */
+  async fetchTabletPanelConfigRevision(): Promise<string | null> {
+    const config = await this.getSavedAppConfig();
+    if (!config?.network?.consoleIP) return null;
+    const response = await this.authenticatedRequest(config, 'GET', '/api/v1/tablet-config/revision');
+    if (!response?.ok) return null;
+    const data = await response.json().catch(() => null);
+    return data?.revision ? String(data.revision) : null;
+  }
+
+  /** Guarda en el panel la config propia de esta tablet (identificada por Android ID). */
+  async pushTabletOwnConfig(appConfig: any): Promise<{
+    revision: string;
+    updated_at: string | null;
+    config: any;
+  } | null> {
+    const config = await this.getSavedAppConfig();
+    if (!config?.network?.consoleIP) return null;
+    const response = await this.authenticatedRequest(config, 'PUT', '/api/v1/tablet-config', appConfig);
+    if (!response?.ok) {
+      const errText = await response?.text().catch(() => '');
+      console.warn(`⚠️ pushTabletOwnConfig (${response?.status}): ${errText}`);
+      return null;
+    }
+    const data = await response.json().catch(() => null);
+    if (!data?.config) return null;
+    return {
+      revision: String(data.revision ?? 'unknown'),
+      updated_at: data.updated_at ?? null,
+      config: data.config,
+    };
+  }
+
+  /** Descarta la config propia en el panel: la tablet vuelve a la común de la sucursal. */
+  async resetTabletOwnConfig(sourceConfig?: any): Promise<boolean> {
+    const config = sourceConfig ?? (await this.getSavedAppConfig());
+    if (!config?.network?.consoleIP) return false;
+    const response = await this.authenticatedRequest(config, 'POST', '/api/v1/tablet-config/reset');
+    return !!response?.ok;
   }
 }
 

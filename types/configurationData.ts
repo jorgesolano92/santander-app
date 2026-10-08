@@ -44,6 +44,9 @@ export interface ConfigurationData {
   };
   api: {
     port: number;
+    /** HTTPS/WSS con la CA de la instalación (por defecto true). */
+    secure?: boolean;
+    tlsPort?: number;
     username: string;
     password: string;
     urlToken: string;

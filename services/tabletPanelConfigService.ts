@@ -145,9 +145,10 @@ export async function initializeTabletConfigOnBoot(): Promise<{
     return { config: bootstrap, needsIpSetup: true, pulledFromPanel: false };
   }
 
-  // Si el usuario ya personalizó la config en la tablet, no sobrescribir
+  // Cambios guardados en la tablet sin subir aún al panel: conservarlos y reintentar la subida
   if (local && (await hasLocalConfigOverrides())) {
-    console.log('[TabletConfig] Conservando configuración local (hay cambios en tablet)');
+    console.log('[TabletConfig] Conservando configuración local (pendiente de subir al panel)');
+    void pushLocalConfigToPanel(local);
     return { config: local, needsIpSetup: false, pulledFromPanel: false };
   }
 
@@ -175,7 +176,59 @@ export async function initializeTabletConfigOnBoot(): Promise<{
   return { config: bootstrap, needsIpSetup: false, pulledFromPanel: false };
 }
 
-/** Botón «Restaurar datos por defecto» en la tablet. */
+/**
+ * Guarda la config local como configuración propia de esta tablet en el panel.
+ * Sin red queda marcada como pendiente y se reintenta en el arranque o en la siguiente sincronización.
+ */
+export async function pushLocalConfigToPanel(config: ConfigurationData): Promise<boolean> {
+  try {
+    const record = await doorControlService.pushTabletOwnConfig(config);
+    if (!record) return false;
+    await AsyncStorage.setItem(PANEL_DEFAULTS_KEY, JSON.stringify(record));
+    await clearLocalConfigOverrides();
+    console.log('[TabletConfig] Configuración propia guardada en el panel', record.revision);
+    return true;
+  } catch (error) {
+    console.warn('[TabletConfig] No se pudo subir la configuración al panel:', error);
+    return false;
+  }
+}
+
+/**
+ * Sincroniza con el panel (aviso WS o reconexión): sube cambios pendientes o descarga
+ * la config de esta tablet si su revisión cambió. Devuelve la config aplicada o null.
+ */
+export async function syncTabletConfigFromPanel(): Promise<ConfigurationData | null> {
+  const raw = await AsyncStorage.getItem(EFFECTIVE_CONFIG_KEY);
+  if (!raw) return null;
+  let local: ConfigurationData;
+  try {
+    local = JSON.parse(raw) as ConfigurationData;
+  } catch {
+    return null;
+  }
+  if (!String(local.network?.consoleIP || '').trim()) return null;
+  if (await hasLocalConfigOverrides()) {
+    await pushLocalConfigToPanel(local);
+    return null;
+  }
+  const remoteRevision = await doorControlService.fetchTabletPanelConfigRevision();
+  if (!remoteRevision) return null;
+  const cached = await getCachedPanelDefaults();
+  if (cached?.revision === remoteRevision) return null;
+  const applied = await pullAndApplyPanelDefaults(local);
+  if (!applied) return null;
+  const merged: ConfigurationData = {
+    ...applied,
+    network: { ...applied.network, ...(local.network || {}) },
+    api: { ...applied.api, ...(local.api || {}) },
+  };
+  await saveEffectiveConfig(merged);
+  console.log('[TabletConfig] Configuración actualizada desde el panel', remoteRevision);
+  return merged;
+}
+
+/** Botón «Restaurar datos por defecto» en la tablet: vuelve a la config común de la sucursal. */
 export async function restorePanelDefaultsOnDevice(): Promise<ConfigurationData | null> {
   const bootstrap = cloneDefaultDoorAppConfig();
   const savedRaw = await AsyncStorage.getItem(EFFECTIVE_CONFIG_KEY);
@@ -191,6 +244,9 @@ export async function restorePanelDefaultsOnDevice(): Promise<ConfigurationData 
     } catch {
       /* usar bootstrap */
     }
+  }
+  if (!(await doorControlService.resetTabletOwnConfig(bootstrap))) {
+    console.warn('[TabletConfig] El panel no confirmó el descarte de la config propia');
   }
   return pullAndApplyPanelDefaults(bootstrap);
 }

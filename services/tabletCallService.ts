@@ -59,6 +59,7 @@ class TabletCallService extends EventEmitter {
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private stopped = true;
   private clientId: string | null = null;
+  private tabletName: string | null = null;
   private intercomStatus: IntercomStatus = { busy: false };
   private livePanelState: PanelLivePayload = {
     currentMode: null,
@@ -67,6 +68,11 @@ class TabletCallService extends EventEmitter {
   private pendingClaim:
     | { resolve: (ok: boolean) => void; timer: ReturnType<typeof setTimeout> }
     | null = null;
+
+  /** «Tablet N» que el panel asignó a este dispositivo. */
+  getTabletName(): string | null {
+    return this.tabletName;
+  }
 
   async start(): Promise<void> {
     this.stopped = false;
@@ -202,6 +208,12 @@ class TabletCallService extends EventEmitter {
     switch (type) {
       case 'registered':
         this.clientId = String(data.client_id || '');
+        this.tabletName = data.tablet_name ? String(data.tablet_name) : null;
+        this.emit('registered', { tabletName: this.tabletName });
+        break;
+      case 'tablet_config_changed':
+        console.log('[TabletCall] tablet_config_changed WS');
+        this.emit('tablet_config_changed');
         break;
       case 'incoming_call': {
         const remaining = Number(data.remaining_seconds ?? 0);

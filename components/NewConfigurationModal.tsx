@@ -16,6 +16,7 @@ import {
   restorePanelDefaultsOnDevice,
 } from '@/services/tabletPanelConfigService';
 import { configCredentialsService } from '@/services/ConfigCredentialsService';
+import { tabletCallService } from '@/services/tabletCallService';
 import { cloneDefaultDoorAppConfig } from '@/config/defaultDoorAppConfig';
 import { INTERCOM_BRIDGE_ONLY } from '@/config/intercomFeatures';
 import { showOperationError, showOperationInfo } from '@/utils/showOperationError';
@@ -476,7 +477,7 @@ export default function NewConfigurationModal({
     }));
   };
 
-  const updateApi = (field: keyof typeof config.api, value: string | number) => {
+  const updateApi = (field: keyof typeof config.api, value: string | number | boolean) => {
     setConfig(prev => ({
       ...prev,
       api: { ...prev.api, [field]: value }
@@ -1063,6 +1064,7 @@ export default function NewConfigurationModal({
         <View style={styles.header}>
           <Text style={styles.headerTitle}>
             {requireNetworkSetup ? 'CONFIGURACIÓN INICIAL' : 'CONFIGURACIÓN DEL SISTEMA'}
+            {tabletCallService.getTabletName() ? ` · ${tabletCallService.getTabletName()!.toUpperCase()}` : ''}
           </Text>
           
           {/* Toggle de sandbox deshabilitado */}
@@ -1270,15 +1272,38 @@ export default function NewConfigurationModal({
               <Text style={styles.sectionTitle}>CONFIGURACIÓN API</Text>
               <View style={styles.networkCard}>
                 <View style={styles.networkRow}>
-                  <Text style={styles.networkLabel}>Puerto:</Text>
-                  <TextInput
-                    style={styles.networkInput}
-                    value={config.api.port.toString()}
-                    onChangeText={(text) => updateApi('port', parseInt(text) || 443)}
-                    placeholder="443"
-                    keyboardType="numeric"
+                  <Text style={styles.networkLabel}>Cifrado (HTTPS):</Text>
+                  <Switch
+                    value={config.api.secure !== false}
+                    onValueChange={(value) => updateApi('secure', value)}
+                    trackColor={{ false: '#CED4DA', true: '#28A745' }}
+                    thumbColor="#FFFFFF"
                   />
                 </View>
+
+                {config.api.secure !== false ? (
+                  <View style={styles.networkRow}>
+                    <Text style={styles.networkLabel}>Puerto HTTPS:</Text>
+                    <TextInput
+                      style={styles.networkInput}
+                      value={String(config.api.tlsPort ?? 8443)}
+                      onChangeText={(text) => updateApi('tlsPort', parseInt(text) || 8443)}
+                      placeholder="8443"
+                      keyboardType="numeric"
+                    />
+                  </View>
+                ) : (
+                  <View style={styles.networkRow}>
+                    <Text style={styles.networkLabel}>Puerto HTTP:</Text>
+                    <TextInput
+                      style={styles.networkInput}
+                      value={config.api.port.toString()}
+                      onChangeText={(text) => updateApi('port', parseInt(text) || 8000)}
+                      placeholder="8000"
+                      keyboardType="numeric"
+                    />
+                  </View>
+                )}
 
                 <View style={styles.networkRow}>
                   <Text style={styles.networkLabel}>Usuario:</Text>
@@ -1672,7 +1697,7 @@ export default function NewConfigurationModal({
           message={
             confirmAction === 'reset_app'
               ? 'Se eliminarán los datos guardados en esta tablet y se cargarán los valores de fábrica embebidos en la app. ¿Continuar?'
-              : 'Se descartarán los cambios locales y se importará la configuración por defecto de la sucursal desde el panel. ¿Continuar?'
+              : 'Se descartará la configuración propia de esta tablet (también en el panel) y se aplicará la configuración común de la sucursal. ¿Continuar?'
           }
           confirmText={confirmAction === 'reset_app' ? 'Restablecer' : 'Restaurar'}
           confirmColor={confirmAction === 'reset_app' ? '#DC3545' : '#0D6EFD'}

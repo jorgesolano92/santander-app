@@ -233,6 +233,8 @@ export const DEFAULT_DOOR_APP_CONFIGURATION: ConfigurationData = {
   },
   api: {
     port: 8000,
+    secure: true,
+    tlsPort: 8443,
     username: 'ceroideas',
     password: '12345678',
     urlToken: '/api/v1/auth/token',

@@ -1,26 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <network-security-config>
-    <!-- Allow cleartext traffic for local network -->
-    <domain-config cleartextTrafficPermitted="true">
-        <domain includeSubdomains="true">192.168.1.155</domain>
-        <domain includeSubdomains="true">192.168.1.117</domain>
-        <domain includeSubdomains="true">192.168.1.120</domain>
-        <domain includeSubdomains="true">192.168.1.130</domain>
-        <domain includeSubdomains="true">192.168.1.25</domain>
-        <domain includeSubdomains="true">localhost</domain>
-        <domain includeSubdomains="true">127.0.0.1</domain>
-        <!-- Include trust anchors for HTTPS connections -->
-        <trust-anchors>
-            <certificates src="system" />
-            <certificates src="user" />
-        </trust-anchors>
-    </domain-config>
-    <!-- Allow all traffic for debugging (development only) -->
+    <!--
+      HTTPS/WSS con el panel: certificado emitido por la CA propia de la instalación
+      (res/raw/santander_ca.crt, generada con backend/scripts/tls_ca.py). No se confía en
+      CAs instaladas por el usuario para evitar interceptación.
+      Se mantiene HTTP en claro para equipos que no admiten TLS (videoporteros CSIP/RTSP, ESP32).
+    -->
     <base-config cleartextTrafficPermitted="true">
         <trust-anchors>
             <certificates src="system" />
-            <certificates src="user" />
+            <certificates src="@raw/santander_ca" />
         </trust-anchors>
     </base-config>
 </network-security-config>
-

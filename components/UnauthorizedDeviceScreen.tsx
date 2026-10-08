@@ -2,14 +2,17 @@ import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'rea
 
 type Props = {
   androidId: string;
+  tabletName?: string | null;
   reason?: string | null;
   checking?: boolean;
   onRetry?: () => void;
   onOpenConfig?: () => void;
 };
 
-function reasonMessage(reason?: string | null): string {
+function reasonMessage(reason?: string | null, tabletName?: string | null): string {
   switch (reason) {
+    case 'pending_approval':
+      return `El panel ha registrado este dispositivo como ${tabletName || 'tablet nueva'}, pero falta autorizarlo.`;
     case 'not_registered':
       return 'Este dispositivo no está en la lista de tablets autorizadas del panel.';
     case 'disabled':
@@ -27,6 +30,7 @@ function reasonMessage(reason?: string | null): string {
 
 export default function UnauthorizedDeviceScreen({
   androidId,
+  tabletName,
   reason,
   checking,
   onRetry,
@@ -36,13 +40,14 @@ export default function UnauthorizedDeviceScreen({
     <View style={styles.container}>
       <View style={styles.card}>
         <Text style={styles.title}>Tablet no autorizada</Text>
-        <Text style={styles.body}>{reasonMessage(reason)}</Text>
+        <Text style={styles.body}>{reasonMessage(reason, tabletName)}</Text>
         <Text style={styles.hint}>
-          En el panel: Configuración tablet → Tablets autorizadas. Añade el ID que aparece abajo.
+          En el panel: Configuración tablet → Tablets autorizadas. Autoriza la tablet con el ID que
+          aparece abajo.
         </Text>
 
         <View style={styles.idBox}>
-          <Text style={styles.idLabel}>Android ID</Text>
+          <Text style={styles.idLabel}>{tabletName ? `${tabletName} · Android ID` : 'Android ID'}</Text>
           <Text style={styles.idValue} selectable>
             {androidId || '—'}
           </Text>
