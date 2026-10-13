@@ -45,6 +45,35 @@ type SimpleUserLike = {
 let webrtcGlobalsReady = false;
 let webSocketPatched = false;
 
+const CONNECT_ATTEMPTS = 3;
+const CONNECT_RETRY_DELAY_MS = 1500;
+const WS_CONNECTION_TIMEOUT_S = 8;
+const WATCHDOG_INTERVAL_MS = 30_000;
+
+function sipConfigKey(config: SipConfig): string {
+  return JSON.stringify([
+    config.sipUri?.trim(),
+    config.sipUsername?.trim(),
+    config.sipPassword,
+    config.sipDomain?.trim(),
+    Boolean(config.enableTLS),
+    config.sipServer?.trim(),
+  ]);
+}
+
+function errorMessage(error: unknown, fallback: string): string {
+  if (error instanceof Error) return error.message;
+  if (typeof error === 'string') return error;
+  return fallback;
+}
+
+/** Fallos de transporte (WS caído / sin respuesta) en los que merece reconectar y reintentar. */
+export function isSipTransportError(message: string): boolean {
+  return /websocket|transport|not connected|connection|timeout|\b408\b|\b503\b/i.test(message);
+}
+
+const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
 /**
  * sip.js Transport usa ws.addEventListener(...). En React Native el WebSocket
  * nativo solo expone onopen/onmessage/onerror/onclose → "undefined is not a function".
@@ -228,122 +257,212 @@ class SipService extends EventEmitter {
     duration: 0,
   };
   private callDurationInterval: ReturnType<typeof setInterval> | null = null;
+  private initPromise: Promise<boolean> | null = null;
+  private initKey = '';
+  private activeKey = '';
+  private watchdog: ReturnType<typeof setInterval> | null = null;
 
-  async initialize(config: SipConfig): Promise<boolean> {
-    try {
-      if (!isSipConfigured(config)) {
-        throw new Error('Configuración SIP incompleta.');
-      }
-
-      ensureWebSocketAddEventListener();
-      ensureWebRtcGlobals();
-      this.currentConfig = config;
-
-      if (this.simpleUser) {
-        try {
-          await this.simpleUser.disconnect();
-        } catch {
-          // ignore
-        }
-        this.simpleUser = null;
-      }
-
-      const { Web } = await import('sip.js');
-      const aor = buildAor(config);
-      const server = buildWebSocketServer(config);
-
-      const options = {
-        aor,
-        media: {
-          constraints: {
-            audio: {
-              echoCancellation: true,
-              noiseSuppression: true,
-              autoGainControl: true,
-            },
-            video: false,
-          },
-        },
-        delegate: {
-          onServerConnect: () => {
-            console.log('[SIP] WS conectado');
-          },
-          onServerDisconnect: (err?: Error) => {
-            console.warn('[SIP] WS desconectado', err?.message);
-            this.isInitialized = false;
-          },
-          onRegistered: () => {
-            console.log('[SIP] REGISTER OK', aor);
-          },
-          onUnregistered: () => {
-            console.log('[SIP] UNREGISTER');
-          },
-          onCallAnswered: () => {
-            if (this.callState.isActive) {
-              this.callState.isConnected = true;
-              startCommunicationAudio(true);
-              this.callState.isSpeakerOn = true;
-              this.startCallDuration();
-              this.emit('callConnected', { remoteUri: this.callState.remoteUri });
-            }
-          },
-          onCallHangup: () => {
-            stopCommunicationAudio();
-            this.resetCallState();
-            this.emit('callEnded', {});
-          },
-        },
-        userAgentOptions: {
-          authorizationUsername: config.sipUsername.trim(),
-          authorizationPassword: config.sipPassword,
-          logLevel: 'warn' as const,
-          transportOptions: {
-            server,
-          },
-          // FreePBX en la misma LAN: bastan candidatos host. Un STUN público sin salida a
-          // Internet hace que sip.js agote su espera de ICE (5 s por defecto) en cada INVITE.
-          sessionDescriptionHandlerFactoryOptions: {
-            peerConnectionConfiguration: {
-              iceServers: [],
-            },
-            iceGatheringTimeout: 500,
-          },
-        },
-      };
-
-      console.log('[SIP] Conectando WS', server, 'AOR', aor);
-      const user = new Web.SimpleUser(server, options) as SimpleUserLike;
-
-      await user.connect();
-      // sip.js: connect solo abre el WebSocket; el REGISTER es aparte.
-      await user.register();
-      this.simpleUser = user;
-      this.isInitialized = true;
-      console.log('[SIP] Registrado/conectado a', server, 'como', aor);
+  /** Conecta y registra si hace falta; reutiliza la conexión viva si la config no cambió. */
+  async ensureReady(config: SipConfig, opts?: { silent?: boolean }): Promise<boolean> {
+    if (sipConfigKey(config) === this.activeKey && this.isServiceInitialized()) {
       return true;
-    } catch (error) {
-      const message =
-        error instanceof Error
-          ? error.message
-          : typeof error === 'string'
-            ? error
-            : 'Error inicializando SIP';
-      let endpoint = '(sip)';
+    }
+    return this.initialize(config, opts);
+  }
+
+  async initialize(config: SipConfig, opts?: { silent?: boolean }): Promise<boolean> {
+    const key = sipConfigKey(config);
+    if (this.initPromise && this.initKey === key) {
+      return this.initPromise;
+    }
+    const pending = this.initializeWithRetry(config, opts?.silent ?? false).finally(() => {
+      if (this.initPromise === pending) {
+        this.initPromise = null;
+      }
+    });
+    this.initPromise = pending;
+    this.initKey = key;
+    return pending;
+  }
+
+  private async initializeWithRetry(config: SipConfig, silent: boolean): Promise<boolean> {
+    let lastError: unknown = null;
+    this.startWatchdog();
+    for (let attempt = 1; attempt <= CONNECT_ATTEMPTS; attempt += 1) {
       try {
-        endpoint = `${buildWebSocketServer(config)} / ${buildAor(config)}`;
+        await this.connectOnce(config);
+        return true;
+      } catch (error) {
+        lastError = error;
+        console.warn(
+          `[SIP] Intento ${attempt}/${CONNECT_ATTEMPTS} fallido:`,
+          errorMessage(error, 'Error inicializando SIP'),
+        );
+        if (attempt < CONNECT_ATTEMPTS) {
+          await delay(CONNECT_RETRY_DELAY_MS);
+        }
+      }
+    }
+
+    const message = errorMessage(lastError, 'Error inicializando SIP');
+    let endpoint = '(sip)';
+    try {
+      endpoint = `${buildWebSocketServer(config)} / ${buildAor(config)}`;
+    } catch {
+      // ignore
+    }
+    console.error('[SIP] Error inicializando:', endpoint, message, lastError);
+    this.isInitialized = false;
+    this.activeKey = '';
+    if (!silent) {
+      this.emit('error', { error: message });
+    }
+    throw new Error(`SIP no registrado (${endpoint}): ${message}`);
+  }
+
+  private async connectOnce(config: SipConfig): Promise<void> {
+    if (!isSipConfigured(config)) {
+      throw new Error('Configuración SIP incompleta.');
+    }
+
+    ensureWebSocketAddEventListener();
+    ensureWebRtcGlobals();
+    this.currentConfig = config;
+    this.isInitialized = false;
+    this.activeKey = '';
+
+    if (this.simpleUser) {
+      const previous = this.simpleUser;
+      this.simpleUser = null;
+      try {
+        await previous.disconnect();
       } catch {
         // ignore
       }
-      console.error('[SIP] Error inicializando:', endpoint, message, error);
-      this.isInitialized = false;
-      this.simpleUser = null;
-      this.emit('error', { error: message });
-      throw new Error(`SIP no registrado (${endpoint}): ${message}`);
+    }
+
+    const { Web } = await import('sip.js');
+    const aor = buildAor(config);
+    const server = buildWebSocketServer(config);
+    let user: SimpleUserLike | null = null;
+    const isCurrent = () => user !== null && this.simpleUser === user;
+
+    const options = {
+      aor,
+      // sip.js reconecta y vuelve a registrar solo tras un corte del WS.
+      reconnectionAttempts: 10,
+      reconnectionDelay: 3,
+      media: {
+        constraints: {
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+          },
+          video: false,
+        },
+      },
+      delegate: {
+        onServerConnect: () => {
+          console.log('[SIP] WS conectado');
+          if (isCurrent()) {
+            this.isInitialized = true;
+            this.activeKey = sipConfigKey(config);
+          }
+        },
+        onServerDisconnect: (err?: Error) => {
+          console.warn('[SIP] WS desconectado', err?.message);
+          if (isCurrent()) {
+            this.isInitialized = false;
+          }
+        },
+        onRegistered: () => {
+          console.log('[SIP] REGISTER OK', aor);
+        },
+        onUnregistered: () => {
+          console.log('[SIP] UNREGISTER');
+        },
+        onCallAnswered: () => {
+          if (this.callState.isActive) {
+            this.callState.isConnected = true;
+            startCommunicationAudio(true);
+            this.callState.isSpeakerOn = true;
+            this.startCallDuration();
+            this.emit('callConnected', { remoteUri: this.callState.remoteUri });
+          }
+        },
+        onCallHangup: () => {
+          stopCommunicationAudio();
+          this.resetCallState();
+          this.emit('callEnded', {});
+        },
+      },
+      userAgentOptions: {
+        authorizationUsername: config.sipUsername.trim(),
+        authorizationPassword: config.sipPassword,
+        logLevel: 'warn' as const,
+        transportOptions: {
+          server,
+          connectionTimeout: WS_CONNECTION_TIMEOUT_S,
+        },
+        // FreePBX en la misma LAN: bastan candidatos host. Un STUN público sin salida a
+        // Internet hace que sip.js agote su espera de ICE (5 s por defecto) en cada INVITE.
+        sessionDescriptionHandlerFactoryOptions: {
+          peerConnectionConfiguration: {
+            iceServers: [],
+          },
+          iceGatheringTimeout: 500,
+        },
+      },
+    };
+
+    console.log('[SIP] Conectando WS', server, 'AOR', aor);
+    user = new Web.SimpleUser(server, options) as SimpleUserLike;
+    this.simpleUser = user;
+
+    try {
+      await user.connect();
+      // sip.js: connect solo abre el WebSocket; el REGISTER es aparte.
+      await user.register();
+    } catch (error) {
+      if (this.simpleUser === user) {
+        this.simpleUser = null;
+      }
+      try {
+        await user.disconnect();
+      } catch {
+        // ignore
+      }
+      throw error;
+    }
+    this.isInitialized = true;
+    this.activeKey = sipConfigKey(config);
+    console.log('[SIP] Registrado/conectado a', server, 'como', aor);
+  }
+
+  /** Si el WS cae y sip.js agota sus reintentos, vuelve a conectar fuera de llamada. */
+  private startWatchdog(): void {
+    if (this.watchdog) return;
+    this.watchdog = setInterval(() => {
+      const config = this.currentConfig;
+      if (!config || this.initPromise || this.callState.isActive) return;
+      if (this.isServiceInitialized()) return;
+      console.log('[SIP] Watchdog: WS caído, reconectando…');
+      this.initialize(config, { silent: true }).catch((error) => {
+        console.warn('[SIP] Watchdog: reconexión fallida:', errorMessage(error, ''));
+      });
+    }, WATCHDOG_INTERVAL_MS);
+  }
+
+  private stopWatchdog(): void {
+    if (this.watchdog) {
+      clearInterval(this.watchdog);
+      this.watchdog = null;
     }
   }
 
   isServiceInitialized(): boolean {
-    return this.isInitialized;
+    return this.isInitialized && Boolean(this.simpleUser?.isConnected());
   }
 
   async startCall(remoteUri: string): Promise<boolean> {
@@ -376,7 +495,20 @@ class SipService extends EventEmitter {
       };
       this.emit('callStarted', { remoteUri: destination });
 
-      await this.simpleUser.call(destination);
+      try {
+        await this.simpleUser.call(destination);
+      } catch (callError) {
+        const detail = errorMessage(callError, '');
+        if (!this.currentConfig || !isSipTransportError(detail)) {
+          throw callError;
+        }
+        console.warn('[SIP] INVITE sin transporte, reconecto y reintento:', detail);
+        await this.initialize(this.currentConfig, { silent: true });
+        if (!this.simpleUser) {
+          throw callError;
+        }
+        await this.simpleUser.call(destination);
+      }
       return true;
     } catch (error) {
       const message =
@@ -435,6 +567,7 @@ class SipService extends EventEmitter {
   }
 
   async shutdown(): Promise<void> {
+    this.stopWatchdog();
     await this.endCall();
     if (this.simpleUser) {
       try {
@@ -445,6 +578,7 @@ class SipService extends EventEmitter {
       this.simpleUser = null;
     }
     this.isInitialized = false;
+    this.activeKey = '';
     this.currentConfig = null;
   }
 

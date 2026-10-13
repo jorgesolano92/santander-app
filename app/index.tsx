@@ -32,12 +32,13 @@ import {
   type ModeQueuedPayload,
   type CoceNotificationPayload,
 } from '@/services/tabletCallService';
-import { CoceMessageToast } from '@/components/CoceMessageToast';
+import { SrcMessagePopup } from '@/components/SrcMessagePopup';
 import { CoceMessagesModal } from '@/components/CoceMessagesModal';
 import DoorVideoStream from '@/components/DoorVideoStream';
 import { coceMessageService, type CoceMessage } from '@/services/CoceMessageService';
 import { wakeTablet } from '@/services/tabletWake';
 import { warmUpSipIntercom } from '@/services/intercomSip';
+import { resolveTabletSipAccount, setActiveTabletSipAccount } from '@/services/tabletSipAccount';
 import { showOperationError, showOperationInfo } from '@/utils/showOperationError';
 import type { ConfigurationData } from '@/types/configurationData';
 import { getModeActiveDescription, formatModeDisplayName } from '@/config/modeTexts';
@@ -154,7 +155,7 @@ export default function MainScreen() {
   const [pendingModeLabel, setPendingModeLabel] = useState<string | null>(null);
   const [showCoceMessagesModal, setShowCoceMessagesModal] = useState(false);
   const [coceMessages, setCoceMessages] = useState<CoceMessage[]>([]);
-  const [coceToastMessage, setCoceToastMessage] = useState<CoceMessage | null>(null);
+  const [srcPopupQueue, setSrcPopupQueue] = useState<CoceMessage[]>([]);
   const [coceUnreadCount, setCoceUnreadCount] = useState(0);
   const [needsInitialSetup, setNeedsInitialSetup] = useState(false);
   const [configBootReady, setConfigBootReady] = useState(false);
@@ -276,7 +277,11 @@ export default function MainScreen() {
     };
     const onToast = (message: CoceMessage) => {
       wakeTablet();
-      setCoceToastMessage(message);
+      if (!message.seenAt) {
+        setSrcPopupQueue((queue) =>
+          queue.some((m) => m.id === message.id) ? queue : [...queue, message],
+        );
+      }
       refreshCoceMessages();
     };
     const onCoceNotification = (payload: CoceNotificationPayload) => {
@@ -465,9 +470,11 @@ export default function MainScreen() {
   }, [deviceAuthStatus, validateDevice]);
 
   useEffect(() => {
-    if (deviceAuthStatus !== 'authorized' || !systemConfig?.doors) return;
+    if (!systemConfig) return;
+    setActiveTabletSipAccount(resolveTabletSipAccount(systemConfig));
+    if (deviceAuthStatus !== 'authorized' || !systemConfig.doors) return;
     warmUpSipIntercom(systemConfig.doors);
-  }, [deviceAuthStatus, systemConfig?.doors]);
+  }, [deviceAuthStatus, systemConfig?.doors, systemConfig?.sip]);
 
   // Función para alternar modo sandbox - DESHABILITADA
   // const handleToggleSandboxMode = (newMode: boolean) => {
@@ -1888,9 +1895,12 @@ export default function MainScreen() {
         isDeactivating={isFireActive}
       />
 
-      <CoceMessageToast
-        message={coceToastMessage}
-        onDismiss={() => setCoceToastMessage(null)}
+      <SrcMessagePopup
+        queue={srcPopupQueue}
+        onAcknowledge={(message) => {
+          setSrcPopupQueue((queue) => queue.filter((m) => m.id !== message.id));
+          void coceMessageService.markSeen([message.id]);
+        }}
       />
 
       <CoceMessagesModal

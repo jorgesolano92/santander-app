@@ -19,6 +19,7 @@ import { configCredentialsService } from '@/services/ConfigCredentialsService';
 import { tabletCallService } from '@/services/tabletCallService';
 import { cloneDefaultDoorAppConfig } from '@/config/defaultDoorAppConfig';
 import { INTERCOM_BRIDGE_ONLY } from '@/config/intercomFeatures';
+import { resolveTabletSipAccount, type TabletSipAccount } from '@/services/tabletSipAccount';
 import { showOperationError, showOperationInfo } from '@/utils/showOperationError';
 import type { ConfigurationData, ModeConfig, ModesConfig } from '@/types/configurationData';
 
@@ -112,8 +113,6 @@ export default function NewConfigurationModal({
                   sdkPassword: door.intercom.sdkPassword ?? '',
                   voiceChannel: door.intercom.voiceChannel ?? -1,
                   intercomMode: INTERCOM_BRIDGE_ONLY ? 'bridge' : (door.intercom.intercomMode ?? 'bridge'),
-                  sipSignaling: door.intercom.sipSignaling ?? 'pbx',
-                  sipP2pPeerIp: door.intercom.sipP2pPeerIp ?? '',
                   bridgeUrl: door.intercom.bridgeUrl ?? 'ws://192.168.1.10:8765',
                   sipUri: door.intercom.sipUri ?? '',
                   sipUsername: door.intercom.sipUsername ?? '',
@@ -125,10 +124,6 @@ export default function NewConfigurationModal({
                   csipApiUseHttps: door.intercom.csipApiUseHttps ?? false,
                   csipApiKey: door.intercom.csipApiKey ?? '',
                   csipBearerToken: door.intercom.csipBearerToken ?? '',
-                  csipCallTargetType: door.intercom.csipCallTargetType ?? 'default',
-                  csipCallTarget: door.intercom.csipCallTarget ?? '',
-                  csipCallUser: door.intercom.csipCallUser ?? '',
-                  csipCallRecording: door.intercom.csipCallRecording ?? false,
                   csipButtonId:
                     door.intercom.csipButtonId ?? (index === 1 ? 'p2' : 'p1'),
                 }
@@ -137,7 +132,8 @@ export default function NewConfigurationModal({
             return door;
           });
         }
-        
+        parsedConfig.sip = resolveTabletSipAccount(parsedConfig);
+
         const emergencyConfig = await emergencyService.getEmergencyConfig();
         parsedConfig.emergency = {
           enabled: true,
@@ -484,6 +480,14 @@ export default function NewConfigurationModal({
     }));
   };
 
+  const updateSip = (field: keyof TabletSipAccount, value: string | boolean) => {
+    setConfig(prev => ({
+      ...prev,
+      sip: { ...resolveTabletSipAccount(prev), [field]: value },
+    }));
+  };
+  const sipAccount = resolveTabletSipAccount(config);
+
   const styles = StyleSheet.create({
     container: {
       flex: 1,
@@ -708,6 +712,11 @@ export default function NewConfigurationModal({
       elevation: 3,
       borderWidth: 1,
       borderColor: '#E9ECEF',
+    },
+    sipHint: {
+      fontSize: isSmallTablet ? 10 : 11,
+      color: '#6C757D',
+      marginTop: 4,
     },
     networkRow: {
       flexDirection: 'row',
@@ -1233,7 +1242,7 @@ export default function NewConfigurationModal({
           <View style={styles.twoColumnSection}>
             {/* Columna Izquierda - Parámetros de Red */}
             <View style={styles.leftColumn}>
-              <Text style={styles.sectionTitle}>PARÁMETROS DE RED</Text>
+              <Text style={styles.sectionTitle}>PANEL DE LA SUCURSAL</Text>
               <View style={styles.networkCard}>
                 <View style={styles.networkRow}>
                   <Text style={styles.networkLabel}>IP consola:</Text>
@@ -1245,25 +1254,64 @@ export default function NewConfigurationModal({
                   />
                 </View>
                 
+              </View>
+              <Text style={[styles.sectionTitle, { marginTop: 16 }]}>CUENTA SIP DE LA TABLET</Text>
+              <View style={styles.networkCard}>
                 <View style={styles.networkRow}>
-                  <Text style={styles.networkLabel}>Máscara:</Text>
+                  <Text style={styles.networkLabel}>Extensión:</Text>
                   <TextInput
                     style={styles.networkInput}
-                    value={config.network.netmask}
-                    onChangeText={(text) => updateNetwork('netmask', text)}
-                    placeholder="255.255.255.0"
+                    value={sipAccount.extension}
+                    onChangeText={(text) => updateSip('extension', text.trim())}
+                    placeholder="201"
+                    autoCapitalize="none"
+                    keyboardType="numeric"
                   />
                 </View>
-                
                 <View style={styles.networkRow}>
-                  <Text style={styles.networkLabel}>Gateway:</Text>
+                  <Text style={styles.networkLabel}>Contraseña:</Text>
                   <TextInput
                     style={styles.networkInput}
-                    value={config.network.gateway}
-                    onChangeText={(text) => updateNetwork('gateway', text)}
-                    placeholder="192.168.1.1"
+                    value={sipAccount.password}
+                    onChangeText={(text) => updateSip('password', text)}
+                    placeholder="••••••••"
+                    autoCapitalize="none"
+                    secureTextEntry={true}
                   />
                 </View>
+                <View style={styles.networkRow}>
+                  <Text style={styles.networkLabel}>Centralita:</Text>
+                  <TextInput
+                    style={styles.networkInput}
+                    value={sipAccount.domain}
+                    onChangeText={(text) => updateSip('domain', text.trim())}
+                    placeholder="192.168.1.154"
+                    autoCapitalize="none"
+                  />
+                </View>
+                <View style={styles.networkRow}>
+                  <Text style={styles.networkLabel}>WebSocket SIP:</Text>
+                  <TextInput
+                    style={styles.networkInput}
+                    value={sipAccount.server}
+                    onChangeText={(text) => updateSip('server', text.trim())}
+                    placeholder="192.168.1.154:8088/ws"
+                    autoCapitalize="none"
+                  />
+                </View>
+                <View style={styles.networkRow}>
+                  <Text style={styles.networkLabel}>TLS (WSS):</Text>
+                  <Switch
+                    value={sipAccount.enableTLS}
+                    onValueChange={(value) => updateSip('enableTLS', value)}
+                    trackColor={{ false: '#CED4DA', true: '#28A745' }}
+                    thumbColor="#FFFFFF"
+                  />
+                </View>
+                <Text style={styles.sipHint}>
+                  Común a todos los intercomunicadores. En cada puerta solo se indica la extensión
+                  de su intercomunicador.
+                </Text>
               </View>
             </View>
 
@@ -1328,49 +1376,6 @@ export default function NewConfigurationModal({
                   />
                 </View>
 
-                <View style={styles.networkRow}>
-                  <Text style={styles.networkLabel}>URL TOKEN:</Text>
-                  <TextInput
-                    style={styles.networkInput}
-                    value={config.api.urlToken}
-                    onChangeText={(text) => updateApi('urlToken', text)}
-                    placeholder="/api/v1/auth/token"
-                    autoCapitalize="none"
-                  />
-                </View>
-
-                <View style={styles.networkRow}>
-                  <Text style={styles.networkLabel}>URL GET:</Text>
-                  <TextInput
-                    style={styles.networkInput}
-                    value={config.api.urlGet}
-                    onChangeText={(text) => updateApi('urlGet', text)}
-                    placeholder="/api/v1/get_mode"
-                    autoCapitalize="none"
-                  />
-                </View>
-
-                <View style={styles.networkRow}>
-                  <Text style={styles.networkLabel}>URL POST:</Text>
-                  <TextInput
-                    style={styles.networkInput}
-                    value={config.api.urlPost}
-                    onChangeText={(text) => updateApi('urlPost', text)}
-                    placeholder="/api/v1/set_mode"
-                    autoCapitalize="none"
-                  />
-                </View>
-
-                <View style={styles.networkRow}>
-                  <Text style={styles.networkLabel}>URL MODES:</Text>
-                  <TextInput
-                    style={styles.networkInput}
-                    value={config.api.urlModes}
-                    onChangeText={(text) => updateApi('urlModes', text)}
-                    placeholder="/api/v1/modes"
-                    autoCapitalize="none"
-                  />
-                </View>
               </View>
             </View>
           </View>

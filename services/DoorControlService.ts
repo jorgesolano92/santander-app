@@ -37,6 +37,13 @@ if (Platform.OS !== 'web') {
   }
 }
 
+export interface IntercomAudioLevels {
+  speaker: number;
+  microphone: number;
+  min: number;
+  max: number;
+}
+
 export interface DoorStatus {
   id: string;
   name: string;
@@ -2786,6 +2793,48 @@ class DoorControlService {
       message_ids: ids,
       channel: 'tablet',
     });
+  }
+
+  /** Volumen altavoz / micrófono de la placa Panphone de la puerta (escala 0–10). */
+  async getIntercomAudio(door: 'p1' | 'p2'): Promise<IntercomAudioLevels> {
+    return this.intercomAudioRequest(door, 'GET');
+  }
+
+  async setIntercomAudio(
+    door: 'p1' | 'p2',
+    levels: { speaker?: number; microphone?: number },
+  ): Promise<IntercomAudioLevels> {
+    return this.intercomAudioRequest(door, 'PUT', levels);
+  }
+
+  private async intercomAudioRequest(
+    door: 'p1' | 'p2',
+    method: 'GET' | 'PUT',
+    body?: { speaker?: number; microphone?: number },
+  ): Promise<IntercomAudioLevels> {
+    const config = await this.getSavedAppConfig();
+    if (!config?.network?.consoleIP) {
+      throw new Error('Sin IP de consola configurada');
+    }
+    const response = await this.authenticatedRequest(
+      config,
+      method,
+      `/api/v1/intercom/${door}/audio`,
+      body,
+      20000,
+    );
+    if (!response) throw new Error('Sin sesión con el panel');
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const detail = typeof data?.detail === 'string' ? data.detail : '';
+      throw new Error(detail || 'La placa no respondió');
+    }
+    return {
+      speaker: Number(data.speaker ?? 0),
+      microphone: Number(data.microphone ?? 0),
+      min: Number(data.min ?? 0),
+      max: Number(data.max ?? 10),
+    };
   }
 
   async fetchSchedules(): Promise<any> {

@@ -35,10 +35,16 @@ class CoceMessageService extends EventEmitter {
   }
 
   async markAllSeen(): Promise<void> {
+    await this.markSeen(null);
+  }
+
+  /** Marca como vistos los mensajes indicados (todos si ``ids`` es null) y confirma al SRC. */
+  async markSeen(ids: string[] | null): Promise<void> {
     const now = new Date().toISOString();
     const unreadIds: string[] = [];
+    const wanted = ids ? new Set(ids) : null;
     this.messages = this.messages.map((m) => {
-      if (m.seenAt) return m;
+      if (m.seenAt || (wanted && !wanted.has(m.id))) return m;
       unreadIds.push(m.id);
       return { ...m, seenAt: now };
     });
@@ -73,8 +79,8 @@ class CoceMessageService extends EventEmitter {
     };
     const idx = this.messages.findIndex((m) => m.id === id);
     if (idx >= 0) {
-      const prev = this.messages[idx];
-      this.messages[idx] = { ...incoming, seenAt: prev.seenAt ?? null };
+      incoming.seenAt = this.messages[idx].seenAt ?? null;
+      this.messages[idx] = incoming;
     } else {
       this.messages.unshift(incoming);
     }

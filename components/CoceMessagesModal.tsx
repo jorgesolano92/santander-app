@@ -35,7 +35,7 @@ export function CoceMessagesModal({ visible, messages, onClose }: Props) {
       <View style={styles.backdrop}>
         <View style={styles.panel}>
           <View style={styles.header}>
-            <Text style={styles.heading}>Mensajes del COCE</Text>
+            <Text style={styles.heading}>Mensajes del SRC</Text>
             <TouchableOpacity onPress={onClose} hitSlop={12}>
               <X size={22} color="#334155" />
             </TouchableOpacity>

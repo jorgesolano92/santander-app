@@ -17,6 +17,7 @@ import { useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useDoorControl } from '@/hooks/useDoorControl';
 import DoorVideoStream from './DoorVideoStream';
+import IntercomAudioControls from './IntercomAudioControls';
 import { startIntercom, stopIntercom } from '@/services/intercom';
 import { IntercomConfig } from './IntercomConfigurationModal';
 
@@ -867,6 +868,15 @@ export default function ManualModeModal({
       alignSelf: 'stretch',
       marginBottom: 0,
     },
+    doorControlSectionHidden: {
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      width: 1,
+      height: 1,
+      opacity: 0,
+      overflow: 'hidden',
+    },
     doorControlButtonsFloating: {
       position: 'absolute',
       left: 0,
@@ -939,7 +949,11 @@ export default function ManualModeModal({
           >
             {enabledDoors.map((door, index) => {
               const doorId = `P${index + 1}`;
-              if (activeExpandedDoorId && activeExpandedDoorId !== doorId) {
+              // Al remontar el reproductor tras salir de pantalla completa el vídeo
+              // se redimensiona mal: se mantiene montado y oculto en su lugar.
+              const hiddenBehindFullscreen =
+                !!activeExpandedDoorId && activeExpandedDoorId !== doorId;
+              if (hiddenBehindFullscreen && isVideoportero) {
                 return null;
               }
               const isDoorExpanded = activeExpandedDoorId === doorId;
@@ -949,7 +963,14 @@ export default function ManualModeModal({
               return (
                 <View
                   key={doorId}
-                  style={isDoorExpanded ? styles.doorControlSectionExpanded : styles.doorControlSection}
+                  style={
+                    isDoorExpanded
+                      ? styles.doorControlSectionExpanded
+                      : hiddenBehindFullscreen
+                        ? styles.doorControlSectionHidden
+                        : styles.doorControlSection
+                  }
+                  pointerEvents={hiddenBehindFullscreen ? 'none' : 'auto'}
                 >
                   <View
                     style={[
@@ -983,6 +1004,13 @@ export default function ManualModeModal({
                         {isDoorExpanded ? (
                           <View style={styles.doorControlButtonsFloating} pointerEvents="box-none">
                             {renderDoorControlButton(doorId, door.name, true)}
+                            {door.intercom?.intercomMode === 'sip' ? (
+                              <IntercomAudioControls
+                                door={doorId === 'P2' ? 'p2' : 'p1'}
+                                doorName={door.name}
+                                variant="floating"
+                              />
+                            ) : null}
                             {isVideoportero ? (
                               <TouchableOpacity
                                 style={[
@@ -1048,6 +1076,9 @@ export default function ManualModeModal({
                           </>
                         )}
                       </TouchableOpacity>
+                    ) : null}
+                    {!isDoorExpanded && door.intercom?.intercomMode === 'sip' ? (
+                      <IntercomAudioControls door={doorId === 'P2' ? 'p2' : 'p1'} doorName={door.name} />
                     ) : null}
                   </View>
                 </View>

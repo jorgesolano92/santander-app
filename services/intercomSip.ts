@@ -1,25 +1,22 @@
 import { Alert, PermissionsAndroid, Platform } from 'react-native';
 
 import type { IntercomConfig } from '@/components/IntercomConfigurationModal';
+import { INTERCOM_BRIDGE_ONLY } from '@/config/intercomFeatures';
 import {
   buildCsipApiConfig,
   csipControlLed,
   csipStartCall,
   doorIdToCsipButton,
   isCsipApiConfigured,
-  type CsipCallTargetType,
 } from '@/services/csipApiClient';
 import { isSipConfigured, sipService, type SipConfig } from '@/services/SipService';
+import { withTabletSipAccount } from '@/services/tabletSipAccount';
 
 let activeDoorId: string | null = null;
 
 export function isSipIntercomActive(doorId?: string): boolean {
   if (!activeDoorId) return false;
   return doorId ? activeDoorId === doorId : true;
-}
-
-function isP2pSignaling(config: IntercomConfig): boolean {
-  return (config.sipSignaling ?? 'pbx') === 'p2p';
 }
 
 async function ensureMicPermission(): Promise<boolean> {
@@ -46,88 +43,36 @@ function buildSipConfig(config: IntercomConfig): SipConfig {
   };
 }
 
-function resolveCallTarget(config: IntercomConfig): {
-  target_type: CsipCallTargetType;
-  target?: string;
-  user?: string;
-} {
-  if (isP2pSignaling(config)) {
-    const peer =
-      config.sipP2pPeerIp?.trim() ||
-      config.csipCallTarget?.trim() ||
-      '';
-    return {
-      target_type: 'ip',
-      target: peer || undefined,
-      user: config.csipCallUser?.trim() || undefined,
-    };
-  }
-
-  const targetType = config.csipCallTargetType ?? 'default';
-  if (targetType === 'default') {
-    return { target_type: 'default' };
-  }
-  return {
-    target_type: targetType,
-    target: config.csipCallTarget?.trim() || undefined,
-    user: config.csipCallUser?.trim() || config.sipUsername?.trim() || undefined,
-  };
-}
-
 function missingSipSetupMessage(config: IntercomConfig): string {
   const parts: string[] = [];
   if (!isCsipApiConfigured(config)) {
-    parts.push('API CSIP: host, puerto y API key/token (cuando estén disponibles).');
+    parts.push('Intercomunicador: host CSIP y API key.');
   }
-  if (isP2pSignaling(config)) {
-    const peer = config.sipP2pPeerIp?.trim() || config.csipCallTarget?.trim();
-    if (!peer) {
-      parts.push('P2P: IP del peer SIP (softphone u otra extensión por IP).');
-    }
-  } else if (!isSipConfigured(buildSipConfig(config))) {
-    parts.push('Cuenta SIP: URI, usuario, contraseña y dominio/servidor.');
+  if (!isSipConfigured(buildSipConfig(config))) {
+    parts.push('Cuenta SIP de la tablet (configuración general): extensión, contraseña y centralita.');
   }
   return parts.join('\n\n');
 }
 
 /**
- * Modo SIP: PBX (sip.js WS) y/o P2P (CSIP call_start target_type=ip, como Panphone modo IP).
- *
- * PBX con sipCallDestination: solo marca la tablet → extensión Panphone (.80=101 / .70=100).
- * No se llama call_start (evitar segunda pata que deja el audio abierto al colgar).
+ * La tablet marca por SIP (WebSocket) a la extensión del intercomunicador.
+ * Con extensión de destino no se llama call_start (evita una segunda pata que deja el
+ * audio abierto al colgar); sin ella, call_start hace que la placa marque su destino.
  */
-export async function startSipIntercom(doorId: string, config: IntercomConfig): Promise<boolean> {
+export async function startSipIntercom(doorId: string, doorConfig: IntercomConfig): Promise<boolean> {
   if (activeDoorId && activeDoorId !== doorId) {
     Alert.alert('Intercom SIP', 'Ya hay un intercom activo en otra puerta.');
     return false;
   }
 
-  const p2p = isP2pSignaling(config);
+  const config = withTabletSipAccount(doorConfig);
   const hasCsip = isCsipApiConfigured(config);
-  const hasSipClient = !p2p && isSipConfigured(buildSipConfig(config));
-  const callTarget = resolveCallTarget(config);
+  const hasSipClient = isSipConfigured(buildSipConfig(config));
 
-  if (p2p) {
-    if (!hasCsip) {
-      Alert.alert(
-        'Intercom P2P',
-        'Falta la API CSIP (host + API key) para enviar call_start a Panphone.',
-      );
-      return false;
-    }
-    if (!callTarget.target) {
-      Alert.alert(
-        'Intercom P2P',
-        'Indica la IP del peer SIP (softphone Linphone u otra IP que acepte SIP UDP).',
-      );
-      return false;
-    }
-  } else if (!hasCsip && !hasSipClient) {
+  if (!hasCsip && !hasSipClient) {
     Alert.alert(
-      'Intercom SIP — pendiente de accesos',
-      'El modo SIP está preparado pero faltan credenciales:\n\n' +
-        missingSipSetupMessage(config) +
-        '\n\nMientras tanto puedes usar el modo Puente PC (audio_bridge.py).',
+      'Intercom SIP — faltan datos',
+      'El modo SIP está preparado pero faltan datos:\n\n' + missingSipSetupMessage(config),
     );
     return false;
   }
@@ -140,35 +85,22 @@ export async function startSipIntercom(doorId: string, config: IntercomConfig): 
     }
   }
 
-  // PBX + tablet marca al Panphone (sipCallDestination): no usar call_start.
-  // call_start haría que la placa marque su destino por defecto (p.ej. RG 200 u otra
-  // extensión) en paralelo → dos llamadas, acoplamiento .80/.70 y colgado incompleto.
-  const tabletDialsPanphone =
-    !p2p && hasSipClient && Boolean(config.sipCallDestination?.trim());
-  const shouldCsipCallStart = hasCsip && (p2p || !tabletDialsPanphone);
+  const destination = config.sipCallDestination?.trim() || '';
+  const shouldCsipCallStart = hasCsip && !(hasSipClient && destination);
 
   try {
     if (hasCsip) {
       const apiConfig = buildCsipApiConfig(config);
       if (shouldCsipCallStart) {
         try {
-          const csipResult = await csipStartCall(apiConfig, {
-            ...callTarget,
-            recording: config.csipCallRecording ?? false,
-          });
-          console.log('[SIP intercom] CSIP call_start:', csipResult, p2p ? '(P2P)' : '(PBX)');
+          const csipResult = await csipStartCall(apiConfig, { target_type: 'default' });
+          console.log('[SIP intercom] CSIP call_start:', csipResult);
         } catch (csipError) {
-          // En PBX el audio va por SIP; un fallo CSIP no debe tumbar toda la llamada.
-          if (p2p || !hasSipClient) {
+          if (!hasSipClient) {
             throw csipError;
           }
           console.warn('[SIP intercom] CSIP call_start falló; continuo con SIP:', csipError);
         }
-      } else {
-        console.log(
-          '[SIP intercom] PBX: omito call_start; la tablet marca',
-          config.sipCallDestination?.trim(),
-        );
       }
 
       // El LED no debe retrasar el audio: se envía en paralelo a la llamada SIP.
@@ -180,53 +112,33 @@ export async function startSipIntercom(doorId: string, config: IntercomConfig): 
       });
     }
 
-    if (p2p) {
-      Alert.alert(
-        'Intercom P2P',
-        `Marcación enviada a Panphone → SIP UDP ${callTarget.target}` +
-          (callTarget.user ? ` (user ${callTarget.user})` : '') +
-          '.\n\n' +
-          'Esta tablet no termina audio SIP UDP (sip.js usa WebSocket). ' +
-          'Contesta en el softphone del peer o usa señalización PBX para audio en la app.',
-      );
-      activeDoorId = doorId;
-      return true;
-    }
-
     if (hasSipClient) {
-      const sipConfig = buildSipConfig(config);
-      if (!sipService.isServiceInitialized()) {
-        try {
-          const initialized = await sipService.initialize(sipConfig);
-          if (!initialized) {
-            throw new Error('No se pudo registrar la cuenta SIP en el servidor.');
-          }
-        } catch (sipError: unknown) {
-          const detail = sipError instanceof Error ? sipError.message : String(sipError);
-          throw new Error(
-            detail.includes('SIP no registrado')
-              ? detail
-              : `No se pudo registrar la cuenta SIP en el servidor. ${detail}`,
-          );
+      try {
+        const initialized = await sipService.ensureReady(buildSipConfig(config));
+        if (!initialized) {
+          throw new Error('No se pudo registrar la cuenta SIP en el servidor.');
         }
+      } catch (sipError: unknown) {
+        const detail = sipError instanceof Error ? sipError.message : String(sipError);
+        throw new Error(
+          detail.includes('SIP no registrado')
+            ? detail
+            : `No se pudo registrar la cuenta SIP en el servidor. ${detail}`,
+        );
       }
 
-      const remoteUri = config.sipCallDestination?.trim() || config.sipUri.trim();
-      try {
-        const callStarted = await sipService.startCall(remoteUri);
-        if (!callStarted) {
-          throw new Error('No se pudo iniciar la llamada SIP desde la tablet.');
-        }
-      } catch (callError: unknown) {
-        const detail = callError instanceof Error ? callError.message : String(callError);
-        throw new Error(detail);
+      if (!destination) {
+        throw new Error('Falta la extensión del intercomunicador en la configuración de la puerta.');
       }
-    } else if (hasCsip) {
+      const callStarted = await sipService.startCall(destination);
+      if (!callStarted) {
+        throw new Error('No se pudo iniciar la llamada SIP desde la tablet.');
+      }
+    } else {
       Alert.alert(
         'Intercom SIP (CSIP)',
-        'Marcación remota enviada a la tarjeta CSIP.\n\n' +
-          'El audio bidireccional en la tablet requiere además la cuenta SIP ' +
-          '(URI, usuario, contraseña y servidor).',
+        'Marcación remota enviada al intercomunicador.\n\n' +
+          'Para hablar desde la tablet falta la cuenta SIP de la tablet en la configuración general.',
       );
     }
 
@@ -234,9 +146,25 @@ export async function startSipIntercom(doorId: string, config: IntercomConfig): 
     return true;
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Error desconocido';
-    Alert.alert(p2p ? 'Intercom P2P' : 'Intercom SIP', message);
+    Alert.alert('Intercom SIP', message);
     return false;
   }
+}
+
+/**
+ * Deja la cuenta SIP conectada y registrada antes de pulsar intercom, para no abrir
+ * el WebSocket en el momento de la llamada. Sin avisos: los fallos se reintentan solos.
+ */
+export function warmUpSipIntercom(doors: { enabled?: boolean; intercom?: IntercomConfig }[]): void {
+  if (INTERCOM_BRIDGE_ONLY) return;
+  const intercom = doors
+    .filter((door) => door.enabled && door.intercom?.intercomMode === 'sip')
+    .map((door) => withTabletSipAccount(door.intercom as IntercomConfig))
+    .find((ic) => isSipConfigured(buildSipConfig(ic)));
+  if (!intercom) return;
+  sipService.ensureReady(buildSipConfig(intercom), { silent: true }).catch((error) => {
+    console.warn('[SIP intercom] Precarga SIP fallida (se reintentará):', error);
+  });
 }
 
 export async function stopSipIntercom(config?: IntercomConfig): Promise<void> {

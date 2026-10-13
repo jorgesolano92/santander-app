@@ -1,6 +1,7 @@
 import type { IntercomConfig } from '@/components/IntercomConfigurationModal';
 import type { EmergencyConfig } from '@/services/EmergencyService';
 import type { FireSignalConfig } from '@/services/FireService';
+import type { TabletSipAccount } from '@/services/tabletSipAccount';
 
 export interface DoorConfig {
   enabled: boolean;
@@ -37,6 +38,8 @@ export interface ModesConfig {
 
 export interface ConfigurationData {
   doors: DoorConfig[];
+  /** Cuenta SIP de esta tablet, común a todos los intercomunicadores. */
+  sip?: TabletSipAccount;
   network: {
     consoleIP: string;
     netmask: string;

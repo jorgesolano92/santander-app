@@ -2,6 +2,7 @@ import { View, Text, StyleSheet, TextInput, TouchableOpacity, Modal, ScrollView,
 import { useState, useEffect } from 'react';
 import { Save, X, Camera } from 'lucide-react-native';
 import { INTERCOM_BRIDGE_ONLY } from '@/config/intercomFeatures';
+import { intercomDestinationExtension } from '@/services/tabletSipAccount';
 import { Picker } from '@react-native-picker/picker';
 import { useWindowDimensions } from 'react-native';
 export interface IntercomConfig {
@@ -27,35 +28,26 @@ export interface IntercomConfig {
   voiceChannel?: number;
   /** bridge = PC + audio_bridge.py; sdk = SDK nativo Android; sip = CSIP API + cuenta SIP. */
   intercomMode?: 'bridge' | 'sdk' | 'sip';
-  /**
-   * Señalización cuando intercomMode=sip:
-   * - pbx: cuenta SIP tablet (WS) + PBX
-   * - p2p: call_start CSIP target_type=ip (como modo IP en Panphone), sin centralita
-   */
-  sipSignaling?: 'pbx' | 'p2p';
-  /** IP destino P2P para call_start (ej. softphone o extensión SIP en otra IP). */
-  sipP2pPeerIp?: string;
   /** URL WebSocket del puente (ej. ws://192.168.1.10:8765 o IP ZeroTier). */
   bridgeUrl?: string;
   /** Micrófono tablet en modo puente: voice_communication (AGC) o mic (más crudo). */
   bridgeMicSource?: 'voice_communication' | 'mic';
+  /**
+   * Cuenta SIP: se rellena en ejecución desde la cuenta global de la tablet
+   * (ConfigurationData.sip); en configuraciones antiguas estaba repetida por puerta.
+   */
   sipUri: string;
   sipUsername: string;
   sipPassword: string;
   sipDomain: string;
-  /** Servidor SIP WebSocket (host:puerto). Ej. pbx.local:5066 */
   sipServer?: string;
-  /** Destino al marcar desde la tablet (si distinto de sipUri). */
+  /** Extensión del intercomunicador ("101" o URI completa "sip:101@host"). */
   sipCallDestination?: string;
   /** API CSIP custom1 — host:puerto del dispositivo. Ej. 192.168.1.80:8090 */
   csipApiHost?: string;
   csipApiUseHttps?: boolean;
   csipApiKey?: string;
   csipBearerToken?: string;
-  csipCallTargetType?: 'number' | 'ip' | 'default';
-  csipCallTarget?: string;
-  csipCallUser?: string;
-  csipCallRecording?: boolean;
   /** Canal CSIP asociado a esta puerta (p1 / p2). */
   csipButtonId?: 'p1' | 'p2';
   enableOnvifEvents: boolean;
@@ -114,25 +106,19 @@ const defaultIntercomConfig: IntercomConfig = {
   sdkPassword: '',
   voiceChannel: -1,
   intercomMode: 'sip',
-  sipSignaling: 'pbx',
-  sipP2pPeerIp: '',
   bridgeUrl: 'ws://192.168.1.155:8765',
   bridgeMicSource: 'voice_communication',
-  sipUri: 'sip:201@192.168.1.154',
-  sipUsername: '201',
-  sipPassword: 'Santander201',
-  sipDomain: '192.168.1.154',
-  sipServer: '192.168.1.154:8088/ws',
+  sipUri: '',
+  sipUsername: '',
+  sipPassword: '',
+  sipDomain: '',
+  sipServer: '',
   // P1 Calle→101 · P2 Oficina→100 (ajustado por puerta en defaultDoorAppConfig)
-  sipCallDestination: 'sip:101@192.168.1.154',
+  sipCallDestination: '101',
   csipApiHost: '192.168.1.80:8090',
   csipApiUseHttps: false,
   csipApiKey: 'f3fb37ac959b795507cf3d6794b1f29b91ed2b1b1d1f06c6',
   csipBearerToken: '',
-  csipCallTargetType: 'default',
-  csipCallTarget: '',
-  csipCallUser: '',
-  csipCallRecording: false,
   csipButtonId: 'p1',
   enableOnvifEvents: true,
   enableTLS: false,
@@ -425,9 +411,7 @@ export default function IntercomConfigurationModal({
                   </View>
                   <Text style={{ fontSize: 11, color: '#6C757D', marginBottom: 8 }}>
                     {(config.intercomMode ?? 'bridge') === 'sip'
-                      ? (config.sipSignaling ?? 'pbx') === 'p2p'
-                        ? 'P2P: Panphone marca por SIP UDP a una IP (sin PBX). Vídeo RTSP + call_start. Audio en esta tablet requiere softphone SIP UDP o PBX (sip.js usa WebSocket).'
-                        : 'Asterisk/PBX: call_start/LED en Panphone + audio en tablet vía cuenta SIP (WebSocket). Dejad señalización en PBX/Asterisk.'
+                      ? 'La tablet llama por SIP a la extensión del intercomunicador. La cuenta SIP de la tablet (extensión, contraseña y centralita) se configura una sola vez en la configuración general.'
                       : (config.intercomMode ?? 'bridge') === 'sdk'
                         ? 'Audio directo tablet ↔ cámara vía SDK nativo.'
                         : 'Audio tablet ↔ WS puente PC ↔ cámara (audio_bridge.py).'}
@@ -437,24 +421,16 @@ export default function IntercomConfigurationModal({
 
               {!INTERCOM_BRIDGE_ONLY && (config.intercomMode ?? 'bridge') === 'sip' ? (
                 <>
-                  <View style={styles.pickerRowVertical}>
-                    <Text style={styles.pickerLabel}>Señalización SIP:</Text>
-                    <View style={styles.pickerContainer}>
-                      <Picker
-                        mode={Platform.OS === 'android' ? 'dropdown' : 'dialog'}
-                        selectedValue={config.sipSignaling ?? 'pbx'}
-                        onValueChange={(v) => {
-                          updateConfig('sipSignaling', v);
-                          if (v === 'p2p') {
-                            updateConfig('csipCallTargetType', 'ip');
-                          }
-                        }}
-                        style={styles.picker}
-                      >
-                        <Picker.Item label="PBX / Asterisk (recomendado)" value="pbx" />
-                        <Picker.Item label="P2P / IP (sin centralita)" value="p2p" />
-                      </Picker>
-                    </View>
+                  <View style={styles.inputRow}>
+                    <Text style={styles.inputLabel}>Extensión intercom:</Text>
+                    <TextInput
+                      style={styles.textInput}
+                      value={intercomDestinationExtension(config.sipCallDestination)}
+                      onChangeText={(text) => updateConfig('sipCallDestination', text.trim())}
+                      placeholder="101"
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                    />
                   </View>
 
                   <Text style={[styles.pickerLabel, { marginTop: 8 }]}>API CSIP / Panphone</Text>
@@ -502,161 +478,6 @@ export default function IntercomConfigurationModal({
                       </Picker>
                     </View>
                   </View>
-
-                  {(config.sipSignaling ?? 'pbx') === 'p2p' ? (
-                    <>
-                      <Text style={[styles.pickerLabel, { marginTop: 12 }]}>
-                        Destino P2P (call_start IP)
-                      </Text>
-                      <Text style={{ fontSize: 11, color: '#6C757D', marginBottom: 8 }}>
-                        Como en Panphone modo IP: la placa marca por SIP UDP a esta IP
-                        (softphone Linphone u otro peer), no al puerto 8090.
-                      </Text>
-                      <View style={styles.inputRow}>
-                        <Text style={styles.inputLabel}>IP peer:</Text>
-                        <TextInput
-                          style={styles.textInput}
-                          value={config.sipP2pPeerIp || config.csipCallTarget || ''}
-                          onChangeText={(text) => {
-                            updateConfig('sipP2pPeerIp', text);
-                            updateConfig('csipCallTargetType', 'ip');
-                            updateConfig('csipCallTarget', text);
-                          }}
-                          placeholder="192.168.1.155"
-                          autoCapitalize="none"
-                          autoCorrect={false}
-                          keyboardType="numeric"
-                        />
-                      </View>
-                      <View style={styles.inputRow}>
-                        <Text style={styles.inputLabel}>Usuario:</Text>
-                        <TextInput
-                          style={styles.textInput}
-                          value={config.csipCallUser || ''}
-                          onChangeText={(text) => updateConfig('csipCallUser', text)}
-                          placeholder="opcional (extensión SIP peer)"
-                          autoCapitalize="none"
-                        />
-                      </View>
-                    </>
-                  ) : (
-                    <>
-                      <View style={styles.pickerRowVertical}>
-                        <Text style={styles.pickerLabel}>call_start destino:</Text>
-                        <View style={styles.pickerContainer}>
-                          <Picker
-                            mode={Platform.OS === 'android' ? 'dropdown' : 'dialog'}
-                            selectedValue={config.csipCallTargetType ?? 'default'}
-                            onValueChange={(v) => updateConfig('csipCallTargetType', v)}
-                            style={styles.picker}
-                          >
-                            <Picker.Item label="default (config placa)" value="default" />
-                            <Picker.Item label="number (extensión PBX)" value="number" />
-                            <Picker.Item label="ip" value="ip" />
-                          </Picker>
-                        </View>
-                      </View>
-                      {(config.csipCallTargetType === 'number' || config.csipCallTargetType === 'ip') && (
-                        <>
-                          <View style={styles.inputRow}>
-                            <Text style={styles.inputLabel}>Destino:</Text>
-                            <TextInput
-                              style={styles.textInput}
-                              value={config.csipCallTarget || ''}
-                              onChangeText={(text) => updateConfig('csipCallTarget', text)}
-                              placeholder={config.csipCallTargetType === 'ip' ? '192.168.1.80' : '201'}
-                              autoCapitalize="none"
-                            />
-                          </View>
-                          <View style={styles.inputRow}>
-                            <Text style={styles.inputLabel}>Usuario:</Text>
-                            <TextInput
-                              style={styles.textInput}
-                              value={config.csipCallUser || ''}
-                              onChangeText={(text) => updateConfig('csipCallUser', text)}
-                              placeholder="opcional"
-                              autoCapitalize="none"
-                            />
-                          </View>
-                        </>
-                      )}
-
-                      <Text style={[styles.pickerLabel, { marginTop: 12 }]}>
-                        Cuenta SIP tablet (Asterisk / PBX)
-                      </Text>
-                      <Text style={{ fontSize: 11, color: '#6C757D', marginBottom: 8 }}>
-                        Extensión de esta tablet en Asterisk. WS SIP suele ser IP:8088/ws (o 8089/ws con TLS).
-                      </Text>
-                      <View style={styles.inputRow}>
-                        <Text style={styles.inputLabel}>SIP URI:</Text>
-                        <TextInput
-                          style={styles.textInput}
-                          value={config.sipUri}
-                          onChangeText={(text) => updateConfig('sipUri', text)}
-                          placeholder="sip:201@192.168.1.154"
-                          autoCapitalize="none"
-                        />
-                      </View>
-                      <View style={styles.inputRow}>
-                        <Text style={styles.inputLabel}>Usuario:</Text>
-                        <TextInput
-                          style={styles.textInput}
-                          value={config.sipUsername}
-                          onChangeText={(text) => updateConfig('sipUsername', text)}
-                          placeholder="201"
-                          autoCapitalize="none"
-                        />
-                      </View>
-                      <View style={styles.inputRow}>
-                        <Text style={styles.inputLabel}>Password:</Text>
-                        <TextInput
-                          style={styles.textInput}
-                          value={config.sipPassword}
-                          onChangeText={(text) => updateConfig('sipPassword', text)}
-                          placeholder="••••••••"
-                          secureTextEntry
-                          autoCapitalize="none"
-                        />
-                      </View>
-                      <View style={styles.inputRow}>
-                        <Text style={styles.inputLabel}>Dominio:</Text>
-                        <TextInput
-                          style={styles.textInput}
-                          value={config.sipDomain}
-                          onChangeText={(text) => updateConfig('sipDomain', text)}
-                          placeholder="192.168.1.154"
-                          autoCapitalize="none"
-                        />
-                      </View>
-                      <View style={styles.inputRow}>
-                        <Text style={styles.inputLabel}>WS SIP:</Text>
-                        <TextInput
-                          style={styles.textInput}
-                          value={config.sipServer || ''}
-                          onChangeText={(text) => updateConfig('sipServer', text)}
-                          placeholder="192.168.1.154:8088/ws"
-                          autoCapitalize="none"
-                        />
-                      </View>
-                      <View style={styles.inputRow}>
-                        <Text style={styles.inputLabel}>Destino:</Text>
-                        <TextInput
-                          style={styles.textInput}
-                          value={config.sipCallDestination || ''}
-                          onChangeText={(text) => updateConfig('sipCallDestination', text)}
-                          placeholder="sip:101@192.168.1.154 (ext. Panphone)"
-                          autoCapitalize="none"
-                        />
-                      </View>
-                      <View style={styles.switchRow}>
-                        <Text style={styles.switchLabel}>TLS / WSS</Text>
-                        <Switch
-                          value={Boolean(config.enableTLS)}
-                          onValueChange={(v) => updateConfig('enableTLS', v)}
-                        />
-                      </View>
-                    </>
-                  )}
                 </>
               ) : null}
             </View>
@@ -681,16 +502,6 @@ export default function IntercomConfigurationModal({
                   />
                 </View>
 
-                <View style={styles.inputRow}>
-                  <Text style={styles.inputLabel}>Puerto HTTPS:</Text>
-                  <TextInput
-                    style={styles.numberInput}
-                    value={config.httpsPort.toString()}
-                    onChangeText={(text) => updateConfig('httpsPort', parseInt(text) || 443)}
-                    placeholder="443"
-                    keyboardType="numeric"
-                  />
-                </View>
                 
                 <View style={styles.inputRow}>
                   <Text style={styles.inputLabel}>Puerto RTSP:</Text>
@@ -776,17 +587,11 @@ export default function IntercomConfigurationModal({
                 </View>
               </View>
 
-              {/* Ruta Snapshot oculta - no se usa */}
-
-              <Text style={{ fontSize: 11, color: '#6C757D', marginBottom: 8, marginTop: 4 }}>
-                {(config.intercomMode ?? 'bridge') === 'bridge' || INTERCOM_BRIDGE_ONLY
-                  ? 'Voz bidireccional vía puente PC (audio_bridge.py en el industrial).'
-                  : (config.intercomMode ?? 'bridge') === 'sip'
-                    ? 'En modo SIP el puente WS no se usa; configura CSIP/SIP arriba.'
-                    : 'En modo SDK el puente WS no se usa.'}
-              </Text>
               {((config.intercomMode ?? 'bridge') === 'bridge' || INTERCOM_BRIDGE_ONLY) && (
               <>
+              <Text style={{ fontSize: 11, color: '#6C757D', marginBottom: 8, marginTop: 4 }}>
+                Voz bidireccional vía puente PC (audio_bridge.py en el industrial).
+              </Text>
               <View style={styles.inputRow}>
                 <Text style={styles.inputLabel}>URL puente WS:</Text>
                 <TextInput
